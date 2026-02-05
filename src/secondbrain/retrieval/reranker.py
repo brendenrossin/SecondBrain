@@ -35,6 +35,7 @@ Respond with ONLY a JSON object: {"score": <number>, "reason": "<brief explanati
     def __init__(
         self,
         model: str = "gpt-4o-mini",
+        api_key: str | None = None,
         rerank_threshold: float = 5.0,
         hallucination_threshold: float = 3.0,
     ) -> None:
@@ -42,11 +43,13 @@ Respond with ONLY a JSON object: {"score": <number>, "reason": "<brief explanati
 
         Args:
             model: OpenAI model to use for reranking.
+            api_key: OpenAI API key.
             rerank_threshold: Minimum rerank score to consider relevant.
             hallucination_threshold: If similarity is high but rerank is below this,
                 flag as potential hallucination.
         """
         self.model = model
+        self.api_key = api_key
         self.rerank_threshold = rerank_threshold
         self.hallucination_threshold = hallucination_threshold
         self._client: OpenAI | None = None
@@ -55,7 +58,7 @@ Respond with ONLY a JSON object: {"score": <number>, "reason": "<brief explanati
     def client(self) -> OpenAI:
         """Lazy-load the OpenAI client."""
         if self._client is None:
-            self._client = OpenAI()
+            self._client = OpenAI(api_key=self.api_key)
         return self._client
 
     def rerank(

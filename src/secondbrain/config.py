@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     rerank_model: str = "gpt-4o-mini"
     answer_model: str = "gpt-4o-mini"
 
+    # API keys (loaded from env or .env file)
+    openai_api_key: str | None = None
+
     # Gradio UI settings
     gradio_port: int = 7860
 

@@ -78,11 +78,11 @@ def get_retriever() -> HybridRetriever:
 def get_reranker() -> LLMReranker:
     """Get cached reranker instance."""
     settings = get_settings()
-    return LLMReranker(model=settings.rerank_model)
+    return LLMReranker(model=settings.rerank_model, api_key=settings.openai_api_key)
 
 
 @lru_cache
 def get_answerer() -> Answerer:
     """Get cached answerer instance."""
     settings = get_settings()
-    return Answerer(model=settings.answer_model)
+    return Answerer(model=settings.answer_model, api_key=settings.openai_api_key)

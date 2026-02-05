@@ -31,20 +31,22 @@ You might want to:
 - Check if you have notes on this topic
 - Ask me to brainstorm (I'll make it clear when I'm speculating)"""
 
-    def __init__(self, model: str = "gpt-4o-mini") -> None:
+    def __init__(self, model: str = "gpt-4o-mini", api_key: str | None = None) -> None:
         """Initialize the answerer.
 
         Args:
             model: OpenAI model to use for generation.
+            api_key: OpenAI API key.
         """
         self.model = model
+        self.api_key = api_key
         self._client: OpenAI | None = None
 
     @property
     def client(self) -> OpenAI:
         """Lazy-load the OpenAI client."""
         if self._client is None:
-            self._client = OpenAI()
+            self._client = OpenAI(api_key=self.api_key)
         return self._client
 
     def answer(
