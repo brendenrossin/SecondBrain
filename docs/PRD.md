@@ -142,8 +142,156 @@ Build a personal “memory layer” on top of an Obsidian vault that:
 - **Index drift** (unstable chunking) → stable chunk IDs + incremental diffing
 - **Cost creep** (hosted embeddings/LLMs) → local models + caching; measure token usage
 
+
 ## 8) Milestones (high-level)
 - POC: index + hybrid search + citations (local)
 - V1: incremental updates + entity extraction + suggestions UI + secure remote web
 - V1.5: chat interface + rate limiting + audit logs
 - V2: knowledge graph + graph exploration UI + write-back workflow
+
+## 9) Interaction layer (POC → V1)
+
+### Goal
+Provide a **clean, secure browser-based chat interface** for interacting with the Second Brain RAG system from anywhere, without exposing the system publicly or building custom auth in early phases.
+
+This document defines the **reference interaction architecture** that an AI coding agent can implement quickly (≈1 week) and safely.
+
+---
+
+### Phase 1 (POC): Local-first web UI + private network access
+
+**Architecture**
+- Backend: local RAG service (FastAPI)
+- UI: lightweight web chat (Gradio)
+- Network access: private device network (Tailscale)
+
+**Key properties**
+- No public endpoints
+- No custom authentication
+- Access restricted to trusted devices
+- Vault + embeddings remain local
+
+**Why this approach**
+- Minimizes security risk
+- Fastest path to usable remote access
+- Easy to reason about + debug
+- Suitable for a single-user system
+
+---
+
+### Web UI requirements (Gradio)
+
+**Functional scope**
+- Single-page browser UI
+- Text chat interface
+- Multi-turn conversation with local persistence (SQLite or JSON file)
+- Streaming LLM responses for responsive UX
+- Explicit citation display for every response
+
+**UI elements**
+- Chat panel (left)
+- Sources panel (right or expandable):
+  - note title / file path
+  - heading path
+  - short snippet
+  - similarity score + rerank score
+
+**Non-goals (POC UI)**
+- User accounts
+- Settings dashboard
+- Note editing or write-back
+- Multi-user support
+
+---
+
+### API contract (reference)
+
+**Endpoint**
+- `POST /ask`
+
+**Request**
+```json
+{
+  "query": "string",
+  "conversation_id": "optional-string",
+  "top_n": 5
+}
+```
+
+**Response**
+```json
+{
+  "answer": "string",
+  "conversation_id": "string",
+  "citations": [
+    {
+      "note_path": "string",
+      "note_title": "string",
+      "heading_path": ["string"],
+      "chunk_id": "string",
+      "snippet": "string",
+      "similarity_score": 0.0,
+      "rerank_score": 0.0
+    }
+  ],
+  "retrieval_label": "PASS | NO_RESULTS | IRRELEVANT | HALLUCINATION_RISK"
+}
+```
+
+**Streaming variant**
+- `POST /ask/stream` returns Server-Sent Events (SSE)
+- Events: `citation` (sent first), `token` (streamed answer), `done` (final metadata)
+```
+
+---
+
+### Security model (POC)
+
+**Access control**
+- Enforced at the network layer (Tailscale)
+- Only trusted devices can reach the service
+- MFA enabled via identity provider
+
+**Application assumptions**
+- Single trusted user
+- No anonymous access
+- No public DNS
+
+**Threats intentionally out-of-scope (POC)**
+- Credential stuffing
+- Multi-user role separation
+- External attacker probing
+
+---
+
+### Phase 2 (V1): Secure browser access without VPN (optional)
+
+**Upgrade path**
+- Add Cloudflare Tunnel in front of the local service
+- Protect with Cloudflare Access (SSO + MFA)
+
+**When to do this**
+- If VPN-style access is undesirable
+- If access is needed from unmanaged devices
+
+---
+
+### Explicit non-goals (until V2)
+- Slack / Telegram / WhatsApp bots
+- Public API exposure
+- MCP-based tool execution
+- Note write-back or auto-editing
+
+---
+
+### Implementation guidance for AI coding agents
+
+When implementing this layer:
+1. Favor simplicity over extensibility
+2. Always return citations
+3. Never answer without retrieval evidence unless explicitly requested
+4. Log retrieval outcomes to local JSONL file (`data/queries.jsonl`):
+   - timestamp, query, conversation_id, retrieval_label, citation_ids, latency_ms
+5. Keep UI stateless where possible
+
+This interaction layer is intended to be **replaceable** without affecting the core indexing or retrieval pipeline.

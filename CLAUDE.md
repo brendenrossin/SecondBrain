@@ -16,13 +16,43 @@ This repository has completed **Phase 0** (scaffolding) and is ready for Phase 1
 
 ```bash
 make install   # Install dependencies with uv
-make dev       # Run dev server at http://localhost:8000
+make dev       # Run FastAPI server at http://localhost:8000
+make ui        # Run Gradio UI at http://localhost:7860
+make index     # Trigger vault indexing via API
 make test      # Run pytest
 make lint      # Run ruff linter
 make format    # Run ruff formatter
 make typecheck # Run mypy type checker
 make check     # Run all checks (lint + typecheck + test)
 make clean     # Remove build artifacts
+```
+
+## Environment Variables
+
+```bash
+SECONDBRAIN_VAULT_PATH=/path/to/obsidian/vault  # Required for indexing
+SECONDBRAIN_HOST=127.0.0.1                       # API server host
+SECONDBRAIN_PORT=8000                            # API server port
+SECONDBRAIN_GRADIO_PORT=7860                     # Gradio UI port
+SECONDBRAIN_DATA_PATH=data                       # Data storage directory
+OPENAI_API_KEY=sk-...                            # Required for LLM features
+```
+
+## Project Structure
+
+```
+src/secondbrain/
+├── main.py              # FastAPI app entry point
+├── config.py            # Settings (pydantic-settings)
+├── models.py            # Pydantic models
+├── ui.py                # Gradio UI
+├── vault/               # Vault connector + parser
+├── indexing/            # Chunker + embedder
+├── stores/              # Vector (ChromaDB), lexical (FTS5), conversation
+├── retrieval/           # Hybrid search + reranker
+├── synthesis/           # LLM answer generation
+├── api/                 # FastAPI routes (/ask, /index)
+└── logging/             # Query logger (JSONL)
 ```
 
 ## Architecture

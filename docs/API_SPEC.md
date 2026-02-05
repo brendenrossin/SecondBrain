@@ -75,6 +75,49 @@ Requires elevated scope.
 
 ---
 
-## 6) Health & ops
+## 6) Ask (conversational RAG)
+### POST `/ask`
+Chat-style endpoint with LLM synthesis and conversation history.
+
+Request:
+```json
+{
+  "query": "What did I decide about the engagement ring prongs?",
+  "conversation_id": "optional-uuid",
+  "top_n": 5
+}
+```
+
+Response:
+```json
+{
+  "answer": "Based on your notes, you decided...",
+  "conversation_id": "uuid",
+  "citations": [
+    {
+      "note_path": "Reference/Engagement Ring Spec.md",
+      "note_title": "Engagement Ring Spec",
+      "heading_path": ["Requirements", "Prong Style"],
+      "chunk_id": "abc123",
+      "snippet": "Decided on 4-prong cathedral setting...",
+      "similarity_score": 0.89,
+      "rerank_score": 8.5
+    }
+  ],
+  "retrieval_label": "PASS"
+}
+```
+
+### POST `/ask/stream`
+Streaming variant using Server-Sent Events (SSE).
+
+Events:
+- `citation`: Sent first with all citations
+- `token`: Streamed answer tokens
+- `done`: Final metadata (retrieval_label, conversation_id)
+
+---
+
+## 7) Health & ops
 ### GET `/health`
 ### GET `/metrics` (prometheus style)

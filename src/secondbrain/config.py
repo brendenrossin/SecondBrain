@@ -20,8 +20,19 @@ class Settings(BaseSettings):
     port: int = 8000
     debug: bool = False
 
-    # Vault settings (for future use)
+    # Vault settings
     vault_path: Path | None = None
+
+    # Data storage
+    data_path: Path = Path("data")
+
+    # Model settings
+    embedding_model: str = "all-MiniLM-L6-v2"
+    rerank_model: str = "gpt-4o-mini"
+    answer_model: str = "gpt-4o-mini"
+
+    # Gradio UI settings
+    gradio_port: int = 7860
 
 
 def get_settings() -> Settings:

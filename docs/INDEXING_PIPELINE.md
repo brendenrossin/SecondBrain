@@ -12,33 +12,83 @@
 
 ## 2) Markdown-aware chunking
 ### Goals
-- Preserve semantic boundaries (headings/bullets)
+- Preserve semantic boundaries (headings/bullets/code blocks)
 - Avoid tiny chunks
-- Keep stable IDs
+- Keep stable IDs (so incremental re-indexing is cheap)
+- Produce chunks that work well for both semantic search and citation
 
-### Suggested algorithm (POC)
-1. Parse headings into a tree
-2. For each section:
-   - keep bullet lists intact
-   - combine consecutive paragraphs
-3. Enforce chunk size:
-   - target 300–800 tokens
-   - hard cap ~1200 tokens
-4. If a section is huge, split by paragraphs while repeating heading_path metadata
+### Suggested algorithm (POC → V1)
+1. Parse markdown into a lightweight structure:
+   - heading tree (H1/H2/H3…)
+   - paragraph blocks
+   - bullet/list blocks
+   - fenced code blocks
+2. Chunk by semantic units, in this order of preference:
+   - split on heading boundaries first
+   - keep bullet lists intact when possible
+   - keep fenced code blocks intact
+   - combine consecutive short paragraphs until near target size
+3. Enforce chunk size (baseline; tune later):
+   - **target**: ~700 characters
+   - **overlap**: ~100 characters
+   - **min chunk**: ~100 characters
+   - If a section is huge, split by paragraph boundaries while repeating `heading_path` metadata.
+
+### Smart separators (Recursive strategy)
+Use a recursive separator list that prefers natural markdown boundaries:
+1) `\n# `, `\n## `, `\n### ` (headers)
+2) `\n\n` (paragraphs)
+3) `\n- ` / `\n* ` / `\n1. ` (lists)
+4) `\n` (line breaks)
+5) `. `, `? `, `! `, `; `, `: ` (sentence-ish boundaries)
+
+### Stable chunk identity
+Create stable chunk IDs so you can diff and upsert incrementally:
+- `chunk_id = sha1(note_path + heading_path + chunk_index + chunk_text_normalized)`
+- Store a `checksum = sha1(chunk_text_normalized)` to detect edits
 
 ### Store with each chunk
-- `heading_path`
+- `note_path`
+- `note_title`
+- `heading_path` (e.g., `["Project", "Architecture", "Indexing"]`)
+- `chunk_index` (order within note)
 - `chunk_text`
 - `checksum`
+- `token_count` (optional)
+- `created_at` / `updated_at` (optional)
 
-## 3) Embeddings
+## 3) Embeddings (with optional contextualization)
 ### Model choice
-- Local option: sentence-transformers (fast, private)
-- Hosted option: embedding API (quality)
+- Local option: sentence-transformers / small embedding model (fast, private)
+- Hosted option: embedding API (quality, easy to scale)
 
-### Embedding strategy
-- Embed chunks (not whole notes)
-- Cache embeddings by chunk checksum
+### Baseline embedding strategy
+- Embed **chunks** (not whole notes)
+- Cache embeddings by `checksum` (so unchanged chunks don’t re-embed)
+
+### Contextualized embeddings (recommended)
+Instead of embedding raw chunks, prepend a short, LLM-generated context sentence to each chunk **before** embedding.
+This improves retrieval for ambiguous chunks (e.g., “it”, “this system”, small lists) by injecting document identity + local continuity.
+
+**Context prefix inputs**
+- Document identity: file name / note title
+- Frontmatter metadata: tags, type, description (if present)
+- Lookback: previous 1–3 chunks (for continuity)
+
+**Prompt (shape)**
+- Output: **one sentence** describing what this chunk is about and where it fits in the note.
+- Keep it short; no extra formatting.
+
+**Resulting text to embed**
+- `context_sentence + "\n\n" + original_chunk_text`
+
+**Operational notes**
+- Generate context prefixes in small batches (e.g., 10 chunks) to respect rate limits
+- Embedding batch size can be larger (e.g., 100 chunks) depending on provider
+- Store both:
+  - `chunk_text_original`
+  - `chunk_text_contextualized` (what gets embedded)
+  - `context_sentence` (for debugging)
 
 ## 4) Lexical index (BM25)
 ### POC
@@ -50,20 +100,56 @@
   - synonyms (optional)
 
 ## 5) Hybrid retrieval
-### Strategy
-1. Lexical retrieve top K_lex (e.g., 50)
-2. Vector retrieve top K_vec (e.g., 50)
-3. Merge with score normalization
-4. Optional rerank top N (e.g., 20) using cross-encoder or LLM reranker
-5. Return top results with:
-   - snippet highlights
-   - note path/title
-   - chunk heading_path
-   - citations (stable links to file + section)
+### Strategy (baseline)
+1. Lexical retrieve top **K_lex** (e.g., 50)
+2. Vector retrieve top **K_vec** (e.g., 30)
+3. Merge candidates (e.g., RRF or min-max normalization)
+4. Apply gates/filters (similarity threshold, metadata filters)
+5. Optional LLM rerank to improve precision
+6. Return top results with citations
 
-### Score normalization
-- Min-max per channel
-- Or reciprocal rank fusion (RRF) (simple and strong)
+### Defaults to start with
+- `K_vec = 30`
+- `K_lex = 50`
+- `rerank_top_k = 10`
+- `top_n = 5`
+
+### Candidate merging
+- Prefer **Reciprocal Rank Fusion (RRF)** for simplicity and strong performance
+  - Merge lexical + vector lists using RRF score
+
+### Similarity threshold gating
+Avoid returning results “just to return something.”
+- Apply a cosine similarity threshold to vector results before reranking
+- If nothing passes threshold, return `NO_RESULTS` (and optionally suggest query refinement)
+
+### Optional query transformation (later)
+Can improve retrieval when queries are conversational or contain pronouns.
+- Resolve pronouns where possible
+- Expand with key entities from conversation context
+- Prefer descriptive keywords over filler
+
+### LLM reranking (recommended)
+After merging/gating, rerank the best candidates using an LLM as a cross-encoder-style scorer.
+- Input: query + candidate chunk (plus a short citation header)
+- Output: relevance score (0–10)
+- Re-sort by score desc
+- Return `top_n` chunks
+
+**Example flow**
+- Retrieve `K_vec=30`
+- Merge with lexical
+- Take best `rerank_top_k=10`
+- LLM scores each 0–10
+- Return `top_n=5`
+
+### Return payload
+Return top results with:
+- snippet highlights
+- note path/title
+- chunk `heading_path`
+- similarity score + rerank score
+- citations (stable links to file + section)
 
 ## 6) Citation format
 Return machine-usable citations:
@@ -74,9 +160,29 @@ Return machine-usable citations:
 
 UI can open the note at the right place.
 
+## 6.1) Retrieval evaluation (POC harness)
+Add a lightweight evaluation harness that labels outcomes for each query.
+This helps tune thresholds, chunking, and reranking.
+
+### Suggested labels
+- `PASS`: at least one result meets similarity + rerank thresholds
+- `HALLUCINATION_RISK`: high vector similarity but low rerank score (embeddings fooled; reranker caught it)
+- `NO_RESULTS`: nothing above similarity threshold
+- `IRRELEVANT`: candidates retrieved but fail rerank threshold
+
+### Metrics to log
+- query
+- retrieved candidate count
+- similarity stats (min/mean/max)
+- rerank stats (min/mean/max)
+- final citations returned
+
 ## 7) Incremental indexing
 - Use filesystem watcher (watchdog) OR scheduled scan with mtimes
 - For changed file:
+  - if chunk text changed (checksum differs):
+    - regenerate `context_sentence` (if using contextualized embeddings)
+    - re-embed and upsert
   - re-parse → re-chunk → diff chunks by ID/checksum
   - upsert changed chunks
   - delete removed chunks

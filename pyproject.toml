@@ -8,6 +8,16 @@ dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
     "pydantic-settings>=2.6.0",
+    # RAG dependencies
+    "chromadb>=0.5.0",
+    "sentence-transformers>=3.0.0",
+    "python-frontmatter>=1.1.0",
+    "openai>=1.50.0",
+    "sse-starlette>=2.0.0",
+    # UI
+    "gradio>=5.0.0",
+    # File watching
+    "watchdog>=4.0.0",
 ]
 
 [project.optional-dependencies]
@@ -60,6 +70,16 @@ plugins = ["pydantic.mypy"]
 [[tool.mypy.overrides]]
 module = "tests.*"
 disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = [
+    "frontmatter",
+    "chromadb.*",
+    "sentence_transformers",
+    "gradio",
+    "gradio.*",
+]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,12 +1,20 @@
-.PHONY: install dev test lint format typecheck check clean
+.PHONY: install dev ui test lint format typecheck check clean index
 
 # Install dependencies
 install:
 	uv sync --all-extras
 
-# Run development server with hot reload
+# Run FastAPI development server with hot reload
 dev:
 	uv run uvicorn secondbrain.main:app --reload --host 127.0.0.1 --port 8000
+
+# Run Gradio UI
+ui:
+	uv run python -m secondbrain.ui
+
+# Index the vault (requires SECONDBRAIN_VAULT_PATH)
+index:
+	curl -X POST http://localhost:8000/api/v1/index
 
 # Run tests
 test:
