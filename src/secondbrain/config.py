@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     rerank_model: str = "gpt-4o-mini"
     answer_model: str = "gpt-4o-mini"
 
+    # Ollama settings (local LLM)
+    ollama_base_url: str = "http://127.0.0.1:11434/v1"
+    ollama_model: str = "gpt-oss:20b"
+
     # API keys (loaded from env or .env file)
     openai_api_key: str | None = None
 

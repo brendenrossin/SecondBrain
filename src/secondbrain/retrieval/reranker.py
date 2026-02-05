@@ -21,7 +21,7 @@ class RankedCandidate:
 class LLMReranker:
     """LLM-based reranker using OpenAI API."""
 
-    SYSTEM_PROMPT = """You are a relevance scorer. Given a query and a text chunk from a personal knowledge base, rate how relevant the chunk is to answering the query.
+    SYSTEM_PROMPT = """You are a relevance scorer. Given a query and multiple text chunks from a personal knowledge base, rate how relevant each chunk is to answering the query.
 
 Score from 0-10:
 - 0-2: Not relevant at all
@@ -30,12 +30,14 @@ Score from 0-10:
 - 7-8: Relevant, directly addresses part of the query
 - 9-10: Highly relevant, directly and completely addresses the query
 
-Respond with ONLY a JSON object: {"score": <number>, "reason": "<brief explanation>"}"""
+Respond with ONLY a JSON array of scores in order, e.g.: [8.5, 3.0, 7.0, ...]
+The array MUST have exactly the same number of elements as chunks provided."""
 
     def __init__(
         self,
         model: str = "gpt-4o-mini",
         api_key: str | None = None,
+        base_url: str | None = None,
         rerank_threshold: float = 5.0,
         hallucination_threshold: float = 3.0,
     ) -> None:
@@ -44,12 +46,14 @@ Respond with ONLY a JSON object: {"score": <number>, "reason": "<brief explanati
         Args:
             model: OpenAI model to use for reranking.
             api_key: OpenAI API key.
+            base_url: Custom API base URL (e.g. Ollama's OpenAI-compatible endpoint).
             rerank_threshold: Minimum rerank score to consider relevant.
             hallucination_threshold: If similarity is high but rerank is below this,
                 flag as potential hallucination.
         """
         self.model = model
         self.api_key = api_key
+        self.base_url = base_url
         self.rerank_threshold = rerank_threshold
         self.hallucination_threshold = hallucination_threshold
         self._client: OpenAI | None = None
@@ -58,7 +62,13 @@ Respond with ONLY a JSON object: {"score": <number>, "reason": "<brief explanati
     def client(self) -> OpenAI:
         """Lazy-load the OpenAI client."""
         if self._client is None:
-            self._client = OpenAI(api_key=self.api_key)
+            kwargs: dict[str, str] = {}
+            if self.api_key:
+                kwargs["api_key"] = self.api_key
+            if self.base_url:
+                kwargs["base_url"] = self.base_url
+                kwargs.setdefault("api_key", "ollama")
+            self._client = OpenAI(**kwargs)
         return self._client
 
     def rerank(
@@ -80,13 +90,14 @@ Respond with ONLY a JSON object: {"score": <number>, "reason": "<brief explanati
         if not candidates:
             return [], RetrievalLabel.NO_RESULTS
 
-        # Score each candidate
+        # Score all candidates in a single batch API call
+        scores = self._score_candidates_batch(query, candidates)
+
+        # Build ranked list
         ranked: list[RankedCandidate] = []
         has_hallucination_risk = False
 
-        for candidate in candidates:
-            score = self._score_candidate(query, candidate)
-
+        for candidate, score in zip(candidates, scores):
             # Check for hallucination risk
             if (
                 candidate.similarity_score > 0.7
@@ -114,13 +125,20 @@ Respond with ONLY a JSON object: {"score": <number>, "reason": "<brief explanati
 
         return top_ranked, label
 
-    def _score_candidate(self, query: str, candidate: RetrievalCandidate) -> float:
-        """Score a single candidate."""
-        # Build context
-        context = f"Note: {candidate.note_title}"
-        if candidate.heading_path:
-            context += f" > {' > '.join(candidate.heading_path)}"
-        context += f"\n\n{candidate.chunk_text}"
+    def _score_candidates_batch(
+        self, query: str, candidates: list[RetrievalCandidate]
+    ) -> list[float]:
+        """Score all candidates in a single API call."""
+        # Build chunks text
+        chunks_text = []
+        for i, candidate in enumerate(candidates):
+            context = f"[{i+1}] Note: {candidate.note_title}"
+            if candidate.heading_path:
+                context += f" > {' > '.join(candidate.heading_path)}"
+            context += f"\n{candidate.chunk_text[:500]}"  # Truncate for efficiency
+            chunks_text.append(context)
+
+        all_chunks = "\n\n---\n\n".join(chunks_text)
 
         try:
             response = self.client.chat.completions.create(
@@ -129,27 +147,32 @@ Respond with ONLY a JSON object: {"score": <number>, "reason": "<brief explanati
                     {"role": "system", "content": self.SYSTEM_PROMPT},
                     {
                         "role": "user",
-                        "content": f"Query: {query}\n\nChunk:\n{context}",
+                        "content": f"Query: {query}\n\nChunks:\n\n{all_chunks}",
                     },
                 ],
                 temperature=0,
-                max_tokens=100,
+                max_tokens=200,
             )
 
-            content = response.choices[0].message.content or "{}"
+            content = response.choices[0].message.content or "[]"
 
-            # Parse score from JSON response
+            # Parse scores from JSON array
             try:
-                result = json.loads(content)
-                return float(result.get("score", 0))
+                scores = json.loads(content)
+                if isinstance(scores, list) and len(scores) == len(candidates):
+                    return [float(s) for s in scores]
             except (json.JSONDecodeError, ValueError):
-                # Try to extract number from response
-                match = re.search(r"\b(\d+(?:\.\d+)?)\b", content)
-                if match:
-                    return float(match.group(1))
-                return 0.0
+                pass
+
+            # Try to extract numbers from response
+            numbers = re.findall(r"\b(\d+(?:\.\d+)?)\b", content)
+            if len(numbers) >= len(candidates):
+                return [float(n) for n in numbers[: len(candidates)]]
+
+            # Fall back to similarity scores
+            return [c.similarity_score * 10 for c in candidates]
 
         except Exception as e:
-            print(f"Reranking error: {e}")
-            # Fall back to similarity score scaled to 0-10
-            return candidate.similarity_score * 10
+            print(f"Batch reranking error: {e}")
+            # Fall back to similarity scores
+            return [c.similarity_score * 10 for c in candidates]

@@ -76,13 +76,33 @@ def get_retriever() -> HybridRetriever:
 
 @lru_cache
 def get_reranker() -> LLMReranker:
-    """Get cached reranker instance."""
+    """Get cached reranker instance (OpenAI)."""
     settings = get_settings()
     return LLMReranker(model=settings.rerank_model, api_key=settings.openai_api_key)
 
 
 @lru_cache
+def get_local_reranker() -> LLMReranker:
+    """Get cached reranker instance (local Ollama)."""
+    settings = get_settings()
+    return LLMReranker(
+        model=settings.ollama_model,
+        base_url=settings.ollama_base_url,
+    )
+
+
+@lru_cache
 def get_answerer() -> Answerer:
-    """Get cached answerer instance."""
+    """Get cached answerer instance (OpenAI)."""
     settings = get_settings()
     return Answerer(model=settings.answer_model, api_key=settings.openai_api_key)
+
+
+@lru_cache
+def get_local_answerer() -> Answerer:
+    """Get cached answerer instance (local Ollama)."""
+    settings = get_settings()
+    return Answerer(
+        model=settings.ollama_model,
+        base_url=settings.ollama_base_url,
+    )

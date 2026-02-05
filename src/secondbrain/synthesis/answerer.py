@@ -31,22 +31,35 @@ You might want to:
 - Check if you have notes on this topic
 - Ask me to brainstorm (I'll make it clear when I'm speculating)"""
 
-    def __init__(self, model: str = "gpt-4o-mini", api_key: str | None = None) -> None:
+    def __init__(
+        self,
+        model: str = "gpt-4o-mini",
+        api_key: str | None = None,
+        base_url: str | None = None,
+    ) -> None:
         """Initialize the answerer.
 
         Args:
             model: OpenAI model to use for generation.
             api_key: OpenAI API key.
+            base_url: Custom API base URL (e.g. Ollama's OpenAI-compatible endpoint).
         """
         self.model = model
         self.api_key = api_key
+        self.base_url = base_url
         self._client: OpenAI | None = None
 
     @property
     def client(self) -> OpenAI:
         """Lazy-load the OpenAI client."""
         if self._client is None:
-            self._client = OpenAI(api_key=self.api_key)
+            kwargs: dict[str, str] = {}
+            if self.api_key:
+                kwargs["api_key"] = self.api_key
+            if self.base_url:
+                kwargs["base_url"] = self.base_url
+                kwargs.setdefault("api_key", "ollama")
+            self._client = OpenAI(**kwargs)
         return self._client
 
     def answer(
