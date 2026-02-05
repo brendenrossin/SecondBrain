@@ -97,7 +97,7 @@ The array MUST have exactly the same number of elements as chunks provided."""
         ranked: list[RankedCandidate] = []
         has_hallucination_risk = False
 
-        for candidate, score in zip(candidates, scores):
+        for candidate, score in zip(candidates, scores, strict=True):
             # Check for hallucination risk
             if (
                 candidate.similarity_score > 0.7

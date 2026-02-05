@@ -1,4 +1,4 @@
-.PHONY: install dev ui test lint format typecheck check clean index
+.PHONY: install dev ui test lint format typecheck check clean index process-inbox sync-tasks daily-sync install-cron uninstall-cron
 
 # Install dependencies
 install:
@@ -34,6 +34,28 @@ typecheck:
 
 # Run all checks (lint + typecheck + test)
 check: lint typecheck test
+
+# Process inbox notes
+process-inbox:
+	uv run python -m secondbrain.scripts.daily_sync inbox
+
+# Sync tasks from daily notes
+sync-tasks:
+	uv run python -m secondbrain.scripts.daily_sync tasks
+
+# Run full daily sync (inbox + tasks)
+daily-sync:
+	uv run python -m secondbrain.scripts.daily_sync all
+
+# Install launchd job for daily sync at 7AM
+install-cron:
+	cp com.secondbrain.daily-sync.plist ~/Library/LaunchAgents/
+	launchctl load ~/Library/LaunchAgents/com.secondbrain.daily-sync.plist
+
+# Uninstall launchd job
+uninstall-cron:
+	launchctl unload ~/Library/LaunchAgents/com.secondbrain.daily-sync.plist 2>/dev/null || true
+	rm -f ~/Library/LaunchAgents/com.secondbrain.daily-sync.plist
 
 # Clean build artifacts
 clean:
