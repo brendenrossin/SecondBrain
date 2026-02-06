@@ -3,7 +3,7 @@
 import time
 from collections.abc import Generator
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, TypedDict
 
 import gradio as gr
 
@@ -18,6 +18,13 @@ from secondbrain.api.dependencies import (
 )
 from secondbrain.config import get_settings
 from secondbrain.models import Citation
+from secondbrain.retrieval.reranker import LLMReranker
+from secondbrain.synthesis.answerer import Answerer
+
+
+class _Provider(TypedDict):
+    reranker: LLMReranker
+    answerer: Answerer
 
 
 @dataclass
@@ -84,6 +91,50 @@ def format_citations(citations: list[Citation]) -> str:
     return "\n---\n".join(parts)
 
 
+MOBILE_CSS = """
+/* Remove excess padding on mobile */
+.gradio-container {
+    padding: 0 !important;
+    max-width: 100% !important;
+}
+
+/* Desktop: constrain width and center */
+@media (min-width: 768px) {
+    .gradio-container {
+        max-width: 900px !important;
+        margin: 0 auto !important;
+    }
+}
+
+/* Compact header */
+.gradio-container h2 {
+    margin: 8px 16px !important;
+    font-size: 1.3rem !important;
+}
+
+/* Chatbot fills available space */
+.chat-panel {
+    flex-grow: 1 !important;
+    min-height: 200px !important;
+}
+
+/* Touch-friendly accordion targets (44px min per Apple HIG) */
+.gradio-accordion > button {
+    min-height: 44px !important;
+    font-size: 1rem !important;
+}
+
+/* Sticky input at bottom */
+.input-row {
+    position: sticky !important;
+    bottom: 0 !important;
+    background: var(--background-fill-primary) !important;
+    padding: 8px !important;
+    z-index: 10 !important;
+}
+"""
+
+
 def create_ui() -> "gr.Blocks":
     """Create the Gradio UI."""
     # Get shared instances
@@ -92,7 +143,7 @@ def create_ui() -> "gr.Blocks":
     query_logger = get_query_logger()
 
     # Provider instances: local (Ollama) and API (OpenAI)
-    providers = {
+    providers: dict[str, _Provider] = {
         "Local (Ollama)": {
             "reranker": get_local_reranker(),
             "answerer": get_local_answerer(),
@@ -112,7 +163,9 @@ def create_ui() -> "gr.Blocks":
         conversation_id: str | None,
         metrics: LatencyMetrics | None,
         provider_name: str,
-    ) -> Generator[tuple[list[dict[str, str]], str | None, list[Citation], str, LatencyMetrics], None, None]:
+    ) -> Generator[
+        tuple[list[dict[str, str]], str | None, list[Citation], str, LatencyMetrics], None, None
+    ]:
         """Process a chat message with streaming response."""
         start_time = time.time()
 
@@ -131,7 +184,13 @@ def create_ui() -> "gr.Blocks":
         history.append({"role": "assistant", "content": ""})
 
         # Show searching status
-        yield history, conversation_id, [], f"**Searching your notes...** ({provider_name})", metrics
+        yield (
+            history,
+            conversation_id,
+            [],
+            f"**Searching your notes...** ({provider_name})",
+            metrics,
+        )
 
         # Get or create conversation
         conv_id = conversation_store.get_or_create_conversation(conversation_id)
@@ -149,9 +208,7 @@ def create_ui() -> "gr.Blocks":
 
         # Rerank
         t0 = time.time()
-        ranked_candidates, retrieval_label = reranker.rerank(
-            message, candidates, top_n=5
-        )
+        ranked_candidates, retrieval_label = reranker.rerank(message, candidates, top_n=5)
         rerank_ms = (time.time() - t0) * 1000
         print(f"[TIMING] Reranking: {rerank_ms:.0f}ms", flush=True)
 
@@ -222,64 +279,60 @@ def create_ui() -> "gr.Blocks":
     # Build UI
     with gr.Blocks(
         title="SecondBrain",
+        fill_height=True,
     ) as demo:
         # State must be defined inside Blocks context in Gradio 6.x
         current_conversation_id = gr.State(None)
         current_citations = gr.State([])
         current_metrics = gr.State(LatencyMetrics())
 
-        gr.Markdown("# SecondBrain")
-        gr.Markdown("Ask questions about your Obsidian vault")
+        gr.Markdown("## SecondBrain")
 
-        with gr.Row():
+        chatbot = gr.Chatbot(
+            show_label=False,
+            height=None,
+            scale=1,
+            min_height=200,
+            placeholder="Ask anything about your vault...",
+            elem_classes=["chat-panel"],
+        )
+
+        with gr.Accordion("Settings", open=False):
             model_provider = gr.Radio(
                 choices=["Local (Ollama)", "OpenAI API"],
                 value="OpenAI API",
                 label="Model Provider",
                 interactive=True,
             )
+            clear_btn = gr.Button("New Conversation", size="sm")
 
-        with gr.Row():
-            # Left column: Chat
-            with gr.Column(scale=3):
-                chatbot = gr.Chatbot(
-                    label="Chat",
-                    height=500,
-                    elem_classes=["chat-panel"],
-                )
-                with gr.Row():
-                    msg = gr.Textbox(
-                        label="Your question",
-                        placeholder="What did I decide about...?",
-                        scale=4,
-                        lines=2,
-                    )
-                    submit_btn = gr.Button("Ask", variant="primary", scale=1)
+        with gr.Accordion("Sources", open=False):
+            sources_display = gr.Markdown(
+                value="Start a conversation to see sources.",
+                elem_classes=["sources-panel"],
+            )
 
-                with gr.Row():
-                    clear_btn = gr.Button("New Conversation", size="sm")
-
-            # Right column: Sources
-            with gr.Column(scale=2), gr.Accordion("Sources", open=True):
-                sources_display = gr.Markdown(
-                    value="Start a conversation to see sources.",
-                    elem_classes=["sources-panel"],
-                )
-
-        # Event handlers
-        submit_btn.click(
-            chat_stream,
-            inputs=[msg, chatbot, current_conversation_id, current_metrics, model_provider],
-            outputs=[chatbot, current_conversation_id, current_citations, sources_display, current_metrics],
-        ).then(
-            lambda: "",
-            outputs=[msg],
+        msg = gr.Textbox(
+            show_label=False,
+            placeholder="Ask anything...",
+            lines=1,
+            max_lines=4,
+            submit_btn=True,
+            autofocus=True,
+            elem_classes=["input-row"],
         )
 
+        # Event handlers
         msg.submit(
             chat_stream,
             inputs=[msg, chatbot, current_conversation_id, current_metrics, model_provider],
-            outputs=[chatbot, current_conversation_id, current_citations, sources_display, current_metrics],
+            outputs=[
+                chatbot,
+                current_conversation_id,
+                current_citations,
+                sources_display,
+                current_metrics,
+            ],
         ).then(
             lambda: "",
             outputs=[msg],
@@ -287,7 +340,13 @@ def create_ui() -> "gr.Blocks":
 
         clear_btn.click(
             clear_chat,
-            outputs=[chatbot, current_conversation_id, current_citations, sources_display, current_metrics],
+            outputs=[
+                chatbot,
+                current_conversation_id,
+                current_citations,
+                sources_display,
+                current_metrics,
+            ],
         )
 
     return demo  # type: ignore[no-any-return]
@@ -309,6 +368,9 @@ def main() -> None:
         server_name=settings.host,
         server_port=settings.gradio_port,
         share=False,
+        pwa=True,
+        css=MOBILE_CSS,
+        theme=gr.themes.Soft(),
     )
 
 
