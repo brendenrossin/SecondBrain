@@ -371,6 +371,7 @@ def main() -> None:
         pwa=True,
         css=MOBILE_CSS,
         theme=gr.themes.Soft(),
+        favicon_path="assets/favicon.png",
     )
 
 
