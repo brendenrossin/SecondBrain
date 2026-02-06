@@ -118,13 +118,15 @@
 - Postgres graph tables if you want fewer moving parts
 
 ### Models
-- Embeddings:
-  - Local: sentence-transformers family
-  - Hosted: best-in-class embeddings provider
+- Embeddings (multi-provider, configurable via `SECONDBRAIN_EMBEDDING_PROVIDER`):
+  - **Default (local):** BAAI/bge-base-en-v1.5 (768d) — best local accuracy/speed tradeoff
+  - **OpenAI API:** text-embedding-3-small (1536d, configurable dimensions)
+  - BGE models use query-specific prefix for improved retrieval
+  - Model metadata stored in ChromaDB; mismatch detection on startup
 - Reranker:
-  - Cross-encoder (local) or hosted rerank endpoint
-- Generator (optional):
-  - LLM with strict grounding and citations
+  - LLM-based reranking (gpt-4o-mini or local Ollama)
+- Generator:
+  - LLM synthesis with strict grounding and citations (gpt-4o-mini or local Ollama)
 
 ## 6) Data flow
 1. File change detected → enqueue file path

@@ -41,11 +41,14 @@ curl http://localhost:8000/health
 ### Development commands
 ```bash
 make dev       # Run dev server with hot reload
+make ui        # Run Gradio chat UI
 make test      # Run tests
 make lint      # Run linter
 make format    # Format code
 make typecheck # Run type checker
 make check     # Run all checks (lint + typecheck + test)
+make eval      # Run RAG evaluation harness
+make reindex   # Reindex vault (no server needed)
 ```
 
 ## Documentation

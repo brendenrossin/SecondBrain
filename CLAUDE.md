@@ -10,7 +10,7 @@ SecondBrain is a semantic memory system built on top of an Obsidian vault. It co
 
 ## Current Status
 
-This repository has completed **Phase 0** (scaffolding) and is ready for Phase 1 implementation.
+Phases 0–2 are complete. The system has vault ingestion, chunking, hybrid search (BM25 + vectors), LLM reranking, answer synthesis, a Gradio chat UI, incremental indexing, and a RAG evaluation framework.
 
 ## Build & Development Commands
 
@@ -24,18 +24,25 @@ make lint      # Run ruff linter
 make format    # Run ruff formatter
 make typecheck # Run mypy type checker
 make check     # Run all checks (lint + typecheck + test)
+make eval      # Run RAG evaluation harness
+make reindex   # Reindex vault standalone (no server needed)
+make daily-sync # Run full daily sync (inbox + tasks + reindex)
 make clean     # Remove build artifacts
 ```
 
 ## Environment Variables
 
 ```bash
-SECONDBRAIN_VAULT_PATH=/path/to/obsidian/vault  # Required for indexing
-SECONDBRAIN_HOST=127.0.0.1                       # API server host
-SECONDBRAIN_PORT=8000                            # API server port
-SECONDBRAIN_GRADIO_PORT=7860                     # Gradio UI port
-SECONDBRAIN_DATA_PATH=data                       # Data storage directory
-OPENAI_API_KEY=sk-...                            # Required for LLM features
+SECONDBRAIN_VAULT_PATH=/path/to/obsidian/vault        # Required for indexing
+SECONDBRAIN_HOST=127.0.0.1                             # API server host
+SECONDBRAIN_PORT=8000                                  # API server port
+SECONDBRAIN_GRADIO_PORT=7860                           # Gradio UI port
+SECONDBRAIN_DATA_PATH=data                             # Data storage directory
+SECONDBRAIN_OPENAI_API_KEY=sk-...                      # Required for LLM features
+SECONDBRAIN_EMBEDDING_PROVIDER=local                   # "local" or "openai"
+SECONDBRAIN_EMBEDDING_MODEL=BAAI/bge-base-en-v1.5     # Local embedding model
+SECONDBRAIN_OPENAI_EMBEDDING_MODEL=text-embedding-3-small  # OpenAI embedding model
+SECONDBRAIN_OPENAI_EMBEDDING_DIMENSIONS=               # Optional dimension override
 ```
 
 ## Project Structure
@@ -47,11 +54,13 @@ src/secondbrain/
 ├── models.py            # Pydantic models
 ├── ui.py                # Gradio UI
 ├── vault/               # Vault connector + parser
-├── indexing/            # Chunker + embedder
+├── indexing/            # Chunker + multi-provider embedder
 ├── stores/              # Vector (ChromaDB), lexical (FTS5), conversation
 ├── retrieval/           # Hybrid search + reranker
 ├── synthesis/           # LLM answer generation
+├── eval/                # RAG evaluation harness + metrics
 ├── api/                 # FastAPI routes (/ask, /index)
+├── scripts/             # Daily sync, inbox processor, task aggregator
 └── logging/             # Query logger (JSONL)
 ```
 
@@ -64,12 +73,14 @@ src/secondbrain/
 4. **Retrieval Service** - Hybrid search + reranking + citation assembly
 5. **Answer Service** - Optional LLM synthesis with strict grounding
 
-### Tech Stack (Planned)
+### Tech Stack
 - **Language:** Python + FastAPI
-- **Documents:** SQLite (POC) → Postgres (V1+)
-- **Vectors:** Chroma or Qdrant (local)
-- **Lexical Search:** SQLite FTS5 (POC) → Meilisearch (V1+)
-- **Embeddings:** sentence-transformers (local)
+- **Documents:** SQLite (WAL mode)
+- **Vectors:** ChromaDB (local)
+- **Lexical Search:** SQLite FTS5
+- **Embeddings:** BAAI/bge-base-en-v1.5 (default, local) or OpenAI text-embedding-3-small (API)
+- **LLM:** OpenAI gpt-4o-mini (reranking + synthesis) or local Ollama
+- **UI:** Gradio (mobile-first chat)
 - **Knowledge Graph:** Neo4j or Postgres (V2, optional)
 
 ### Data Flow
@@ -93,9 +104,9 @@ Read docs in this order for full context:
 
 ## Implementation Phases
 
-- **Phase 0:** Repo scaffolding, CI/CD, config system, Makefile
-- **Phase 1:** POC indexing + retrieval (vault ingestion, chunker, hybrid search)
-- **Phase 2:** Quality improvements (incremental re-indexing, reranking, caching)
+- **Phase 0:** Repo scaffolding, CI/CD, config system, Makefile *(done)*
+- **Phase 1:** POC indexing + retrieval (vault ingestion, chunker, hybrid search) *(done)*
+- **Phase 2:** Quality improvements (incremental re-indexing, reranking, eval framework, embedding upgrade) *(done)*
 - **Phase 3:** Metadata extraction + suggestions
 - **Phase 4:** Secure remote access (VPN/tunnel + auth)
 - **Phase 5:** Chat interface (optional)

@@ -59,8 +59,11 @@ Create stable chunk IDs so you can diff and upsert incrementally:
 
 ## 3) Embeddings (with optional contextualization)
 ### Model choice
-- Local option: sentence-transformers / small embedding model (fast, private)
-- Hosted option: embedding API (quality, easy to scale)
+Configurable via `SECONDBRAIN_EMBEDDING_PROVIDER` ("local" or "openai"):
+- **Local (default):** BAAI/bge-base-en-v1.5 (768d) via sentence-transformers — best local accuracy
+- **OpenAI API:** text-embedding-3-small (1536d, configurable via `SECONDBRAIN_OPENAI_EMBEDDING_DIMENSIONS`)
+- BGE models use a query prefix (`"Represent this sentence for searching relevant passages: "`) automatically via `embed_query()` vs `embed()` for documents
+- Model name is stored in ChromaDB collection metadata; mismatch triggers a warning on startup
 
 ### Baseline embedding strategy
 - Embed **chunks** (not whole notes)
@@ -160,22 +163,27 @@ Return machine-usable citations:
 
 UI can open the note at the right place.
 
-## 6.1) Retrieval evaluation (POC harness)
-Add a lightweight evaluation harness that labels outcomes for each query.
-This helps tune thresholds, chunking, and reranking.
+## 6.1) Retrieval evaluation
+Implemented in `src/secondbrain/eval/`. Run with `make eval`.
 
-### Suggested labels
+### Ground truth queries
+Defined in `src/secondbrain/eval/eval_queries.yaml` — YAML with query, expected notes, and tags for filtering.
+
+### Metrics computed (retrieval-only, no LLM answer eval)
+- **Recall@K** (K=5, 10): fraction of expected notes in top-K results
+- **Precision@5**: fraction of top-5 results that are relevant
+- **MRR** (Mean Reciprocal Rank): how high the first relevant result ranks
+- Per-query pass/fail breakdown with hits and misses
+
+### Per-query labels (runtime)
 - `PASS`: at least one result meets similarity + rerank thresholds
-- `HALLUCINATION_RISK`: high vector similarity but low rerank score (embeddings fooled; reranker caught it)
+- `HALLUCINATION_RISK`: high vector similarity but low rerank score
 - `NO_RESULTS`: nothing above similarity threshold
 - `IRRELEVANT`: candidates retrieved but fail rerank threshold
 
-### Metrics to log
-- query
-- retrieved candidate count
-- similarity stats (min/mean/max)
-- rerank stats (min/mean/max)
-- final citations returned
+### Output
+- Human-readable table to stdout
+- JSON report saved to `data/eval/<model>-<timestamp>.json` for cross-model comparison
 
 ## 7) Incremental indexing
 - Use filesystem watcher (watchdog) OR scheduled scan with mtimes

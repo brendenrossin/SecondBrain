@@ -7,56 +7,55 @@ Avoid “graph perfection” early.
 
 ---
 
-## Phase 0 — Repo + scaffolding (1–2 days)
-- [ ] Create repo structure
-- [ ] CI linting + type checks
-- [ ] Config system (env + YAML)
-- [ ] Local dev tooling (Makefile / task runner)
+## Phase 0 — Repo + scaffolding ✅
+- [x] Create repo structure
+- [x] CI linting + type checks
+- [x] Config system (env + pydantic-settings)
+- [x] Local dev tooling (Makefile)
 
 Deliverable: run `make dev` and see a hello-world API.
 
 ---
 
-## Phase 1 — POC indexing + retrieval (1–2 weeks)
+## Phase 1 — POC indexing + retrieval ✅
 ### 1.1 Vault ingestion
-- [ ] Read vault path; enumerate Markdown files
-- [ ] Parse frontmatter (YAML) + body
-- [ ] Store note metadata in SQLite/Postgres
+- [x] Read vault path; enumerate Markdown files
+- [x] Parse frontmatter (YAML) + body
+- [x] Store note metadata in SQLite
 
 ### 1.2 Chunking
-- [ ] Markdown-aware chunker (headings + bullets)
-- [ ] Stable chunk IDs (hash of note path + heading path + block offsets)
+- [x] Markdown-aware chunker (headings + bullets)
+- [x] Stable chunk IDs (hash of note path + heading path + block offsets)
 
 ### 1.3 Embeddings + vector store
-- [ ] Choose embedder (local or hosted)
-- [ ] Store vectors in Chroma/Qdrant/pgvector
-- [ ] Store chunk text + note refs
+- [x] Multi-provider embedder (local sentence-transformers + OpenAI API)
+- [x] Default: BAAI/bge-base-en-v1.5 (768d, local)
+- [x] Store vectors in ChromaDB with model metadata tracking
+- [x] Store chunk text + note refs
 
 ### 1.4 Lexical search
-- [ ] SQLite FTS5 (POC) or Meilisearch
-- [ ] Index note/chunk text
+- [x] SQLite FTS5
+- [x] Index note/chunk text
 
 ### 1.5 Hybrid retrieval API
-- [ ] `POST /query` returning:
-  - top chunks
-  - note titles/paths
-  - short highlights
-  - citations
+- [x] `POST /ask` with hybrid search (RRF), LLM reranking, answer synthesis
 
-### 1.6 Minimal UI
-- [ ] CLI command: `memory ask "..."` prints citations
-- [ ] Optional: localhost web page
+### 1.6 UI
+- [x] Gradio mobile-first chat interface with local/OpenAI provider toggle
 
 Deliverable: ask questions and reliably get the right notes back.
 
 ---
 
-## Phase 2 — Quality improvements (2–4 weeks)
-- [ ] Incremental indexing (watcher + queue)
-- [ ] Reranking (cross-encoder) for top N results
-- [ ] Caching embeddings; batch jobs; rate limits
+## Phase 2 — Quality improvements ✅
+- [x] Incremental indexing (index tracker with content hashing)
+- [x] LLM reranking for top N results (gpt-4o-mini or local Ollama)
+- [x] RAG evaluation framework (Recall@K, Precision@K, MRR) with YAML test queries
+- [x] Embedding model upgrade: MiniLM → BGE (Recall@5: 0.710 → 0.783)
+- [x] Multi-provider embedding support (local + OpenAI API)
+- [x] Model mismatch detection in vector store
 
-Deliverable: faster updates + better ranking.
+Deliverable: faster updates + better ranking + measurable retrieval quality.
 
 ---
 

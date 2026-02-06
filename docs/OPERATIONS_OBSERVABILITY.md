@@ -16,6 +16,7 @@
 - chunks indexed, embeddings generated
 - query latency p50/p95
 - error rates by endpoint
+- RAG retrieval quality: Recall@K, Precision@K, MRR (via `make eval`)
 
 ### Tracing (optional)
 - OpenTelemetry spans:
@@ -48,3 +49,5 @@
 - K_lex/K_vec
 - rerank top N
 - caching embeddings
+- embedding model selection (`SECONDBRAIN_EMBEDDING_PROVIDER` + `SECONDBRAIN_EMBEDDING_MODEL`)
+- OpenAI embedding dimension reduction (`SECONDBRAIN_OPENAI_EMBEDDING_DIMENSIONS`)
