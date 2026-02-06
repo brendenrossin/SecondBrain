@@ -7,48 +7,29 @@ from pathlib import Path
 
 from secondbrain.config import get_settings
 from secondbrain.scripts.inbox_processor import process_inbox
+from secondbrain.scripts.project_sync import sync_projects
 from secondbrain.scripts.task_aggregator import sync_tasks
 
 logger = logging.getLogger("secondbrain.scripts")
 
 
 def reindex_vault(vault_path: Path, data_path: Path | None = None) -> str:
-    """Re-index the vault into vector + lexical stores.
+    """Signal the UI server to re-index by writing a trigger file.
+
+    The UI process is the sole owner of the stores (ChromaDB + SQLite).
+    Running reindex from a separate process causes corruption, so daily sync
+    only writes a trigger that the UI picks up on the next query.
 
     Returns a summary string.
     """
-    from secondbrain.indexing.chunker import Chunker
-    from secondbrain.indexing.embedder import Embedder
-    from secondbrain.stores.lexical import LexicalStore
-    from secondbrain.stores.vector import VectorStore
-    from secondbrain.vault.connector import VaultConnector
-
     settings = get_settings()
     if data_path is None:
         data_path = Path(settings.data_path) if settings.data_path else Path("data")
     data_path.mkdir(parents=True, exist_ok=True)
 
-    connector = VaultConnector(vault_path)
-    chunker = Chunker()
-    embedder = Embedder(model_name=settings.embedding_model)
-    vector_store = VectorStore(data_path / "chroma")
-    lexical_store = LexicalStore(data_path / "lexical.db")
-
-    notes = connector.read_all_notes()
-    if not notes:
-        return "Reindex: 0 notes, 0 chunks"
-
-    all_chunks = []
-    for note in notes:
-        all_chunks.extend(chunker.chunk_note(note))
-
-    if all_chunks:
-        texts = [c.chunk_text for c in all_chunks]
-        embeddings = embedder.embed(texts)
-        vector_store.add_chunks(all_chunks, embeddings)
-        lexical_store.add_chunks(all_chunks)
-
-    return f"Reindex: {len(notes)} notes, {len(all_chunks)} chunks"
+    trigger = data_path / ".reindex_needed"
+    trigger.write_text(str(vault_path))
+    return "Reindex trigger written (UI will reindex on next query)"
 
 
 def main() -> None:
@@ -57,7 +38,7 @@ def main() -> None:
         "command",
         nargs="?",
         default="all",
-        choices=["inbox", "tasks", "index", "all"],
+        choices=["inbox", "tasks", "projects", "index", "all"],
         help="Which sync to run (default: all)",
     )
     parser.add_argument(
@@ -107,6 +88,11 @@ def main() -> None:
     if args.command in ("tasks", "all"):
         logger.info("--- Syncing tasks ---")
         summary = sync_tasks(vault_path)
+        logger.info("  %s", summary)
+
+    if args.command in ("projects", "all"):
+        logger.info("--- Syncing projects ---")
+        summary = sync_projects(vault_path)
         logger.info("  %s", summary)
 
     if args.command in ("index", "all"):

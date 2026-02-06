@@ -1,6 +1,7 @@
 """Vault connector for reading Obsidian vault files."""
 
 import fnmatch
+import hashlib
 from pathlib import Path
 
 from secondbrain.models import Note
@@ -69,6 +70,24 @@ class VaultConnector:
         full_path = self.vault_path / relative_path
         content = full_path.read_text(encoding="utf-8")
         return parse_markdown(str(relative_path), content)
+
+    def get_file_metadata(self) -> dict[str, tuple[float, str]]:
+        """Get metadata for all vault files.
+
+        Returns:
+            Dict of {relative_path: (mtime, sha1_hash)} for all vault .md files.
+        """
+        metadata: dict[str, tuple[float, str]] = {}
+        for path in self.list_notes():
+            full_path = self.vault_path / path
+            try:
+                mtime = full_path.stat().st_mtime
+                content = full_path.read_bytes()
+                content_hash = hashlib.sha1(content).hexdigest()
+                metadata[str(path)] = (mtime, content_hash)
+            except OSError:
+                continue
+        return metadata
 
     def read_all_notes(self) -> list[Note]:
         """Read all notes in the vault.

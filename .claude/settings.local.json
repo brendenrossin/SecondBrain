@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(brew info:*)",
+      "Bash(curl:*)",
+      "WebSearch",
+      "WebFetch(domain:www.gradio.app)",
+      "Bash(uv run python:*)",
+      "Bash(export PATH=\"$HOME/.local/bin:$PATH\")",
+      "Bash(make test:*)"
+    ]
+  }
+}

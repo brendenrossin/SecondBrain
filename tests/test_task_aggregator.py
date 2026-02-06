@@ -5,12 +5,13 @@ from datetime import datetime, timedelta
 from secondbrain.scripts.task_aggregator import (
     AggregatedTask,
     Task,
-    _aggregate_tasks,
     _normalize,
     _parse_tasks_from_file,
     _read_aggregate_completions,
+    _read_aggregate_due_dates,
     _write_aggregate_file,
     _write_completed_file,
+    aggregate_tasks,
     sync_tasks,
 )
 
@@ -112,20 +113,20 @@ class TestAggregateTasks:
     def test_groups_same_task(self):
         t1 = Task("Do thing", False, "2026-02-04", "Personal", "", 5)
         t2 = Task("Do thing", False, "2026-02-05", "Personal", "", 5)
-        agg = _aggregate_tasks([t1, t2])
+        agg = aggregate_tasks([t1, t2])
         assert len(agg) == 1
         assert len(agg[0].appearances) == 2
 
     def test_different_categories_separate(self):
         t1 = Task("Do thing", False, "2026-02-04", "AT&T", "", 5)
         t2 = Task("Do thing", False, "2026-02-05", "Personal", "", 5)
-        agg = _aggregate_tasks([t1, t2])
+        agg = aggregate_tasks([t1, t2])
         assert len(agg) == 2
 
     def test_due_date_from_latest(self):
         t1 = Task("Do thing", False, "2026-02-04", "Personal", "", 5, due_date="")
         t2 = Task("Do thing", False, "2026-02-05", "Personal", "", 5, due_date="2026-03-01")
-        agg = _aggregate_tasks([t1, t2])
+        agg = aggregate_tasks([t1, t2])
         assert agg[0].due_date == "2026-03-01"
 
 
@@ -201,7 +202,7 @@ class TestReadAggregateCompletions:
     def test_table_format_open(self, tmp_path):
         f = tmp_path / "All Tasks.md"
         f.write_text(
-            "| Status | Task | Added | Due | |\n"
+            "| Status | Task | Added | Due | Timeline |\n"
             "|:---:|------|:---:|:---:|:---:|\n"
             "| Open | Open task | [[2026-02-05]] |  |  |\n"
         )
@@ -211,7 +212,7 @@ class TestReadAggregateCompletions:
     def test_table_format_done(self, tmp_path):
         f = tmp_path / "All Tasks.md"
         f.write_text(
-            "| Status | Task | Added | Due | |\n"
+            "| Status | Task | Added | Due | Timeline |\n"
             "|:---:|------|:---:|:---:|:---:|\n"
             "| Done | Finished task | [[2026-02-05]] |  |  |\n"
         )
@@ -221,7 +222,7 @@ class TestReadAggregateCompletions:
     def test_table_format_in_progress(self, tmp_path):
         f = tmp_path / "All Tasks.md"
         f.write_text(
-            "| Status | Task | Added | Due | |\n"
+            "| Status | Task | Added | Due | Timeline |\n"
             "|:---:|------|:---:|:---:|:---:|\n"
             "| In Progress | Working task | [[2026-02-05]] |  |  |\n"
         )
@@ -388,3 +389,121 @@ class TestSyncTasks:
         sync_tasks(vault)
         all_tasks = (vault / "Tasks" / "All Tasks.md").read_text()
         assert "2026-02-20" in all_tasks
+
+
+# --- Read aggregate due dates ---
+
+
+class TestReadAggregateDueDates:
+    def test_reads_due_dates_from_table(self, tmp_path):
+        f = tmp_path / "All Tasks.md"
+        f.write_text(
+            "| Status | Task | Added | Due | Timeline |\n"
+            "|:---:|------|:---:|:---:|:---:|\n"
+            "| Open | Send resume | [[2026-02-05]] | 2026-02-10 | in 4 days |\n"
+            "| Open | No deadline | [[2026-02-05]] |  |  |\n"
+        )
+        due_dates = _read_aggregate_due_dates(f)
+        assert due_dates[_normalize("Send resume")] == "2026-02-10"
+        assert due_dates[_normalize("No deadline")] == ""
+
+    def test_nonexistent_file(self, tmp_path):
+        f = tmp_path / "nope.md"
+        assert _read_aggregate_due_dates(f) == {}
+
+
+# --- Due date sync to daily ---
+
+
+class TestDueDateSyncToDaily:
+    def _setup_vault(self, tmp_path):
+        daily_dir = tmp_path / "00_Daily"
+        daily_dir.mkdir()
+        tasks_dir = tmp_path / "Tasks"
+        tasks_dir.mkdir()
+
+        (daily_dir / "2026-02-05.md").write_text(
+            "## Tasks\n"
+            "### Personal\n"
+            "- [ ] Send resume\n"
+            "- [ ] Buy groceries (due: 2026-02-10)\n"
+            "- [ ] Call dentist (due: 2026-02-08)\n"
+        )
+        return tmp_path
+
+    def test_sync_new_due_date_to_daily(self, tmp_path):
+        vault = self._setup_vault(tmp_path)
+        # First sync to generate aggregate
+        sync_tasks(vault)
+
+        # Add due date in aggregate
+        agg_file = vault / "Tasks" / "All Tasks.md"
+        content = agg_file.read_text()
+        content = content.replace(
+            "| Open | Send resume | [[2026-02-05]] |  |",
+            "| Open | Send resume | [[2026-02-05]] | 2026-02-15 |",
+        )
+        agg_file.write_text(content)
+
+        # Re-sync
+        sync_tasks(vault)
+        daily = (vault / "00_Daily" / "2026-02-05.md").read_text()
+        assert "(due: 2026-02-15)" in daily
+        assert "Send resume (due: 2026-02-15)" in daily
+
+    def test_sync_changed_due_date_to_daily(self, tmp_path):
+        vault = self._setup_vault(tmp_path)
+        sync_tasks(vault)
+
+        # Change due date in aggregate for "Buy groceries"
+        agg_file = vault / "Tasks" / "All Tasks.md"
+        content = agg_file.read_text()
+        content = content.replace("2026-02-10", "2026-02-20")
+        agg_file.write_text(content)
+
+        # Re-sync
+        sync_tasks(vault)
+        daily = (vault / "00_Daily" / "2026-02-05.md").read_text()
+        assert "(due: 2026-02-20)" in daily
+        # Old date should be gone
+        assert "(due: 2026-02-10)" not in daily
+
+    def test_empty_aggregate_date_does_not_clear_daily(self, tmp_path):
+        """If aggregate has no due date, daily note's due date is preserved."""
+        vault = self._setup_vault(tmp_path)
+        sync_tasks(vault)
+
+        # Aggregate has date for "Call dentist". Verify it's in daily after sync.
+        daily = (vault / "00_Daily" / "2026-02-05.md").read_text()
+        assert "(due: 2026-02-08)" in daily
+        assert "Call dentist" in daily
+
+    def test_due_date_round_trip(self, tmp_path):
+        """Add due date in daily -> aggregate -> change in aggregate -> back to daily."""
+        vault = self._setup_vault(tmp_path)
+
+        # Step 1: Sync (Send resume has no due date)
+        sync_tasks(vault)
+
+        # Step 2: Add due date in daily note
+        daily_file = vault / "00_Daily" / "2026-02-05.md"
+        content = daily_file.read_text()
+        content = content.replace("- [ ] Send resume", "- [ ] Send resume (due: 2026-03-01)")
+        daily_file.write_text(content)
+
+        # Step 3: Re-sync -> aggregate should pick it up
+        sync_tasks(vault)
+        agg = (vault / "Tasks" / "All Tasks.md").read_text()
+        assert "2026-03-01" in agg
+
+        # Step 4: Change due date in aggregate
+        agg_file = vault / "Tasks" / "All Tasks.md"
+        content = agg_file.read_text()
+        content = content.replace("2026-03-01", "2026-03-15")
+        agg_file.write_text(content)
+
+        # Step 5: Re-sync -> daily should have new date
+        sync_tasks(vault)
+        daily = (vault / "00_Daily" / "2026-02-05.md").read_text()
+        assert "(due: 2026-03-15)" in daily
+        assert "(due: 2026-03-01)" not in daily

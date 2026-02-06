@@ -1,5 +1,6 @@
 """FastAPI dependency injection for shared resources."""
 
+import logging
 from functools import lru_cache
 from pathlib import Path
 
@@ -9,9 +10,12 @@ from secondbrain.logging.query_logger import QueryLogger
 from secondbrain.retrieval.hybrid import HybridRetriever
 from secondbrain.retrieval.reranker import LLMReranker
 from secondbrain.stores.conversation import ConversationStore
+from secondbrain.stores.index_tracker import IndexTracker
 from secondbrain.stores.lexical import LexicalStore
 from secondbrain.stores.vector import VectorStore
 from secondbrain.synthesis.answerer import Answerer
+
+logger = logging.getLogger(__name__)
 
 
 @lru_cache
@@ -65,6 +69,13 @@ def get_query_logger() -> QueryLogger:
 
 
 @lru_cache
+def get_index_tracker() -> IndexTracker:
+    """Get cached index tracker instance."""
+    data_path = get_data_path()
+    return IndexTracker(data_path / "index_tracker.db")
+
+
+@lru_cache
 def get_retriever() -> HybridRetriever:
     """Get cached hybrid retriever instance."""
     return HybridRetriever(
@@ -106,3 +117,97 @@ def get_local_answerer() -> Answerer:
         model=settings.ollama_model,
         base_url=settings.ollama_base_url,
     )
+
+
+def check_and_reindex(full_rebuild: bool = False) -> str | None:
+    """Check for a reindex trigger file and reindex if found.
+
+    The daily sync writes ``data/.reindex_needed`` instead of touching stores
+    directly.  This function is called by the UI before each query so the
+    single owner process (the UI) performs the actual reindex.
+
+    Uses incremental indexing: only re-chunks and embeds new/modified files,
+    and removes chunks for deleted files. First run (empty tracker) behaves
+    like a full rebuild.
+
+    Args:
+        full_rebuild: If True, clear the tracker and do a full reindex.
+
+    Returns a status message, or None if no reindex was needed.
+    """
+    data_path = get_data_path()
+    trigger = data_path / ".reindex_needed"
+    if not trigger.exists():
+        return None
+
+    vault_path_str = trigger.read_text().strip()
+    trigger.unlink()
+
+    from secondbrain.indexing.chunker import Chunker
+    from secondbrain.vault.connector import VaultConnector
+
+    vault_path = Path(vault_path_str)
+    if not vault_path.exists():
+        logger.error("Reindex trigger vault path does not exist: %s", vault_path)
+        return None
+
+    logger.info("Reindex triggered for %s", vault_path)
+    connector = VaultConnector(vault_path)
+    chunker = Chunker()
+    embedder = get_embedder()
+    vector_store = get_vector_store()
+    lexical_store = get_lexical_store()
+    tracker = get_index_tracker()
+
+    if full_rebuild:
+        tracker.clear()
+
+    # Step 1: Get file metadata (mtimes + hashes)
+    vault_files = connector.get_file_metadata()
+    if not vault_files:
+        logger.info("Reindex: 0 notes found")
+        return "Reindex: 0 notes"
+
+    # Step 2: Classify changes
+    new_files, modified_files, deleted_files, unchanged_files = tracker.classify_changes(vault_files)
+
+    # Step 3: Delete chunks for deleted + modified files
+    for file_path in deleted_files + modified_files:
+        vector_store.delete_by_note_path(file_path)
+        lexical_store.delete_by_note_path(file_path)
+        if file_path in deleted_files:
+            tracker.remove_file(file_path)
+
+    # Step 4: Re-chunk and embed new + modified files
+    files_to_index = new_files + modified_files
+    total_chunks = 0
+    for file_path in files_to_index:
+        try:
+            note = connector.read_note(Path(file_path))
+        except Exception as e:
+            logger.warning("Error reading %s: %s", file_path, e)
+            continue
+
+        chunks = chunker.chunk_note(note)
+        if chunks:
+            texts = [c.chunk_text for c in chunks]
+            embeddings = embedder.embed(texts)
+            vector_store.add_chunks(chunks, embeddings)
+            lexical_store.add_chunks(chunks)
+
+        # Step 5: Update tracker
+        mtime, content_hash = vault_files[file_path]
+        tracker.mark_indexed(file_path, content_hash, mtime, len(chunks))
+        total_chunks += len(chunks)
+
+    # Step 6: Write epoch file for multi-process coordination
+    epoch_file = data_path / ".reindex_epoch"
+    epoch_file.write_text(str(Path(vault_path_str)))
+
+    msg = (
+        f"Incremental reindex: {len(new_files)} new, {len(modified_files)} modified, "
+        f"{len(deleted_files)} deleted, {len(unchanged_files)} unchanged "
+        f"({total_chunks} chunks indexed)"
+    )
+    logger.info(msg)
+    return msg

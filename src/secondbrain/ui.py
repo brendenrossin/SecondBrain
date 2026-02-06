@@ -8,13 +8,17 @@ from typing import Any, TypedDict
 import gradio as gr
 
 from secondbrain.api.dependencies import (
+    check_and_reindex,
     get_answerer,
     get_conversation_store,
+    get_index_tracker,
+    get_lexical_store,
     get_local_answerer,
     get_local_reranker,
     get_query_logger,
     get_reranker,
     get_retriever,
+    get_vector_store,
 )
 from secondbrain.config import get_settings
 from secondbrain.models import Citation
@@ -92,6 +96,13 @@ def format_citations(citations: list[Citation]) -> str:
 
 
 MOBILE_CSS = """
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* Apply Inter font globally */
+.gradio-container, .gradio-container * {
+    font-family: 'Inter', sans-serif !important;
+}
+
 /* Remove excess padding on mobile */
 .gradio-container {
     padding: 0 !important;
@@ -135,6 +146,29 @@ MOBILE_CSS = """
 """
 
 
+def get_index_status() -> str:
+    """Get formatted index status for the admin panel."""
+    vector_count = get_vector_store().count()
+    lexical_count = get_lexical_store().count()
+    tracker_stats = get_index_tracker().get_stats()
+
+    last_indexed = tracker_stats["last_indexed_at"] or "Never"
+    # Trim ISO seconds fraction for readability
+    if isinstance(last_indexed, str) and "." in last_indexed:
+        last_indexed = last_indexed.split(".")[0].replace("T", " ")
+
+    return (
+        f"| Metric | Value |\n"
+        f"|--------|-------|\n"
+        f"| Vector chunks | {vector_count} |\n"
+        f"| Lexical chunks | {lexical_count} |\n"
+        f"| Tracked files | {tracker_stats['file_count']} |\n"
+        f"| Tracker chunks | {tracker_stats['total_chunks']} |\n"
+        f"| Last indexed | {last_indexed} |"
+    )
+
+
+
 def create_ui() -> "gr.Blocks":
     """Create the Gradio UI."""
     # Get shared instances
@@ -164,7 +198,7 @@ def create_ui() -> "gr.Blocks":
         metrics: LatencyMetrics | None,
         provider_name: str,
     ) -> Generator[
-        tuple[list[dict[str, str]], str | None, list[Citation], str, LatencyMetrics], None, None
+        tuple[list[dict[str, str]], str | None, list[Citation], str, LatencyMetrics, str], None, None
     ]:
         """Process a chat message with streaming response."""
         start_time = time.time()
@@ -190,6 +224,7 @@ def create_ui() -> "gr.Blocks":
             [],
             f"**Searching your notes...** ({provider_name})",
             metrics,
+            metrics.format_display(),
         )
 
         # Get or create conversation
@@ -204,7 +239,7 @@ def create_ui() -> "gr.Blocks":
         retrieval_ms = (time.time() - t0) * 1000
         print(f"[TIMING] Retrieval: {retrieval_ms:.0f}ms", flush=True)
 
-        yield history, conv_id, [], f"**Reranking results...** ({provider_name})", metrics
+        yield history, conv_id, [], f"**Reranking results...** ({provider_name})", metrics, metrics.format_display()
 
         # Rerank
         t0 = time.time()
@@ -233,7 +268,7 @@ def create_ui() -> "gr.Blocks":
         label_info = f"\n\n**Retrieval Status:** `{retrieval_label.value}`"
 
         # Show sources while generating
-        yield history, conv_id, citations, citations_display + label_info, metrics
+        yield history, conv_id, citations, citations_display + label_info, metrics, metrics.format_display()
 
         # Stream the answer
         t0 = time.time()
@@ -246,7 +281,7 @@ def create_ui() -> "gr.Blocks":
         ):
             answer_text += token
             history[-1]["content"] = answer_text
-            yield history, conv_id, citations, citations_display + label_info, metrics
+            yield history, conv_id, citations, citations_display + label_info, metrics, metrics.format_display()
 
         generation_ms = (time.time() - t0) * 1000
         print(f"[TIMING] Answer generation: {generation_ms:.0f}ms", flush=True)
@@ -268,13 +303,12 @@ def create_ui() -> "gr.Blocks":
             latency_ms=latency_ms,
         )
 
-        # Final yield with metrics
-        final_display = citations_display + label_info + metrics.format_display()
-        yield history, conv_id, citations, final_display, metrics
+        # Final yield — performance goes to admin panel, not sources
+        yield history, conv_id, citations, citations_display + label_info, metrics, metrics.format_display()
 
-    def clear_chat() -> tuple[list[dict[str, str]], None, list[Any], str, LatencyMetrics]:
+    def clear_chat() -> tuple[list[dict[str, str]], None, list[Any], str, LatencyMetrics, str]:
         """Clear the chat and start a new conversation."""
-        return [], None, [], "Start a conversation to see sources.", LatencyMetrics()
+        return [], None, [], "Start a conversation to see sources.", LatencyMetrics(), ""
 
     # Build UI
     with gr.Blocks(
@@ -312,6 +346,11 @@ def create_ui() -> "gr.Blocks":
                 elem_classes=["sources-panel"],
             )
 
+        with gr.Accordion("Admin", open=False):
+            admin_stats = gr.Markdown(value=get_index_status())
+            admin_perf = gr.Markdown(value="")
+            refresh_btn = gr.Button("Refresh Stats", size="sm")
+
         msg = gr.Textbox(
             show_label=False,
             placeholder="Ask anything...",
@@ -332,6 +371,7 @@ def create_ui() -> "gr.Blocks":
                 current_citations,
                 sources_display,
                 current_metrics,
+                admin_perf,
             ],
         ).then(
             lambda: "",
@@ -346,7 +386,14 @@ def create_ui() -> "gr.Blocks":
                 current_citations,
                 sources_display,
                 current_metrics,
+                admin_perf,
             ],
+        )
+
+        # Admin panel handler
+        refresh_btn.click(
+            get_index_status,
+            outputs=[admin_stats],
         )
 
     return demo  # type: ignore[no-any-return]
@@ -362,6 +409,13 @@ def main() -> None:
         print("Example: export SECONDBRAIN_VAULT_PATH=/path/to/your/vault")
     else:
         print(f"Vault path: {settings.vault_path}")
+
+    # Reindex at startup (outside Gradio thread pool) if trigger file exists
+    reindex_msg = check_and_reindex()
+    if reindex_msg:
+        print(f"[REINDEX] {reindex_msg}")
+    else:
+        print("No pending reindex.")
 
     demo = create_ui()
     demo.launch(

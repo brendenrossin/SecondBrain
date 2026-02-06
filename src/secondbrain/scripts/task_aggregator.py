@@ -115,22 +115,25 @@ def sync_tasks(vault_path: Path) -> str:
     aggregate_file = tasks_dir / "All Tasks.md"
     completed_file = tasks_dir / "Completed Tasks.md"
 
-    # Step 1: Read existing completion states from both files (for bi-dir sync)
+    # Step 1: Read existing states from both files (for bi-dir sync)
     existing_completions = _read_aggregate_completions(aggregate_file)
     existing_completions.update(_read_aggregate_completions(completed_file))
+    existing_due_dates = _read_aggregate_due_dates(aggregate_file)
 
     # Step 2: Scan daily notes for all tasks
-    all_tasks = _scan_daily_notes(daily_dir)
+    all_tasks = scan_daily_notes(daily_dir)
 
-    # Step 3: Bi-directional sync — push completions from aggregate back to daily notes
-    updates = _sync_completions_to_daily(daily_dir, all_tasks, existing_completions)
+    # Step 3: Bi-directional sync — push completions + due dates from aggregate back to daily notes
+    updates = _sync_changes_to_daily(
+        daily_dir, all_tasks, existing_completions, existing_due_dates
+    )
 
     # Step 4: Re-scan daily notes after sync (picks up any changes)
     if updates > 0:
-        all_tasks = _scan_daily_notes(daily_dir)
+        all_tasks = scan_daily_notes(daily_dir)
 
     # Step 5: Aggregate tasks by normalized text
-    aggregated = _aggregate_tasks(all_tasks)
+    aggregated = aggregate_tasks(all_tasks)
 
     # Step 6: Generate the aggregate files (open + completed separately)
     _write_aggregate_file(aggregate_file, aggregated)
@@ -153,7 +156,7 @@ def _normalize(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def _scan_daily_notes(daily_dir: Path) -> list[Task]:
+def scan_daily_notes(daily_dir: Path) -> list[Task]:
     """Scan all daily note files for tasks."""
     if not daily_dir.exists():
         return []
@@ -228,7 +231,7 @@ def _parse_tasks_from_file(md_file: Path, date_str: str) -> list[Task]:
     return tasks
 
 
-def _aggregate_tasks(all_tasks: list[Task]) -> list[AggregatedTask]:
+def aggregate_tasks(all_tasks: list[Task]) -> list[AggregatedTask]:
     """Group tasks by normalized text, maintaining category/sub-project from first appearance."""
     seen: dict[str, AggregatedTask] = {}
 
@@ -301,20 +304,61 @@ def _read_aggregate_completions(aggregate_file: Path) -> dict[str, bool]:
     return completions
 
 
-def _sync_completions_to_daily(
+def _read_aggregate_due_dates(aggregate_file: Path) -> dict[str, str]:
+    """Read due dates from the aggregate task table.
+
+    Returns dict of normalized_task_text -> due_date_string (YYYY-MM-DD or "").
+    """
+    if not aggregate_file.exists():
+        return {}
+
+    due_dates: dict[str, str] = {}
+    content = aggregate_file.read_text(encoding="utf-8")
+
+    for line in content.split("\n"):
+        stripped = line.strip()
+
+        # Table format: | Status | Task | Added | Due | Timeline |
+        if stripped.startswith("|") and stripped.endswith("|"):
+            cells = [c.strip() for c in stripped.split("|")]
+            # cells[0] and cells[-1] are empty from leading/trailing |
+            if len(cells) < 6:
+                continue
+            status_cell = cells[1]
+            task_cell = cells[2]
+            due_cell = cells[4]
+            # Skip header/separator rows
+            if task_cell.startswith("--") or task_cell == "Task" or status_cell == "Status":
+                continue
+            # Clean task text: remove wiki-links
+            text = re.sub(r"\[\[\d{4}-\d{2}-\d{2}\]\]", "", task_cell).strip()
+            text = DUE_DATE_RE.sub("", text).strip()
+            normalized = _normalize(text)
+            if normalized:
+                due_dates[normalized] = due_cell
+
+    return due_dates
+
+
+def _sync_changes_to_daily(
     daily_dir: Path,
     all_tasks: list[Task],
     existing_completions: dict[str, bool],
+    existing_due_dates: dict[str, str] | None = None,
 ) -> int:
-    """Push completions from aggregate file back to daily notes.
+    """Push completions and due dates from aggregate file back to daily notes.
 
     If a task is marked completed in the aggregate but open in a daily note,
-    update the daily note.
+    update the daily note. If a due date was added/changed/removed in the
+    aggregate, sync it back to the daily note.
 
     Returns number of daily note files updated.
     """
-    if not existing_completions:
+    if not existing_completions and not existing_due_dates:
         return 0
+
+    if existing_due_dates is None:
+        existing_due_dates = {}
 
     # Group tasks by source file
     tasks_by_file: dict[str, list[Task]] = {}
@@ -331,21 +375,39 @@ def _sync_completions_to_daily(
         file_changed = False
 
         for task in tasks:
-            if task.completed:
-                continue  # Already completed in daily, nothing to sync
+            old_line = lines[task.line_number]
 
-            # Check if aggregate has it as completed
-            agg_completed = existing_completions.get(task.normalized)
-            if agg_completed:
-                # Update the daily note line
-                old_line = lines[task.line_number]
-                new_line = old_line.replace("- [ ]", "- [x]", 1)
-                if old_line != new_line:
-                    lines[task.line_number] = new_line
-                    file_changed = True
-                    logger.info(
-                        "Synced completion: %s in %s", task.text, date_str
-                    )
+            # Sync completions: aggregate completed -> daily note
+            if not task.completed:
+                agg_completed = existing_completions.get(task.normalized)
+                if agg_completed:
+                    new_line = old_line.replace("- [ ]", "- [x]", 1)
+                    if old_line != new_line:
+                        lines[task.line_number] = new_line
+                        old_line = new_line
+                        file_changed = True
+                        logger.info(
+                            "Synced completion: %s in %s", task.text, date_str
+                        )
+
+            # Sync due dates: aggregate due date -> daily note
+            # Only sync non-empty due dates from aggregate. If aggregate
+            # has no date, don't clear the daily note's date (the daily
+            # note is the source of truth for new dates).
+            agg_due = existing_due_dates.get(task.normalized)
+            if agg_due:  # only sync if aggregate has an actual date
+                current_due = task.due_date
+                if agg_due != current_due:
+                    # Strip any existing due date from the line
+                    new_line = DUE_DATE_RE.sub("", old_line).rstrip()
+                    new_line = f"{new_line} (due: {agg_due})"
+                    if old_line != new_line:
+                        lines[task.line_number] = new_line
+                        file_changed = True
+                        logger.info(
+                            "Synced due date: %s -> %s in %s",
+                            task.text, agg_due, date_str,
+                        )
 
         if file_changed:
             daily_file.write_text("\n".join(lines), encoding="utf-8")
@@ -394,7 +456,7 @@ def _write_aggregate_file(aggregate_file: Path, aggregated: list[AggregatedTask]
             tasks.sort(key=lambda t: (t.due_date or "9999-99-99", t.first_date))
 
             # Table header
-            lines.append("| Status | Task | Added | Due | |")
+            lines.append("| Status | Task | Added | Due | Timeline |")
             lines.append("|:---:|------|:---:|:---:|:---:|")
 
             for task in tasks:

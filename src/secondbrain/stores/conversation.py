@@ -1,11 +1,14 @@
 """Conversation history storage."""
 
+import logging
 import sqlite3
 import uuid
 from datetime import datetime
 from pathlib import Path
 
 from secondbrain.models import Conversation, ConversationMessage
+
+logger = logging.getLogger(__name__)
 
 
 class ConversationStore:
@@ -29,8 +32,19 @@ class ConversationStore:
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
             self._conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
             self._conn.row_factory = sqlite3.Row
+            self._conn.execute("PRAGMA journal_mode=WAL")
+            self._conn.execute("PRAGMA busy_timeout=5000")
             self._init_schema()
         return self._conn
+
+    def _reconnect(self) -> None:
+        """Close and discard the current connection so the next access creates a fresh one."""
+        if self._conn is not None:
+            try:
+                self._conn.close()
+            except Exception:
+                pass
+            self._conn = None
 
     def _init_schema(self) -> None:
         """Initialize the database schema."""
@@ -64,11 +78,20 @@ class ConversationStore:
         conversation_id = str(uuid.uuid4())
         now = datetime.utcnow().isoformat()
 
-        self.conn.execute(
-            "INSERT INTO conversations (conversation_id, created_at, updated_at) VALUES (?, ?, ?)",
-            (conversation_id, now, now),
-        )
-        self.conn.commit()
+        try:
+            self.conn.execute(
+                "INSERT INTO conversations (conversation_id, created_at, updated_at) VALUES (?, ?, ?)",
+                (conversation_id, now, now),
+            )
+            self.conn.commit()
+        except sqlite3.DatabaseError:
+            logger.warning("ConversationStore: DatabaseError on create_conversation, reconnecting")
+            self._reconnect()
+            self.conn.execute(
+                "INSERT INTO conversations (conversation_id, created_at, updated_at) VALUES (?, ?, ?)",
+                (conversation_id, now, now),
+            )
+            self.conn.commit()
 
         return conversation_id
 
@@ -82,10 +105,18 @@ class ConversationStore:
             The conversation ID (existing or new).
         """
         if conversation_id:
-            cursor = self.conn.execute(
-                "SELECT conversation_id FROM conversations WHERE conversation_id = ?",
-                (conversation_id,),
-            )
+            try:
+                cursor = self.conn.execute(
+                    "SELECT conversation_id FROM conversations WHERE conversation_id = ?",
+                    (conversation_id,),
+                )
+            except sqlite3.DatabaseError:
+                logger.warning("ConversationStore: DatabaseError on get_or_create, reconnecting")
+                self._reconnect()
+                cursor = self.conn.execute(
+                    "SELECT conversation_id FROM conversations WHERE conversation_id = ?",
+                    (conversation_id,),
+                )
             if cursor.fetchone():
                 return conversation_id
 
@@ -103,23 +134,35 @@ class ConversationStore:
         """
         now = datetime.utcnow().isoformat()
 
-        self.conn.execute(
-            "INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-            (conversation_id, role, content, now),
-        )
-        self.conn.execute(
-            "UPDATE conversations SET updated_at = ? WHERE conversation_id = ?",
-            (now, conversation_id),
-        )
-        self.conn.commit()
+        try:
+            self.conn.execute(
+                "INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
+                (conversation_id, role, content, now),
+            )
+            self.conn.execute(
+                "UPDATE conversations SET updated_at = ? WHERE conversation_id = ?",
+                (now, conversation_id),
+            )
+            self.conn.commit()
+        except sqlite3.DatabaseError:
+            logger.warning("ConversationStore: DatabaseError on add_message, reconnecting")
+            self._reconnect()
+            self.conn.execute(
+                "INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
+                (conversation_id, role, content, now),
+            )
+            self.conn.execute(
+                "UPDATE conversations SET updated_at = ? WHERE conversation_id = ?",
+                (now, conversation_id),
+            )
+            self.conn.commit()
 
         # Prune old messages if needed
         self._prune_messages(conversation_id)
 
     def _prune_messages(self, conversation_id: str) -> None:
         """Keep only the most recent messages."""
-        self.conn.execute(
-            """
+        sql = """
             DELETE FROM messages
             WHERE conversation_id = ?
             AND id NOT IN (
@@ -128,10 +171,16 @@ class ConversationStore:
                 ORDER BY id DESC
                 LIMIT ?
             )
-            """,
-            (conversation_id, conversation_id, self.max_messages),
-        )
-        self.conn.commit()
+        """
+        params = (conversation_id, conversation_id, self.max_messages)
+        try:
+            self.conn.execute(sql, params)
+            self.conn.commit()
+        except sqlite3.DatabaseError:
+            logger.warning("ConversationStore: DatabaseError on _prune_messages, reconnecting")
+            self._reconnect()
+            self.conn.execute(sql, params)
+            self.conn.commit()
 
     def get_conversation(self, conversation_id: str) -> Conversation | None:
         """Get a conversation with its messages.
@@ -142,21 +191,40 @@ class ConversationStore:
         Returns:
             The Conversation object, or None if not found.
         """
-        cursor = self.conn.execute(
-            "SELECT conversation_id FROM conversations WHERE conversation_id = ?",
-            (conversation_id,),
-        )
-        if not cursor.fetchone():
-            return None
+        try:
+            cursor = self.conn.execute(
+                "SELECT conversation_id FROM conversations WHERE conversation_id = ?",
+                (conversation_id,),
+            )
+            if not cursor.fetchone():
+                return None
 
-        cursor = self.conn.execute(
-            """
-            SELECT role, content FROM messages
-            WHERE conversation_id = ?
-            ORDER BY id ASC
-            """,
-            (conversation_id,),
-        )
+            cursor = self.conn.execute(
+                """
+                SELECT role, content FROM messages
+                WHERE conversation_id = ?
+                ORDER BY id ASC
+                """,
+                (conversation_id,),
+            )
+        except sqlite3.DatabaseError:
+            logger.warning("ConversationStore: DatabaseError on get_conversation, reconnecting")
+            self._reconnect()
+            cursor = self.conn.execute(
+                "SELECT conversation_id FROM conversations WHERE conversation_id = ?",
+                (conversation_id,),
+            )
+            if not cursor.fetchone():
+                return None
+
+            cursor = self.conn.execute(
+                """
+                SELECT role, content FROM messages
+                WHERE conversation_id = ?
+                ORDER BY id ASC
+                """,
+                (conversation_id,),
+            )
 
         messages = [
             ConversationMessage(role=row["role"], content=row["content"])
@@ -177,17 +245,20 @@ class ConversationStore:
         Returns:
             List of messages, oldest first.
         """
-        cursor = self.conn.execute(
-            """
+        sql = """
             SELECT role, content FROM (
                 SELECT role, content, id FROM messages
                 WHERE conversation_id = ?
                 ORDER BY id DESC
                 LIMIT ?
             ) ORDER BY id ASC
-            """,
-            (conversation_id, limit),
-        )
+        """
+        try:
+            cursor = self.conn.execute(sql, (conversation_id, limit))
+        except sqlite3.DatabaseError:
+            logger.warning("ConversationStore: DatabaseError on get_recent_messages, reconnecting")
+            self._reconnect()
+            cursor = self.conn.execute(sql, (conversation_id, limit))
 
         return [
             ConversationMessage(role=row["role"], content=row["content"])
@@ -196,15 +267,28 @@ class ConversationStore:
 
     def delete_conversation(self, conversation_id: str) -> None:
         """Delete a conversation and all its messages."""
-        self.conn.execute(
-            "DELETE FROM messages WHERE conversation_id = ?",
-            (conversation_id,),
-        )
-        self.conn.execute(
-            "DELETE FROM conversations WHERE conversation_id = ?",
-            (conversation_id,),
-        )
-        self.conn.commit()
+        try:
+            self.conn.execute(
+                "DELETE FROM messages WHERE conversation_id = ?",
+                (conversation_id,),
+            )
+            self.conn.execute(
+                "DELETE FROM conversations WHERE conversation_id = ?",
+                (conversation_id,),
+            )
+            self.conn.commit()
+        except sqlite3.DatabaseError:
+            logger.warning("ConversationStore: DatabaseError on delete_conversation, reconnecting")
+            self._reconnect()
+            self.conn.execute(
+                "DELETE FROM messages WHERE conversation_id = ?",
+                (conversation_id,),
+            )
+            self.conn.execute(
+                "DELETE FROM conversations WHERE conversation_id = ?",
+                (conversation_id,),
+            )
+            self.conn.commit()
 
     def close(self) -> None:
         """Close the database connection."""
