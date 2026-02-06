@@ -1,4 +1,4 @@
-.PHONY: install dev ui test lint format typecheck check clean index reindex process-inbox sync-tasks daily-sync install-cron uninstall-cron install-ui-service uninstall-ui-service eval
+.PHONY: install dev ui test lint format typecheck check clean index reindex extract process-inbox sync-tasks daily-sync install-cron uninstall-cron install-ui-service uninstall-ui-service eval
 
 # Install dependencies
 install:
@@ -19,6 +19,10 @@ index:
 # Reindex the vault standalone (no server needed)
 reindex:
 	uv run python -m secondbrain.scripts.daily_sync index
+
+# Extract metadata from vault notes (requires running server)
+extract:
+	curl -X POST http://localhost:8000/api/v1/extract
 
 # Run tests
 test:

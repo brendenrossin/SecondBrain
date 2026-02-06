@@ -17,6 +17,7 @@ class LLMClient:
         self._ollama_client: OpenAI | None = None
         self._openai_client: OpenAI | None = None
         self._settings = get_settings()
+        self.model_name: str = self._settings.ollama_model
 
     @property
     def ollama_client(self) -> OpenAI:

@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from secondbrain import __version__
 from secondbrain.api.ask import router as ask_router
 from secondbrain.api.index import router as index_router
+from secondbrain.api.metadata import router as metadata_router
 from secondbrain.config import get_settings
 
 settings = get_settings()
@@ -19,6 +20,7 @@ app = FastAPI(
 # Include API routers
 app.include_router(ask_router)
 app.include_router(index_router)
+app.include_router(metadata_router)
 
 
 @app.get("/")

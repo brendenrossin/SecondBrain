@@ -11,13 +11,16 @@ from secondbrain.api.dependencies import (
     check_and_reindex,
     get_answerer,
     get_conversation_store,
+    get_extractor,
     get_index_tracker,
     get_lexical_store,
     get_local_answerer,
     get_local_reranker,
+    get_metadata_store,
     get_query_logger,
     get_reranker,
     get_retriever,
+    get_suggestion_engine,
     get_vector_store,
 )
 from secondbrain.config import get_settings
@@ -167,6 +170,96 @@ def get_index_status() -> str:
         f"| Last indexed | {last_indexed} |"
     )
 
+
+def _get_note_choices() -> list[str]:
+    """Get all indexed vault note paths for dropdowns."""
+    tracker = get_index_tracker()
+    cursor = tracker.conn.execute("SELECT file_path FROM indexed_files ORDER BY file_path")
+    return [row["file_path"] for row in cursor.fetchall()]
+
+
+def _format_insights(note_path: str) -> str:
+    """Format metadata insights for display."""
+    store = get_metadata_store()
+    meta = store.get(note_path)
+    if meta is None:
+        return "No metadata found. Click 'Extract Now' to extract."
+
+    parts = [f"## {note_path}\n"]
+
+    parts.append(f"**Summary:** {meta.summary}\n")
+
+    if meta.key_phrases:
+        phrases = " | ".join(f"`{kp}`" for kp in meta.key_phrases)
+        parts.append(f"**Key Phrases:** {phrases}\n")
+
+    if meta.entities:
+        parts.append("### Entities\n")
+        by_type: dict[str, list[str]] = {}
+        for e in meta.entities:
+            by_type.setdefault(e.entity_type, []).append(f"{e.text} ({e.confidence:.0%})")
+        for etype, names in sorted(by_type.items()):
+            parts.append(f"**{etype.title()}:** {', '.join(names)}\n")
+
+    if meta.dates:
+        parts.append("### Dates\n")
+        for d in meta.dates:
+            norm = f" ({d.normalized_date})" if d.normalized_date else ""
+            parts.append(f"- {d.text}{norm} [{d.date_type}]\n")
+
+    if meta.action_items:
+        parts.append("### Action Items\n")
+        for a in meta.action_items:
+            priority = f" [{a.priority}]" if a.priority else ""
+            parts.append(f"- {a.text}{priority}\n")
+
+    total = store.count()
+    tracker_stats = get_index_tracker().get_stats()
+    file_count = tracker_stats.get("file_count", 0)
+    parts.append(f"\n---\n*Extracted: {meta.extracted_at[:19]} | Model: {meta.model_used} | {total}/{file_count} notes extracted*")
+
+    return "\n".join(parts)
+
+
+def _format_suggestions(note_path: str) -> str:
+    """Format suggestions for display."""
+    engine = get_suggestion_engine()
+    suggestions = engine.suggest(note_path)
+    if suggestions is None:
+        return "No metadata found. Extract metadata first."
+
+    parts = [f"## Suggestions for {suggestions.note_title}\n"]
+
+    if suggestions.related_notes:
+        parts.append("### Related Notes\n")
+        parts.append("| Note | Similarity | Shared Entities |")
+        parts.append("|------|-----------|-----------------|")
+        for rel in suggestions.related_notes:
+            shared = ", ".join(rel.shared_entities) if rel.shared_entities else "-"
+            parts.append(f"| {rel.note_title} | {rel.similarity_score:.2f} | {shared} |")
+        parts.append("")
+
+    if suggestions.suggested_links:
+        parts.append("### Suggested Links\n")
+        parts.append("| Target | Anchor Text | Confidence | Reason |")
+        parts.append("|--------|-------------|-----------|--------|")
+        for link in suggestions.suggested_links:
+            parts.append(
+                f"| [[{link.target_note_title}]] | {link.anchor_text} "
+                f"| {link.confidence:.2f} | {link.reason} |"
+            )
+        parts.append("")
+
+    if suggestions.suggested_tags:
+        tags = " | ".join(
+            f"`{t.tag}` ({t.confidence:.0%})" for t in suggestions.suggested_tags
+        )
+        parts.append(f"### Suggested Tags\n{tags}\n")
+
+    if not (suggestions.related_notes or suggestions.suggested_links or suggestions.suggested_tags):
+        parts.append("*No suggestions available. Try extracting more notes.*")
+
+    return "\n".join(parts)
 
 
 def create_ui() -> "gr.Blocks":
@@ -356,6 +449,26 @@ def create_ui() -> "gr.Blocks":
                 elem_classes=["sources-panel"],
             )
 
+        with gr.Accordion("Insights", open=False):
+            insights_note = gr.Dropdown(
+                choices=_get_note_choices(),
+                label="Select Note",
+                interactive=True,
+            )
+            with gr.Row():
+                insights_refresh_btn = gr.Button("Refresh Notes", size="sm")
+                insights_extract_btn = gr.Button("Extract Now", size="sm")
+            insights_display = gr.Markdown(value="Select a note to view insights.")
+
+        with gr.Accordion("Suggestions", open=False):
+            suggestions_note = gr.Dropdown(
+                choices=_get_note_choices(),
+                label="Select Note",
+                interactive=True,
+            )
+            suggestions_btn = gr.Button("Generate Suggestions", size="sm")
+            suggestions_display = gr.Markdown(value="Select a note and click Generate.")
+
         with gr.Accordion("Admin", open=False):
             admin_stats = gr.Markdown(value=get_index_status())
             admin_perf = gr.Markdown(value="")
@@ -398,6 +511,69 @@ def create_ui() -> "gr.Blocks":
                 current_metrics,
                 admin_perf,
             ],
+        )
+
+        # Insights handlers
+        def on_insights_note_change(note_path: str) -> str:
+            if not note_path:
+                return "Select a note to view insights."
+            return _format_insights(note_path)
+
+        def on_refresh_notes() -> tuple[object, object]:
+            choices = _get_note_choices()
+            return gr.update(choices=choices), gr.update(choices=choices)
+
+        def on_extract_now(note_path: str) -> tuple[str, object, object]:
+            if not note_path:
+                return "Select a note first.", gr.update(), gr.update()
+            from pathlib import Path
+
+            from secondbrain.vault.connector import VaultConnector
+
+            settings = get_settings()
+            if not settings.vault_path:
+                return "Vault path not configured.", gr.update(), gr.update()
+            connector = VaultConnector(Path(settings.vault_path))
+            try:
+                note = connector.read_note(Path(note_path))
+                extractor = get_extractor()
+                metadata = extractor.extract(note)
+                store = get_metadata_store()
+                store.upsert(metadata)
+                choices = _get_note_choices()
+                return (
+                    _format_insights(note_path),
+                    gr.update(choices=choices),
+                    gr.update(choices=choices),
+                )
+            except Exception as e:
+                return f"Extraction failed: {e}", gr.update(), gr.update()
+
+        insights_note.change(
+            on_insights_note_change,
+            inputs=[insights_note],
+            outputs=[insights_display],
+        )
+        insights_refresh_btn.click(
+            on_refresh_notes,
+            outputs=[insights_note, suggestions_note],
+        )
+        insights_extract_btn.click(
+            on_extract_now,
+            inputs=[insights_note],
+            outputs=[insights_display, insights_note, suggestions_note],
+        )
+
+        # Suggestions handlers
+        def on_generate_suggestions(note_path: str) -> str:
+            if not note_path:
+                return "Select a note first."
+            return _format_suggestions(note_path)
+
+        suggestions_btn.click(
+            on_generate_suggestions,
+            inputs=[suggestions_note],
+            outputs=[suggestions_display],
         )
 
         # Admin panel handler

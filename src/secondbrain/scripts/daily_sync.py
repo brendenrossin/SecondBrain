@@ -32,13 +32,56 @@ def reindex_vault(vault_path: Path, data_path: Path | None = None) -> str:
     return "Reindex trigger written (UI will reindex on next query)"
 
 
+def extract_metadata(vault_path: Path, data_path: Path | None = None) -> str:
+    """Run metadata extraction for new/modified notes.
+
+    Unlike reindexing, extraction runs in-process (not via trigger file)
+    because it only touches the metadata SQLite DB, not ChromaDB.
+    """
+    settings = get_settings()
+    if data_path is None:
+        data_path = Path(settings.data_path) if settings.data_path else Path("data")
+
+    from secondbrain.extraction.extractor import MetadataExtractor
+    from secondbrain.scripts.llm_client import LLMClient
+    from secondbrain.stores.metadata import MetadataStore
+    from secondbrain.vault.connector import VaultConnector
+
+    connector = VaultConnector(vault_path)
+    metadata_store = MetadataStore(data_path / settings.metadata_db_name)
+    extractor = MetadataExtractor(LLMClient())
+
+    vault_files = connector.get_file_metadata()
+    current_hashes = {path: h for path, (_mtime, h) in vault_files.items()}
+    stale_paths = metadata_store.get_stale(current_hashes)
+
+    if not stale_paths:
+        metadata_store.close()
+        return "All notes up to date"
+
+    extracted = 0
+    failed = 0
+    for path in stale_paths:
+        try:
+            note = connector.read_note(Path(path))
+            metadata = extractor.extract(note)
+            metadata_store.upsert(metadata)
+            extracted += 1
+        except Exception:
+            logger.warning("Failed to extract %s", path, exc_info=True)
+            failed += 1
+
+    metadata_store.close()
+    return f"Extracted {extracted}, failed {failed}, skipped {len(vault_files) - extracted - failed}"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="SecondBrain daily vault sync")
     parser.add_argument(
         "command",
         nargs="?",
         default="all",
-        choices=["inbox", "tasks", "projects", "index", "all"],
+        choices=["inbox", "tasks", "projects", "index", "extract", "all"],
         help="Which sync to run (default: all)",
     )
     parser.add_argument(
@@ -98,6 +141,11 @@ def main() -> None:
     if args.command in ("index", "all"):
         logger.info("--- Reindexing vault ---")
         summary = reindex_vault(vault_path)
+        logger.info("  %s", summary)
+
+    if args.command in ("extract", "all"):
+        logger.info("--- Extracting metadata ---")
+        summary = extract_metadata(vault_path)
         logger.info("  %s", summary)
 
     logger.info("Done!")

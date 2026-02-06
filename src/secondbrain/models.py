@@ -77,3 +77,83 @@ class Conversation(BaseModel):
 
     conversation_id: str
     messages: list[ConversationMessage]
+
+
+# --- Phase 3: Metadata Extraction + Suggestions ---
+
+
+class Entity(BaseModel):
+    """An entity extracted from a note."""
+
+    text: str
+    entity_type: str  # "person", "org", "product", "place"
+    confidence: float
+
+
+class DateMention(BaseModel):
+    """A date mention extracted from a note."""
+
+    text: str
+    normalized_date: str | None  # YYYY-MM-DD
+    date_type: str  # "deadline", "event", "reference"
+    confidence: float
+
+
+class ActionItem(BaseModel):
+    """An action item extracted from a note."""
+
+    text: str
+    confidence: float
+    priority: str | None  # "high", "medium", "low"
+
+
+class NoteMetadata(BaseModel):
+    """Extracted metadata for a vault note."""
+
+    note_path: str
+    summary: str
+    key_phrases: list[str]
+    entities: list[Entity]
+    dates: list[DateMention]
+    action_items: list[ActionItem]
+    extracted_at: str  # ISO timestamp
+    content_hash: str  # to detect staleness
+    model_used: str  # provenance
+
+
+class RelatedNote(BaseModel):
+    """A note related to a source note."""
+
+    note_path: str
+    note_title: str
+    similarity_score: float
+    shared_entities: list[str]
+
+
+class LinkSuggestion(BaseModel):
+    """A suggested wiki-link to add to a note."""
+
+    target_note_path: str
+    target_note_title: str
+    anchor_text: str  # text in source that should become [[link]]
+    confidence: float
+    reason: str
+
+
+class TagSuggestion(BaseModel):
+    """A suggested tag for a note."""
+
+    tag: str
+    confidence: float
+    source_notes: list[str]  # similar notes that have this tag
+
+
+class NoteSuggestions(BaseModel):
+    """Suggestions for a note: related notes, links, tags."""
+
+    note_path: str
+    note_title: str
+    related_notes: list[RelatedNote]
+    suggested_links: list[LinkSuggestion]
+    suggested_tags: list[TagSuggestion]
+    generated_at: str

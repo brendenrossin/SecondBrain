@@ -5,6 +5,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from secondbrain.config import Settings
+from secondbrain.extraction.extractor import MetadataExtractor
 from secondbrain.indexing.embedder import (
     Embedder,
     EmbeddingProvider,
@@ -14,10 +15,13 @@ from secondbrain.indexing.embedder import (
 from secondbrain.logging.query_logger import QueryLogger
 from secondbrain.retrieval.hybrid import HybridRetriever
 from secondbrain.retrieval.reranker import LLMReranker
+from secondbrain.scripts.llm_client import LLMClient
 from secondbrain.stores.conversation import ConversationStore
 from secondbrain.stores.index_tracker import IndexTracker
 from secondbrain.stores.lexical import LexicalStore
+from secondbrain.stores.metadata import MetadataStore
 from secondbrain.stores.vector import VectorStore
+from secondbrain.suggestions.engine import SuggestionEngine
 from secondbrain.synthesis.answerer import Answerer
 
 logger = logging.getLogger(__name__)
@@ -80,6 +84,36 @@ def get_query_logger() -> QueryLogger:
     """Get cached query logger instance."""
     data_path = get_data_path()
     return QueryLogger(data_path / "queries.jsonl")
+
+
+@lru_cache
+def get_metadata_store() -> MetadataStore:
+    """Get cached metadata store instance."""
+    settings = get_settings()
+    data_path = get_data_path()
+    return MetadataStore(data_path / settings.metadata_db_name)
+
+
+@lru_cache
+def get_llm_client() -> LLMClient:
+    """Get cached LLM client instance."""
+    return LLMClient()
+
+
+@lru_cache
+def get_extractor() -> MetadataExtractor:
+    """Get cached metadata extractor instance."""
+    return MetadataExtractor(get_llm_client())
+
+
+@lru_cache
+def get_suggestion_engine() -> SuggestionEngine:
+    """Get cached suggestion engine instance."""
+    return SuggestionEngine(
+        vector_store=get_vector_store(),
+        metadata_store=get_metadata_store(),
+        embedder=get_embedder(),
+    )
 
 
 @lru_cache

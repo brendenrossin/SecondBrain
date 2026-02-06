@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     # Gradio UI settings
     gradio_port: int = 7860
 
+    # Metadata extraction settings
+    metadata_db_name: str = "metadata.db"
+
 
 def get_settings() -> Settings:
     """Get application settings instance."""

@@ -59,20 +59,25 @@ Deliverable: faster updates + better ranking + measurable retrieval quality.
 
 ---
 
-## Phase 3 — Metadata extraction + suggestions (2–4 weeks)
-- [ ] Extract:
+## Phase 3 — Metadata extraction + suggestions ✅
+- [x] Extract:
   - summaries
   - key phrases
   - entities (person/org/product)
   - dates/deadlines
   - action items
-- [ ] Confidence scores + provenance
-- [ ] “Suggestions report” UI:
-  - related notes
-  - suggested `[[links]]`
-  - suggested tags
+- [x] Confidence scores + provenance
+- [x] MetadataStore (SQLite WAL, same patterns as other stores)
+- [x] LLM-based extraction pipeline (Ollama-first, OpenAI-fallback)
+- [x] Incremental extraction (content hash comparison)
+- [x] Suggestion engine (related notes, links, tags)
+- [x] API endpoints: /metadata, /extract, /suggestions, /entities, /action-items
+- [x] "Insights" tab in Gradio UI (summary, entities, dates, action items)
+- [x] "Suggestions" tab in Gradio UI (related notes, suggested links, suggested tags)
+- [x] Daily sync integration (extraction runs after reindex)
+- [x] `make extract` command
 
-Deliverable: system becomes a “memory assistant,” not just search.
+Deliverable: system becomes a "memory assistant," not just search.
 
 ---
 
