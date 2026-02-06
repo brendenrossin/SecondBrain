@@ -1,4 +1,4 @@
-.PHONY: install dev ui test lint format typecheck check clean index reindex process-inbox sync-tasks daily-sync install-cron uninstall-cron install-ui-service uninstall-ui-service
+.PHONY: install dev ui test lint format typecheck check clean index reindex process-inbox sync-tasks daily-sync install-cron uninstall-cron install-ui-service uninstall-ui-service eval
 
 # Install dependencies
 install:
@@ -72,6 +72,10 @@ install-ui-service:
 uninstall-ui-service:
 	launchctl unload ~/Library/LaunchAgents/com.secondbrain.ui.plist 2>/dev/null || true
 	rm -f ~/Library/LaunchAgents/com.secondbrain.ui.plist
+
+# Run RAG evaluation harness
+eval:
+	uv run python -m secondbrain.eval
 
 # Clean build artifacts
 clean:

@@ -1,0 +1,152 @@
+# RAG Evaluation Ground Truth Queries
+# Each query has expected notes and tags for filtering/analysis.
+# Tags: semantic, keyword, factual, temporal, recency, tasks, work, personal, project, follow-up, chain
+
+queries:
+  # === CORE RETRIEVAL: Can it find the right notes? ===
+
+  - query: "who do I still need to reach out or respond to?"
+    expected_notes:
+      - "Tasks/All Tasks.md"
+      - "00_Daily/2026-02-05.md"
+      - "00_Daily/2026-02-06.md"
+    tags: [semantic, tasks]
+
+  - query: "nothing about emails or resumes?"
+    expected_notes:
+      - "Tasks/All Tasks.md"
+      - "00_Daily/2026-02-05.md"
+      - "00_Daily/2026-02-06.md"
+    tags: [semantic, follow-up]
+
+  - query: "What is the stone size for Rachel's ring?"
+    expected_notes:
+      - "10_Notes/Rachel's Engagement Ring.md"
+    tags: [factual, exact]
+
+  - query: "resume update"
+    expected_notes:
+      - "Tasks/All Tasks.md"
+      - "00_Daily/2026-02-05.md"
+    tags: [keyword, tasks]
+
+  - query: "Follow up on David's emails"
+    expected_notes:
+      - "00_Daily/2026-02-06.md"
+      - "Tasks/All Tasks.md"
+    tags: [semantic, tasks]
+
+  - query: "AT&T MCP client setup"
+    expected_notes:
+      - "Tasks/All Tasks.md"
+      - "00_Daily/2026-02-04.md"
+    tags: [keyword, work]
+
+  - query: "second brain mobile re-indexing"
+    expected_notes:
+      - "20_Projects/SecondBrain.md"
+      - "00_Daily/2026-02-05.md"
+    tags: [semantic, project]
+
+  - query: "what tasks are due today?"
+    expected_notes:
+      - "Tasks/All Tasks.md"
+      - "00_Daily/2026-02-06.md"
+    tags: [semantic, temporal]
+
+  # === WORK TASK CHAINS: Related tasks that build on each other ===
+
+  - query: "what's the status of the AI receptionist project?"
+    expected_notes:
+      - "Tasks/All Tasks.md"
+      - "00_Daily/2026-02-05.md"
+    tags: [semantic, work, chain]
+
+  - query: "AT&T welcome agent work"
+    expected_notes:
+      - "Tasks/All Tasks.md"
+      - "00_Daily/2026-02-05.md"
+    tags: [keyword, work, chain]
+
+  - query: "what PwC tasks do I have open?"
+    expected_notes:
+      - "Tasks/All Tasks.md"
+      - "00_Daily/2026-02-05.md"
+    tags: [semantic, work, tasks]
+
+  - query: "Dilip snapshot review"
+    expected_notes:
+      - "00_Daily/2026-02-05.md"
+      - "Tasks/All Tasks.md"
+    tags: [keyword, work]
+
+  # === PERSONAL TASKS & LIFE ADMIN ===
+
+  - query: "dermatologist appointment"
+    expected_notes:
+      - "00_Daily/2026-02-05.md"
+      - "Tasks/All Tasks.md"
+    tags: [keyword, personal]
+
+  - query: "what do I need to do for taxes?"
+    expected_notes:
+      - "Tasks/All Tasks.md"
+      - "00_Daily/2026-02-05.md"
+    tags: [semantic, personal, tasks]
+
+  - query: "Azure AI certification progress"
+    expected_notes:
+      - "00_Daily/2026-02-05.md"
+      - "Tasks/All Tasks.md"
+    tags: [semantic, personal, chain]
+
+  # === PROJECT CONTEXT: Cross-referencing project notes ===
+
+  - query: "SecondBrain project open tasks"
+    expected_notes:
+      - "20_Projects/SecondBrain.md"
+      - "Tasks/All Tasks.md"
+    tags: [semantic, project, tasks]
+
+  - query: "what was I working on yesterday?"
+    expected_notes:
+      - "00_Daily/2026-02-05.md"
+    tags: [semantic, temporal, recency]
+
+  - query: "what's my focus for this week?"
+    expected_notes:
+      - "00_Daily/2026-02-05.md"
+      - "00_Daily/2026-02-06.md"
+    tags: [semantic, temporal]
+
+  # === SEMANTIC GAPS: Can it bridge vocabulary mismatches? ===
+
+  - query: "send something to Griffin at Snowflake"
+    expected_notes:
+      - "Tasks/All Tasks.md"
+      - "00_Daily/2026-02-05.md"
+    tags: [semantic, tasks]
+
+  - query: "W2 and investment account stuff"
+    expected_notes:
+      - "00_Daily/2026-02-05.md"
+      - "Tasks/All Tasks.md"
+    tags: [semantic, personal]
+
+  - query: "vector search and embeddings"
+    expected_notes:
+      - "10_Notes/Vector Databases.md"
+      - "20_Projects/SecondBrain.md"
+    tags: [semantic, project]
+
+  # === CONCEPT NOTES: Technical reference retrieval ===
+
+  - query: "how do vector databases work?"
+    expected_notes:
+      - "10_Notes/Vector Databases.md"
+    tags: [semantic, factual]
+
+  - query: "Rachel engagement ring details"
+    expected_notes:
+      - "10_Notes/Rachel's Engagement Ring.md"
+    tags: [keyword, personal, factual]

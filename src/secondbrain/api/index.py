@@ -113,6 +113,8 @@ async def index_vault(
         tracker.mark_indexed(file_path, content_hash, mtime, len(chunks))
         total_chunks += len(chunks)
 
+    vector_store.set_stored_model(embedder.model_name)
+
     return IndexResponse(
         status="success",
         notes_processed=len(files_to_index),

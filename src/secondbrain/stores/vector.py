@@ -1,5 +1,6 @@
 """ChromaDB vector store for semantic search."""
 
+import contextlib
 import logging
 import time
 from pathlib import Path
@@ -53,14 +54,48 @@ class VectorStore:
             )
         return self._collection
 
+    def get_stored_model(self) -> str | None:
+        """Get the embedding model name stored in collection metadata."""
+        try:
+            meta = self.collection.metadata or {}
+            return meta.get("embedding_model")
+        except Exception:
+            return None
+
+    def set_stored_model(self, model_name: str) -> None:
+        """Store the embedding model name in collection metadata."""
+        try:
+            self.collection.modify(metadata={
+                "hnsw:space": "cosine",
+                "embedding_model": model_name,
+            })
+        except Exception:
+            logger.warning("VectorStore: could not store embedding model metadata")
+
+    def check_model_mismatch(self, current_model: str) -> bool:
+        """Check if the stored model differs from the current config.
+
+        Returns True if there is a mismatch (reindex needed).
+        """
+        stored = self.get_stored_model()
+        if stored is None:
+            return False  # No metadata yet — first index or old collection
+        if stored != current_model:
+            logger.warning(
+                "Embedding model mismatch: index was built with '%s' but config uses '%s'. "
+                "Run reindex to rebuild with the new model.",
+                stored,
+                current_model,
+            )
+            return True
+        return False
+
     def _reconnect(self) -> None:
         """Destroy the client and collection so the next access creates fresh ones."""
         self._collection = None
         if self._client is not None:
-            try:
+            with contextlib.suppress(Exception):
                 del self._client
-            except Exception:
-                pass
             self._client = None
 
     def _check_epoch(self) -> None:

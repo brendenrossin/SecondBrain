@@ -1,5 +1,6 @@
 """SQLite FTS5 lexical store for BM25 search."""
 
+import contextlib
 import logging
 import sqlite3
 import time
@@ -42,10 +43,8 @@ class LexicalStore:
     def _reconnect(self) -> None:
         """Close and discard the current connection so the next access creates a fresh one."""
         if self._conn is not None:
-            try:
+            with contextlib.suppress(Exception):
                 self._conn.close()
-            except Exception:
-                pass
             self._conn = None
 
     def _rebuild_fts(self) -> None:

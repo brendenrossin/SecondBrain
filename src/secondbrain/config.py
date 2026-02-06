@@ -26,8 +26,13 @@ class Settings(BaseSettings):
     # Data storage
     data_path: Path = Path("data")
 
-    # Model settings
-    embedding_model: str = "all-MiniLM-L6-v2"
+    # Embedding settings
+    embedding_provider: str = "local"  # "local" or "openai"
+    embedding_model: str = "BAAI/bge-base-en-v1.5"  # local sentence-transformers model
+    openai_embedding_model: str = "text-embedding-3-small"  # OpenAI embedding model
+    openai_embedding_dimensions: int | None = None  # None = use model default
+
+    # LLM settings
     rerank_model: str = "gpt-4o-mini"
     answer_model: str = "gpt-4o-mini"
 

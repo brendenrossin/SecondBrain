@@ -5,7 +5,12 @@ from functools import lru_cache
 from pathlib import Path
 
 from secondbrain.config import Settings
-from secondbrain.indexing.embedder import Embedder
+from secondbrain.indexing.embedder import (
+    Embedder,
+    EmbeddingProvider,
+    OpenAIEmbeddingProvider,
+    SentenceTransformerProvider,
+)
 from secondbrain.logging.query_logger import QueryLogger
 from secondbrain.retrieval.hybrid import HybridRetriever
 from secondbrain.retrieval.reranker import LLMReranker
@@ -49,9 +54,18 @@ def get_lexical_store() -> LexicalStore:
 
 @lru_cache
 def get_embedder() -> Embedder:
-    """Get cached embedder instance."""
+    """Get cached embedder instance based on configured provider."""
     settings = get_settings()
-    return Embedder(model_name=settings.embedding_model)
+    provider: EmbeddingProvider
+    if settings.embedding_provider == "openai":
+        provider = OpenAIEmbeddingProvider(
+            model_name=settings.openai_embedding_model,
+            api_key=settings.openai_api_key,
+            dimensions=settings.openai_embedding_dimensions,
+        )
+    else:
+        provider = SentenceTransformerProvider(model_name=settings.embedding_model)
+    return Embedder(provider=provider)
 
 
 @lru_cache
@@ -200,7 +214,10 @@ def check_and_reindex(full_rebuild: bool = False) -> str | None:
         tracker.mark_indexed(file_path, content_hash, mtime, len(chunks))
         total_chunks += len(chunks)
 
-    # Step 6: Write epoch file for multi-process coordination
+    # Step 6: Store embedding model metadata
+    vector_store.set_stored_model(embedder.model_name)
+
+    # Step 7: Write epoch file for multi-process coordination
     epoch_file = data_path / ".reindex_epoch"
     epoch_file.write_text(str(Path(vault_path_str)))
 

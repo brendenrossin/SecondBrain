@@ -1,5 +1,6 @@
 """Conversation history storage."""
 
+import contextlib
 import logging
 import sqlite3
 import uuid
@@ -40,10 +41,8 @@ class ConversationStore:
     def _reconnect(self) -> None:
         """Close and discard the current connection so the next access creates a fresh one."""
         if self._conn is not None:
-            try:
+            with contextlib.suppress(Exception):
                 self._conn.close()
-            except Exception:
-                pass
             self._conn = None
 
     def _init_schema(self) -> None:
