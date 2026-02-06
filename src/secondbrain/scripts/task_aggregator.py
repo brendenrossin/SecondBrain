@@ -9,6 +9,16 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+# Due date pattern in daily notes: (due: YYYY-MM-DD)
+DUE_DATE_RE = re.compile(r"\s*\(due:\s*(\d{4}-\d{2}-\d{2})\)\s*$")
+
+BADGE_STYLE = 'padding:2px 8px;border-radius:4px;font-size:0.85em;color:white'
+
+
+def _badge(text: str, color: str) -> str:
+    """Create an HTML badge span for Obsidian reading mode."""
+    return f'<span style="background:{color};{BADGE_STYLE}">{text}</span>'
+
 
 @dataclass
 class Task:
@@ -20,6 +30,7 @@ class Task:
     category: str  # e.g. "AT&T", "PwC", "Personal"
     sub_project: str  # e.g. "AI Receptionist", "" for none
     line_number: int  # line index in source file
+    due_date: str = ""  # YYYY-MM-DD or empty
     normalized: str = ""  # set in __post_init__
 
     def __post_init__(self) -> None:
@@ -34,6 +45,7 @@ class AggregatedTask:
     normalized: str
     category: str
     sub_project: str
+    due_date: str = ""
     appearances: list[Task] = field(default_factory=list)
 
     @property
@@ -41,7 +53,6 @@ class AggregatedTask:
         """Task is completed if its most recent appearance is completed."""
         if not self.appearances:
             return False
-        # Most recent appearance determines completion status
         return self.appearances[-1].completed
 
     @property
@@ -60,6 +71,38 @@ class AggregatedTask:
         today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
         return (today - first).days
 
+    def due_label(self) -> str:
+        """Return a label for the due date column: 'in X days', 'Today', etc."""
+        if not self.due_date or self.completed:
+            return ""
+        try:
+            due = datetime.strptime(self.due_date, "%Y-%m-%d")
+        except ValueError:
+            return ""
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        days_until = (due - today).days
+
+        # Build the text
+        if days_until < -1:
+            text = f"{abs(days_until)} days overdue"
+        elif days_until == -1:
+            text = "1 day overdue"
+        elif days_until == 0:
+            text = "Today"
+        elif days_until == 1:
+            text = "Tomorrow"
+        else:
+            text = f"in {days_until} days"
+
+        # Apply color badge based on urgency
+        if days_until <= 1:  # overdue, today, or tomorrow
+            return _badge(text, "#e03e3e")
+        if days_until <= 3:
+            return _badge(text, "#e8a838")
+        if days_until <= 7:
+            return _badge(text, "#4dabf7")
+        return text
+
 
 def sync_tasks(vault_path: Path) -> str:
     """Run the full task aggregation and bi-directional sync.
@@ -70,9 +113,11 @@ def sync_tasks(vault_path: Path) -> str:
     tasks_dir = vault_path / "Tasks"
     tasks_dir.mkdir(parents=True, exist_ok=True)
     aggregate_file = tasks_dir / "All Tasks.md"
+    completed_file = tasks_dir / "Completed Tasks.md"
 
-    # Step 1: Read existing aggregate completion states (for bi-dir sync)
+    # Step 1: Read existing completion states from both files (for bi-dir sync)
     existing_completions = _read_aggregate_completions(aggregate_file)
+    existing_completions.update(_read_aggregate_completions(completed_file))
 
     # Step 2: Scan daily notes for all tasks
     all_tasks = _scan_daily_notes(daily_dir)
@@ -87,8 +132,9 @@ def sync_tasks(vault_path: Path) -> str:
     # Step 5: Aggregate tasks by normalized text
     aggregated = _aggregate_tasks(all_tasks)
 
-    # Step 6: Generate the aggregate file
+    # Step 6: Generate the aggregate files (open + completed separately)
     _write_aggregate_file(aggregate_file, aggregated)
+    _write_completed_file(completed_file, aggregated)
 
     open_count = sum(1 for t in aggregated if not t.completed)
     done_count = sum(1 for t in aggregated if t.completed)
@@ -100,6 +146,8 @@ def sync_tasks(vault_path: Path) -> str:
 
 def _normalize(text: str) -> str:
     """Normalize task text for matching: lowercase, strip punctuation and whitespace."""
+    # Strip due date suffix before normalizing
+    text = DUE_DATE_RE.sub("", text)
     text = text.lower().strip()
     text = text.translate(str.maketrans("", "", string.punctuation))
     return re.sub(r"\s+", " ", text).strip()
@@ -157,15 +205,24 @@ def _parse_tasks_from_file(md_file: Path, date_str: str) -> list[Task]:
         checkbox_match = re.match(r"^-\s*\[([ xX])\]\s*(.+)$", stripped)
         if checkbox_match:
             completed = checkbox_match.group(1).lower() == "x"
-            text = checkbox_match.group(2).strip()
-            if text:
+            raw_text = checkbox_match.group(2).strip()
+
+            # Extract due date if present
+            due_date = ""
+            due_match = DUE_DATE_RE.search(raw_text)
+            if due_match:
+                due_date = due_match.group(1)
+                raw_text = DUE_DATE_RE.sub("", raw_text).strip()
+
+            if raw_text:
                 tasks.append(Task(
-                    text=text,
+                    text=raw_text,
                     completed=completed,
                     source_date=date_str,
                     category=current_category,
                     sub_project=current_sub_project,
                     line_number=i,
+                    due_date=due_date,
                 ))
 
     return tasks
@@ -183,15 +240,20 @@ def _aggregate_tasks(all_tasks: list[Task]) -> list[AggregatedTask]:
                 normalized=task.normalized,
                 category=task.category,
                 sub_project=task.sub_project,
+                due_date=task.due_date,
             )
         seen[key].appearances.append(task)
+        # Update due_date if a later appearance has one
+        if task.due_date:
+            seen[key].due_date = task.due_date
 
     return list(seen.values())
 
 
 def _read_aggregate_completions(aggregate_file: Path) -> dict[str, bool]:
-    """Read completion states from existing All Tasks.md.
+    """Read completion states from existing task files.
 
+    Handles both table format (All Tasks) and list format (Completed Tasks).
     Returns dict of normalized_task_text -> completed.
     """
     if not aggregate_file.exists():
@@ -202,13 +264,36 @@ def _read_aggregate_completions(aggregate_file: Path) -> dict[str, bool]:
 
     for line in content.split("\n"):
         stripped = line.strip()
+
+        # Table format: | Status | Task | Added | Due | label |
+        if stripped.startswith("|") and stripped.endswith("|"):
+            cells = [c.strip() for c in stripped.split("|")]
+            # cells[0] and cells[-1] are empty from leading/trailing |
+            # cells[1]=Status, cells[2]=Task, cells[3]=Added, ...
+            if len(cells) < 4:
+                continue
+            status_cell = cells[1]
+            task_cell = cells[2]
+            # Skip header/separator rows
+            if task_cell.startswith("--") or task_cell == "Task" or status_cell == "Status":
+                continue
+            is_completed = status_cell.lower() == "done"
+            # Clean task text: remove wiki-links and due date
+            text = re.sub(r"\[\[\d{4}-\d{2}-\d{2}\]\]", "", task_cell).strip()
+            text = DUE_DATE_RE.sub("", text).strip()
+            normalized = _normalize(text)
+            if normalized:
+                completions[normalized] = is_completed
+            continue
+
+        # List format (Completed Tasks.md): - [x] task text [[date]] *(category)*
         checkbox_match = re.match(r"^-\s*\[([ xX])\]\s*(.+)$", stripped)
         if checkbox_match:
             completed = checkbox_match.group(1).lower() == "x"
-            # Extract task text (remove the [[date]] wiki-link and day count)
             text = checkbox_match.group(2)
-            # Remove trailing [[YYYY-MM-DD]] and (day N) markers
+            # Remove trailing [[YYYY-MM-DD]], (day N), *(category)* markers
             text = re.sub(r"\s*\[\[\d{4}-\d{2}-\d{2}\]\].*$", "", text).strip()
+            text = DUE_DATE_RE.sub("", text).strip()
             normalized = _normalize(text)
             if normalized:
                 completions[normalized] = completed
@@ -269,13 +354,16 @@ def _sync_completions_to_daily(
     return updated_files
 
 
+
 def _write_aggregate_file(aggregate_file: Path, aggregated: list[AggregatedTask]) -> None:
-    """Generate the All Tasks.md file."""
+    """Generate All Tasks.md as tables with only open tasks."""
     today = datetime.now().strftime("%Y-%m-%d")
 
-    # Group by category then sub_project
+    # Group open tasks by category then sub_project
     by_category: dict[str, dict[str, list[AggregatedTask]]] = {}
     for task in aggregated:
+        if task.completed:
+            continue
         cat = task.category or "Uncategorized"
         sub = task.sub_project or ""
         by_category.setdefault(cat, {}).setdefault(sub, []).append(task)
@@ -302,29 +390,70 @@ def _write_aggregate_file(aggregate_file: Path, aggregated: list[AggregatedTask]
                 lines.append(f"### {sub}")
                 lines.append("")
 
-            # Sort: open tasks first (oldest first), then completed
-            open_tasks = [t for t in tasks if not t.completed]
-            done_tasks = [t for t in tasks if t.completed]
+            # Sort: tasks with due dates first (earliest due), then by first appearance
+            tasks.sort(key=lambda t: (t.due_date or "9999-99-99", t.first_date))
 
-            open_tasks.sort(key=lambda t: t.first_date)
-            done_tasks.sort(key=lambda t: t.latest_date, reverse=True)
+            # Table header
+            lines.append("| Status | Task | Added | Due | |")
+            lines.append("|:---:|------|:---:|:---:|:---:|")
 
-            for task in open_tasks:
-                days = task.days_open
-                day_str = f" *(day {days})*" if days > 0 else ""
+            for task in tasks:
+                status = "Open"
+                added = f"[[{task.first_date}]]"
+                due_col = task.due_date if task.due_date else ""
+                label = task.due_label()
+
                 lines.append(
-                    f"- [ ] {task.text} [[{task.first_date}]]{day_str}"
+                    f"| {status} | {task.text} | {added} | {due_col} | {label} |"
                 )
-
-            if done_tasks:
-                if open_tasks:
-                    lines.append("")
-                for task in done_tasks:
-                    lines.append(
-                        f"- [x] {task.text} [[{task.latest_date}]]"
-                    )
 
             lines.append("")
 
     aggregate_file.write_text("\n".join(lines), encoding="utf-8")
     logger.info("Wrote aggregate file: %s", aggregate_file)
+
+
+def _write_completed_file(
+    completed_file: Path, aggregated: list[AggregatedTask]
+) -> None:
+    """Generate Completed Tasks.md with completed tasks ordered by completion date."""
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    done_tasks = [t for t in aggregated if t.completed]
+    done_tasks.sort(key=lambda t: t.latest_date, reverse=True)
+
+    lines = [
+        "---",
+        "type: tasks",
+        f"updated: {today}",
+        "---",
+        "",
+        "# Completed Tasks",
+        f"*Auto-generated by SecondBrain on {today}*",
+        "",
+    ]
+
+    if not done_tasks:
+        lines.append("*No completed tasks yet.*")
+        lines.append("")
+    else:
+        # Group by completion date (most recent first)
+        by_date: dict[str, list[AggregatedTask]] = {}
+        for task in done_tasks:
+            by_date.setdefault(task.latest_date, []).append(task)
+
+        for date_str in sorted(by_date.keys(), reverse=True):
+            lines.append(f"## {date_str}")
+            lines.append("")
+            for task in by_date[date_str]:
+                cat_label = f" *({task.category}"
+                if task.sub_project:
+                    cat_label += f" > {task.sub_project}"
+                cat_label += ")*"
+                lines.append(
+                    f"- [x] {task.text} [[{task.first_date}]]{cat_label}"
+                )
+            lines.append("")
+
+    completed_file.write_text("\n".join(lines), encoding="utf-8")
+    logger.info("Wrote completed file: %s", completed_file)

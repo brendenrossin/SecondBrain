@@ -1,4 +1,4 @@
-.PHONY: install dev ui test lint format typecheck check clean index process-inbox sync-tasks daily-sync install-cron uninstall-cron
+.PHONY: install dev ui test lint format typecheck check clean index reindex process-inbox sync-tasks daily-sync install-cron uninstall-cron install-ui-service uninstall-ui-service
 
 # Install dependencies
 install:
@@ -12,9 +12,13 @@ dev:
 ui:
 	uv run python -m secondbrain.ui
 
-# Index the vault (requires SECONDBRAIN_VAULT_PATH)
+# Index the vault via API (requires running server)
 index:
 	curl -X POST http://localhost:8000/api/v1/index
+
+# Reindex the vault standalone (no server needed)
+reindex:
+	uv run python -m secondbrain.scripts.daily_sync index
 
 # Run tests
 test:
@@ -43,7 +47,7 @@ process-inbox:
 sync-tasks:
 	uv run python -m secondbrain.scripts.daily_sync tasks
 
-# Run full daily sync (inbox + tasks)
+# Run full daily sync (inbox + tasks + reindex)
 daily-sync:
 	uv run python -m secondbrain.scripts.daily_sync all
 
@@ -56,6 +60,18 @@ install-cron:
 uninstall-cron:
 	launchctl unload ~/Library/LaunchAgents/com.secondbrain.daily-sync.plist 2>/dev/null || true
 	rm -f ~/Library/LaunchAgents/com.secondbrain.daily-sync.plist
+
+# Install persistent UI service (auto-start on boot, auto-restart on crash)
+install-ui-service:
+	kill $$(lsof -ti:7860) 2>/dev/null || true
+	sleep 1
+	cp com.secondbrain.ui.plist ~/Library/LaunchAgents/
+	launchctl load ~/Library/LaunchAgents/com.secondbrain.ui.plist
+
+# Uninstall UI service
+uninstall-ui-service:
+	launchctl unload ~/Library/LaunchAgents/com.secondbrain.ui.plist 2>/dev/null || true
+	rm -f ~/Library/LaunchAgents/com.secondbrain.ui.plist
 
 # Clean build artifacts
 clean:

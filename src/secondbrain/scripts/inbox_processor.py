@@ -23,7 +23,7 @@ Return ONLY valid JSON with these fields:
   "focus_items": ["focus item 1"],
   "notes_items": ["note 1", "note 2"],
   "tasks": [
-    {"text": "task description", "category": "AT&T", "sub_project": "AI Receptionist"}
+    {"text": "task description", "category": "AT&T", "sub_project": "AI Receptionist", "due_date": "YYYY-MM-DD or null"}
   ],
   "content": "cleaned up body text for non-daily notes",
   "links": ["related topic 1"]
@@ -34,6 +34,23 @@ Classification rules:
 - "note": A standalone piece of information, observation, or reference
 - "project": Describes a project with objectives, milestones, or deliverables
 - "concept": An idea, definition, or knowledge topic
+
+IMPORTANT task vs focus rules:
+- ANY actionable item (something the user needs to DO) MUST go in "tasks", NOT "focus_items".
+- "focus_items" are ONLY for high-level themes or areas of attention for the day (e.g. "Azure certification prep").
+- When in doubt, put it in "tasks". Err heavily toward tasks over focus items.
+- Examples that are TASKS: "update resume", "send email to X", "finish taxes", "get W2", "complete course"
+- Examples that are FOCUS: "Azure certification", "Q2 planning", "career development"
+
+IMPORTANT due_date rules:
+- If the user mentions ANY deadline, compute the actual YYYY-MM-DD date for "due_date".
+- "tomorrow" = the day after today's date.
+- "Monday", "Tuesday", etc. = the NEXT occurrence of that weekday from today.
+- "end of February" = last day of February (e.g. 2026-02-28).
+- "early April" = 2026-04-07 (use ~first week).
+- "in two days" = today + 2 days.
+- "next week" = the Monday of the following week.
+- If no deadline is mentioned, set due_date to null.
 
 For daily_note: extract focus_items, notes_items, and tasks with categories.
 For other types: put the main content in "content" field.
@@ -133,7 +150,9 @@ def _append_to_daily(daily_file: Path, classification: dict) -> None:
             continue
         category = task.get("category")
         sub_project = task.get("sub_project")
-        task_line = f"- [ ] {task_text}"
+        due_date = task.get("due_date")
+        due_suffix = f" (due: {due_date})" if due_date else ""
+        task_line = f"- [ ] {task_text}{due_suffix}"
 
         if category and sub_project:
             # Ensure category heading exists under ## Tasks, then sub-project under that
@@ -177,19 +196,21 @@ def _create_daily_note(daily_file: Path, classification: dict, date_str: str) ->
     lines.append("## Tasks")
     # Group tasks by category and sub_project
     tasks = classification.get("tasks", [])
-    tasks_by_cat: dict[str, dict[str, list[str]]] = {}
+    tasks_by_cat: dict[str, dict[str, list[dict]]] = {}
     for task in tasks:
         cat = task.get("category", "Uncategorized")
         sub = task.get("sub_project", "")
-        tasks_by_cat.setdefault(cat, {}).setdefault(sub, []).append(task.get("text", ""))
+        tasks_by_cat.setdefault(cat, {}).setdefault(sub, []).append(task)
 
     for cat, subs in tasks_by_cat.items():
         lines.append(f"### {cat}")
-        for sub, task_texts in subs.items():
+        for sub, task_items in subs.items():
             if sub:
                 lines.append(f"#### {sub}")
-            for t in task_texts:
-                lines.append(f"- [ ] {t}")
+            for t in task_items:
+                due = t.get("due_date")
+                due_suffix = f" (due: {due})" if due else ""
+                lines.append(f"- [ ] {t.get('text', '')}{due_suffix}")
     if not tasks:
         lines.append("- [ ] ")
     lines.append("")

@@ -9,6 +9,47 @@ from secondbrain.config import get_settings
 from secondbrain.scripts.inbox_processor import process_inbox
 from secondbrain.scripts.task_aggregator import sync_tasks
 
+logger = logging.getLogger("secondbrain.scripts")
+
+
+def reindex_vault(vault_path: Path, data_path: Path | None = None) -> str:
+    """Re-index the vault into vector + lexical stores.
+
+    Returns a summary string.
+    """
+    from secondbrain.indexing.chunker import Chunker
+    from secondbrain.indexing.embedder import Embedder
+    from secondbrain.stores.lexical import LexicalStore
+    from secondbrain.stores.vector import VectorStore
+    from secondbrain.vault.connector import VaultConnector
+
+    settings = get_settings()
+    if data_path is None:
+        data_path = Path(settings.data_path) if settings.data_path else Path("data")
+    data_path.mkdir(parents=True, exist_ok=True)
+
+    connector = VaultConnector(vault_path)
+    chunker = Chunker()
+    embedder = Embedder(model_name=settings.embedding_model)
+    vector_store = VectorStore(data_path / "chroma")
+    lexical_store = LexicalStore(data_path / "lexical.db")
+
+    notes = connector.read_all_notes()
+    if not notes:
+        return "Reindex: 0 notes, 0 chunks"
+
+    all_chunks = []
+    for note in notes:
+        all_chunks.extend(chunker.chunk_note(note))
+
+    if all_chunks:
+        texts = [c.chunk_text for c in all_chunks]
+        embeddings = embedder.embed(texts)
+        vector_store.add_chunks(all_chunks, embeddings)
+        lexical_store.add_chunks(all_chunks)
+
+    return f"Reindex: {len(notes)} notes, {len(all_chunks)} chunks"
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="SecondBrain daily vault sync")
@@ -16,7 +57,7 @@ def main() -> None:
         "command",
         nargs="?",
         default="all",
-        choices=["inbox", "tasks", "all"],
+        choices=["inbox", "tasks", "index", "all"],
         help="Which sync to run (default: all)",
     )
     parser.add_argument(
@@ -37,7 +78,6 @@ def main() -> None:
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
-    logger = logging.getLogger("secondbrain.scripts")
 
     vault_path = args.vault_path
     if vault_path is None:
@@ -67,6 +107,11 @@ def main() -> None:
     if args.command in ("tasks", "all"):
         logger.info("--- Syncing tasks ---")
         summary = sync_tasks(vault_path)
+        logger.info("  %s", summary)
+
+    if args.command in ("index", "all"):
+        logger.info("--- Reindexing vault ---")
+        summary = reindex_vault(vault_path)
         logger.info("  %s", summary)
 
     logger.info("Done!")
