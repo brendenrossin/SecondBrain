@@ -310,6 +310,14 @@ def create_ui() -> "gr.Blocks":
         """Clear the chat and start a new conversation."""
         return [], None, [], "Start a conversation to see sources.", LatencyMetrics(), ""
 
+    def check_reindex_periodic() -> tuple[str, str]:
+        """Hourly timer callback: check for trigger file, reindex if needed."""
+        msg = check_and_reindex()
+        if msg:
+            print(f"[TIMER REINDEX] {msg}", flush=True)
+            return get_index_status(), msg
+        return get_index_status(), ""
+
     # Build UI
     with gr.Blocks(
         title="SecondBrain",
@@ -319,6 +327,8 @@ def create_ui() -> "gr.Blocks":
         current_conversation_id = gr.State(None)
         current_citations = gr.State([])
         current_metrics = gr.State(LatencyMetrics())
+
+        reindex_timer = gr.Timer(value=3600, active=True)  # Check every hour
 
         gr.Markdown("## SecondBrain")
 
@@ -394,6 +404,12 @@ def create_ui() -> "gr.Blocks":
         refresh_btn.click(
             get_index_status,
             outputs=[admin_stats],
+        )
+
+        # Periodic reindex check (picks up daily_sync trigger file)
+        reindex_timer.tick(
+            check_reindex_periodic,
+            outputs=[admin_stats, admin_perf],
         )
 
     return demo  # type: ignore[no-any-return]
