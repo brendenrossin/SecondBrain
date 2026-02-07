@@ -39,10 +39,10 @@ interface NavSectionProps {
 function NavSection({ label, items, pathname }: NavSectionProps): React.JSX.Element {
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-widest text-text-dim font-medium mt-6 mb-2 px-3">
+      <div className="text-[10px] uppercase tracking-widest text-text-dim font-medium mt-7 mb-3 px-3">
         {label}
       </div>
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1.5">
         {items.map((item) => {
           const active =
             pathname === item.href ||
@@ -52,7 +52,7 @@ function NavSection({ label, items, pathname }: NavSectionProps): React.JSX.Elem
               key={item.href}
               href={item.href}
               className={cn(
-                "group flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-200",
+                "group flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200",
                 active
                   ? "bg-accent/12 text-accent shadow-[0_0_16px_rgba(79,142,247,0.1)] border border-accent/15"
                   : "text-text-muted hover:bg-white/[0.06] hover:text-text border border-transparent"
@@ -80,7 +80,7 @@ export function Sidebar(): React.JSX.Element {
   const [showHistory, setShowHistory] = useState(false);
 
   return (
-    <aside className="hidden md:flex flex-col w-60 h-full border-r border-border bg-surface/80 backdrop-blur-xl">
+    <aside className="hidden md:flex flex-col w-60 h-full border-r border-border bg-surface/90 backdrop-blur-xl shadow-[2px_0_16px_rgba(0,0,0,0.3)]">
       {/* Logo */}
       <div className="flex items-center gap-3 px-5 h-16 shrink-0">
         <div className="w-9 h-9 rounded-xl bg-accent/15 flex items-center justify-center shadow-[0_0_12px_rgba(79,142,247,0.15)]">

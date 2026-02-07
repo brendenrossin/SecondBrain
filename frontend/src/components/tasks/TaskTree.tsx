@@ -9,12 +9,15 @@ import { TaskCategory } from "./TaskCategory";
 import { TaskFilters } from "./TaskFilters";
 
 type StatColor = "accent" | "danger" | "warning" | "success";
+export type StatFilter = "active" | "overdue" | "dueToday" | "completed";
 
 interface StatCardProps {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: number;
   color: StatColor;
+  isActive: boolean;
+  onClick: () => void;
 }
 
 const STAT_COLORS: Record<StatColor, { icon: string; iconBg: string; value: string; glow: string }> = {
@@ -44,19 +47,28 @@ const STAT_COLORS: Record<StatColor, { icon: string; iconBg: string; value: stri
   },
 };
 
-function StatCard({ icon: Icon, label, value, color }: StatCardProps): React.JSX.Element {
+function StatCard({ icon: Icon, label, value, color, isActive, onClick }: StatCardProps): React.JSX.Element {
   const colors = STAT_COLORS[color];
 
   return (
-    <div className={cn("stat-card-v2 flex flex-col gap-2", colors.glow)}>
+    <button
+      type="button"
+      aria-pressed={isActive}
+      onClick={onClick}
+      className={cn(
+        "stat-card-v2 flex flex-col gap-2 text-left transition-all duration-200 focus-ring active:translate-y-0",
+        colors.glow,
+        isActive && "ring-1 ring-accent/30 border-accent/20"
+      )}
+    >
       <div className="flex items-center justify-between">
-        <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center", colors.iconBg)}>
-          <Icon className={cn("w-4.5 h-4.5", colors.icon)} />
+        <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", colors.iconBg)}>
+          <Icon className={cn("w-5 h-5", colors.icon)} />
         </div>
-        <span className={cn("text-[28px] font-bold tracking-tight", colors.value)}>{value}</span>
+        <span className={cn("text-[32px] font-bold tracking-tight", colors.value)}>{value}</span>
       </div>
-      <span className="text-[11px] font-medium text-text-dim uppercase tracking-wider">{label}</span>
-    </div>
+      <span className="text-[11px] font-medium text-text-dim uppercase tracking-wider mt-1">{label}</span>
+    </button>
   );
 }
 
@@ -66,6 +78,7 @@ export function TaskTree(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
   const [search, setSearch] = useState("");
+  const [activeFilter, setActiveFilter] = useState<StatFilter | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -94,11 +107,39 @@ export function TaskTree(): React.JSX.Element {
     return { open: open.length, overdue: overdue.length, dueToday: dueToday.length, completed: completed.length };
   }, [tasks, todayStr]);
 
+  const toggleFilter = useCallback((filter: StatFilter) => {
+    setActiveFilter((prev) => (prev === filter ? null : filter));
+    if (filter === "completed") setShowCompleted(true);
+  }, []);
+
+  const clearFilter = useCallback(() => {
+    setActiveFilter(null);
+  }, []);
+
   const filtered = useMemo(() => {
     let result = tasks;
-    if (!showCompleted) {
-      result = result.filter((t) => !t.completed);
+
+    // Apply stat card filter
+    switch (activeFilter) {
+      case "active":
+        result = result.filter((t) => !t.completed);
+        break;
+      case "overdue":
+        result = result.filter((t) => !t.completed && !!t.due_date && t.due_date < todayStr);
+        break;
+      case "dueToday":
+        result = result.filter((t) => !t.completed && t.due_date === todayStr);
+        break;
+      case "completed":
+        result = result.filter((t) => t.completed);
+        break;
+      default:
+        if (!showCompleted) {
+          result = result.filter((t) => !t.completed);
+        }
+        break;
     }
+
     if (search) {
       const q = search.toLowerCase();
       result = result.filter(
@@ -109,7 +150,7 @@ export function TaskTree(): React.JSX.Element {
       );
     }
     return result;
-  }, [tasks, showCompleted, search]);
+  }, [tasks, showCompleted, search, activeFilter, todayStr]);
 
   const categories = useMemo(() => {
     const map = new Map<string, TaskResponse[]>();
@@ -125,9 +166,9 @@ export function TaskTree(): React.JSX.Element {
     return (
       <div>
         {/* Stat cards skeleton */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-5 mb-8">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="stat-card-v2 h-[88px]">
+            <div key={i} className="stat-card-v2 h-[100px]">
               <div className="flex items-center justify-between mb-3">
                 <div className="w-9 h-9 rounded-xl skeleton-shimmer" />
                 <div className="w-10 h-7 rounded-lg skeleton-shimmer" />
@@ -138,11 +179,11 @@ export function TaskTree(): React.JSX.Element {
         </div>
 
         {/* Search skeleton */}
-        <div className="h-11 rounded-xl skeleton-shimmer border border-border mb-6" />
+        <div className="h-11 rounded-xl skeleton-shimmer border border-border mb-8" />
 
         {/* Category skeletons */}
         {[...Array(3)].map((_, i) => (
-          <div key={i} className="glass-card mb-4 p-5">
+          <div key={i} className="glass-card mb-5 p-5">
             <div className="flex items-center gap-3">
               <div className="w-4 h-4 rounded skeleton-shimmer" />
               <div className="w-24 h-4 rounded skeleton-shimmer" />
@@ -180,11 +221,11 @@ export function TaskTree(): React.JSX.Element {
   return (
     <div>
       {/* Stat cards row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <StatCard icon={CircleDot} label="Active" value={stats.open} color="accent" />
-        <StatCard icon={AlertTriangle} label="Overdue" value={stats.overdue} color="danger" />
-        <StatCard icon={Clock} label="Due Today" value={stats.dueToday} color="warning" />
-        <StatCard icon={CheckCircle2} label="Completed" value={stats.completed} color="success" />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-5 mb-8">
+        <StatCard icon={CircleDot} label="Active" value={stats.open} color="accent" isActive={activeFilter === "active"} onClick={() => toggleFilter("active")} />
+        <StatCard icon={AlertTriangle} label="Overdue" value={stats.overdue} color="danger" isActive={activeFilter === "overdue"} onClick={() => toggleFilter("overdue")} />
+        <StatCard icon={Clock} label="Due Today" value={stats.dueToday} color="warning" isActive={activeFilter === "dueToday"} onClick={() => toggleFilter("dueToday")} />
+        <StatCard icon={CheckCircle2} label="Completed" value={stats.completed} color="success" isActive={activeFilter === "completed"} onClick={() => toggleFilter("completed")} />
       </div>
 
       <TaskFilters
@@ -192,6 +233,8 @@ export function TaskTree(): React.JSX.Element {
         onToggleCompleted={() => setShowCompleted(!showCompleted)}
         search={search}
         onSearchChange={setSearch}
+        activeFilter={activeFilter}
+        onClearFilter={clearFilter}
       />
       {categories.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -202,7 +245,7 @@ export function TaskTree(): React.JSX.Element {
           <p className="text-xs text-text-dim">No tasks match your current filters.</p>
         </div>
       ) : (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-5">
           {categories.map(([cat, catTasks]) => (
             <TaskCategory key={cat} category={cat} tasks={catTasks} />
           ))}

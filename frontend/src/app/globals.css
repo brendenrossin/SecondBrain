@@ -3,12 +3,12 @@
 @theme {
   --color-bg: #080a10;
   --color-bg-subtle: #0d1017;
-  --color-surface: #111520;
-  --color-surface-hover: #181d2c;
-  --color-card: #141925;
-  --color-card-hover: #1a2033;
-  --color-border: rgba(255, 255, 255, 0.06);
-  --color-border-light: rgba(255, 255, 255, 0.1);
+  --color-surface: #131822;
+  --color-surface-hover: #1a2030;
+  --color-card: #1a2235;
+  --color-card-hover: #212b40;
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-light: rgba(255, 255, 255, 0.13);
   --color-text: #E8ECF4;
   --color-text-muted: #8B95AE;
   --color-text-dim: #5C6580;
@@ -60,31 +60,32 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Page-level background gradient for depth */
+/* Page-level background gradient for depth — macOS-inspired */
 .app-bg {
   background:
-    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(79, 142, 247, 0.06) 0%, transparent 60%),
-    linear-gradient(180deg, #0c0f18 0%, #080a10 100%);
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(79, 142, 247, 0.07) 0%, transparent 50%),
+    radial-gradient(ellipse 60% 40% at 80% 100%, rgba(79, 142, 247, 0.03) 0%, transparent 50%),
+    linear-gradient(180deg, #0e1119 0%, #080a10 50%, #070910 100%);
 }
 
 /* Modern card with depth - use as base for all cards */
 .glass-card {
-  background: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%),
+  background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%),
               var(--color-card);
   border: 1px solid var(--color-border);
   box-shadow:
-    0 2px 4px rgba(0, 0, 0, 0.2),
-    0 8px 24px rgba(0, 0, 0, 0.15),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    0 2px 4px rgba(0, 0, 0, 0.25),
+    0 8px 24px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
   border-radius: var(--radius-lg);
 }
 
 .glass-card:hover {
   border-color: var(--color-border-light);
   box-shadow:
-    0 4px 8px rgba(0, 0, 0, 0.25),
-    0 12px 32px rgba(0, 0, 0, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    0 4px 8px rgba(0, 0, 0, 0.3),
+    0 12px 32px rgba(0, 0, 0, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
 }
 
 /* Accent glow variant */
@@ -193,19 +194,23 @@ body {
 
 /* Stat card v2 with icon container pattern */
 .stat-card-v2 {
-  background: linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%),
+  background: linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%),
               var(--color-card);
   border: 1px solid var(--color-border);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-  border-radius: var(--radius-md);
-  padding: 1.25rem;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
   cursor: pointer;
   transition: all 200ms ease;
 }
 .stat-card-v2:hover {
   border-color: var(--color-border-light);
   transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 /* Accordion smooth open/close */
