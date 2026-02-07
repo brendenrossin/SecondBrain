@@ -264,6 +264,41 @@ class ConversationStore:
             for row in cursor.fetchall()
         ]
 
+    def list_conversations(self, limit: int = 50) -> list[dict[str, object]]:
+        """List recent conversations with preview.
+
+        Returns list of dicts with conversation_id, created_at, updated_at,
+        message_count, and preview (first user message).
+        """
+        sql = """
+            SELECT
+                c.conversation_id,
+                c.created_at,
+                c.updated_at,
+                (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.conversation_id) as message_count,
+                (SELECT m.content FROM messages m WHERE m.conversation_id = c.conversation_id AND m.role = 'user' ORDER BY m.id ASC LIMIT 1) as preview
+            FROM conversations c
+            ORDER BY c.updated_at DESC
+            LIMIT ?
+        """
+        try:
+            cursor = self.conn.execute(sql, (limit,))
+        except sqlite3.DatabaseError:
+            logger.warning("ConversationStore: DatabaseError on list_conversations, reconnecting")
+            self._reconnect()
+            cursor = self.conn.execute(sql, (limit,))
+
+        return [
+            {
+                "conversation_id": row["conversation_id"],
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"],
+                "message_count": row["message_count"],
+                "preview": row["preview"] or "",
+            }
+            for row in cursor.fetchall()
+        ]
+
     def delete_conversation(self, conversation_id: str) -> None:
         """Delete a conversation and all its messages."""
         try:

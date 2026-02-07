@@ -10,6 +10,8 @@ from sse_starlette.sse import EventSourceResponse
 from secondbrain.api.dependencies import (
     get_answerer,
     get_conversation_store,
+    get_local_answerer,
+    get_local_reranker,
     get_query_logger,
     get_reranker,
     get_retriever,
@@ -17,24 +19,47 @@ from secondbrain.api.dependencies import (
 from secondbrain.logging.query_logger import QueryLogger
 from secondbrain.models import AskRequest, AskResponse, Citation
 from secondbrain.retrieval.hybrid import HybridRetriever
-from secondbrain.retrieval.reranker import LLMReranker
+from secondbrain.retrieval.reranker import RankedCandidate
 from secondbrain.stores.conversation import ConversationStore
-from secondbrain.synthesis.answerer import Answerer
 
 router = APIRouter(prefix="/api/v1", tags=["ask"])
+
+
+def _build_citations(ranked_candidates: list[RankedCandidate]) -> list[Citation]:
+    """Build citation list from ranked candidates."""
+    return [
+        Citation(
+            note_path=rc.candidate.note_path,
+            note_title=rc.candidate.note_title,
+            heading_path=rc.candidate.heading_path,
+            chunk_id=rc.candidate.chunk_id,
+            snippet=rc.candidate.chunk_text[:200] + "..."
+            if len(rc.candidate.chunk_text) > 200
+            else rc.candidate.chunk_text,
+            similarity_score=rc.candidate.similarity_score,
+            rerank_score=rc.rerank_score,
+        )
+        for rc in ranked_candidates
+    ]
 
 
 @router.post("/ask", response_model=AskResponse)
 async def ask(
     request: AskRequest,
     retriever: Annotated[HybridRetriever, Depends(get_retriever)],
-    reranker: Annotated[LLMReranker, Depends(get_reranker)],
-    answerer: Annotated[Answerer, Depends(get_answerer)],
     conversation_store: Annotated[ConversationStore, Depends(get_conversation_store)],
     query_logger: Annotated[QueryLogger, Depends(get_query_logger)],
 ) -> AskResponse:
     """Ask a question and get an answer with citations."""
     start_time = time.time()
+
+    # Select provider
+    if request.provider == "local":
+        reranker = get_local_reranker()
+        answerer = get_local_answerer()
+    else:
+        reranker = get_reranker()
+        answerer = get_answerer()
 
     # Get or create conversation
     conversation_id = conversation_store.get_or_create_conversation(
@@ -61,20 +86,7 @@ async def ask(
     )
 
     # Build citations
-    citations = [
-        Citation(
-            note_path=rc.candidate.note_path,
-            note_title=rc.candidate.note_title,
-            heading_path=rc.candidate.heading_path,
-            chunk_id=rc.candidate.chunk_id,
-            snippet=rc.candidate.chunk_text[:200] + "..."
-            if len(rc.candidate.chunk_text) > 200
-            else rc.candidate.chunk_text,
-            similarity_score=rc.candidate.similarity_score,
-            rerank_score=rc.rerank_score,
-        )
-        for rc in ranked_candidates
-    ]
+    citations = _build_citations(ranked_candidates)
 
     # Save conversation
     conversation_store.add_message(conversation_id, "user", request.query)
@@ -102,13 +114,19 @@ async def ask(
 async def ask_stream(
     request: AskRequest,
     retriever: Annotated[HybridRetriever, Depends(get_retriever)],
-    reranker: Annotated[LLMReranker, Depends(get_reranker)],
-    answerer: Annotated[Answerer, Depends(get_answerer)],
     conversation_store: Annotated[ConversationStore, Depends(get_conversation_store)],
     query_logger: Annotated[QueryLogger, Depends(get_query_logger)],
 ) -> EventSourceResponse:
     """Stream an answer with Server-Sent Events."""
     start_time = time.time()
+
+    # Select provider
+    if request.provider == "local":
+        reranker = get_local_reranker()
+        answerer = get_local_answerer()
+    else:
+        reranker = get_reranker()
+        answerer = get_answerer()
 
     # Get or create conversation
     conversation_id = conversation_store.get_or_create_conversation(
@@ -125,20 +143,7 @@ async def ask_stream(
     )
 
     # Build citations
-    citations = [
-        Citation(
-            note_path=rc.candidate.note_path,
-            note_title=rc.candidate.note_title,
-            heading_path=rc.candidate.heading_path,
-            chunk_id=rc.candidate.chunk_id,
-            snippet=rc.candidate.chunk_text[:200] + "..."
-            if len(rc.candidate.chunk_text) > 200
-            else rc.candidate.chunk_text,
-            similarity_score=rc.candidate.similarity_score,
-            rerank_score=rc.rerank_score,
-        )
-        for rc in ranked_candidates
-    ]
+    citations = _build_citations(ranked_candidates)
 
     async def generate() -> AsyncIterator[dict[str, object]]:
         # Send citations first

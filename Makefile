@@ -1,4 +1,4 @@
-.PHONY: install dev ui test lint format typecheck check clean index reindex extract process-inbox sync-tasks daily-sync install-cron uninstall-cron install-ui-service uninstall-ui-service eval
+.PHONY: install dev ui test lint format typecheck check clean index reindex extract process-inbox sync-tasks daily-sync install-cron uninstall-cron install-ui-service uninstall-ui-service eval frontend-install frontend-dev frontend-build dev-all
 
 # Install dependencies
 install:
@@ -80,6 +80,20 @@ uninstall-ui-service:
 # Run RAG evaluation harness
 eval:
 	uv run python -m secondbrain.eval
+
+# Frontend (Next.js)
+frontend-install:
+	cd frontend && npm install
+
+frontend-dev:
+	cd frontend && npm run dev
+
+frontend-build:
+	cd frontend && npm run build
+
+# Run FastAPI + Next.js dev servers together
+dev-all:
+	$(MAKE) dev & $(MAKE) frontend-dev
 
 # Clean build artifacts
 clean:

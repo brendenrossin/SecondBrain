@@ -32,6 +32,7 @@ class AskRequest(BaseModel):
     query: str
     conversation_id: str | None = None
     top_n: int = Field(default=5, ge=1, le=20)
+    provider: str = "openai"  # "openai" or "local"
 
 
 class AskResponse(BaseModel):
@@ -77,6 +78,30 @@ class Conversation(BaseModel):
 
     conversation_id: str
     messages: list[ConversationMessage]
+
+
+class TaskResponse(BaseModel):
+    """A task from the aggregated task view."""
+
+    text: str
+    category: str
+    sub_project: str
+    due_date: str
+    completed: bool
+    days_open: int
+    first_date: str
+    latest_date: str
+    appearance_count: int
+
+
+class ConversationSummary(BaseModel):
+    """Summary of a conversation for listing."""
+
+    conversation_id: str
+    created_at: str
+    updated_at: str
+    message_count: int
+    preview: str
 
 
 # --- Phase 3: Metadata Extraction + Suggestions ---
