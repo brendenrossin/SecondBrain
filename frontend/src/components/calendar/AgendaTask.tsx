@@ -8,7 +8,7 @@ export function AgendaTask({ task }: { task: TaskResponse }) {
   const label = [task.category, task.sub_project].filter(Boolean).join(" > ");
 
   return (
-    <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-card-hover transition-colors border-b border-border/50 last:border-b-0">
+    <div className="flex items-center gap-3.5 px-7 py-4 hover:bg-card-hover transition-colors border-b border-border/50 last:border-b-0">
       <Circle className="w-3.5 h-3.5 text-text-dim shrink-0" />
       <div className="flex-1 min-w-0">
         <p className="text-[13px] leading-snug text-text">{task.text}</p>

@@ -27,7 +27,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen w-screen overflow-hidden app-bg">
       <Sidebar />
-      <main className="flex-1 overflow-y-auto pb-16 md:pb-0">
+      <main className="flex-1 overflow-hidden pb-16 md:pb-0 md:px-6 md:pt-4 md:pb-4">
         <ErrorBoundary>{children}</ErrorBoundary>
       </main>
       <MobileNav />

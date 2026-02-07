@@ -6,11 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 SecondBrain is a semantic memory system built on top of an Obsidian vault. It combines Markdown note ingestion, embeddings, hybrid search (BM25 + vectors), and optional knowledge graphs to enable intelligent retrieval and synthesis from personal notes.
 
-**Key principle:** Local-first by default with optional secure remote access via VPN/tunneling. No public internet exposure in POC phase.
+**Key principles:**
+- Local-first, privacy-preserving
+- Vault is the single source of truth — no application state outside it
+- Suggestion-only: the system recommends, never acts autonomously
+- Simple, maintainable systems over clever or fragile ones
 
 ## Current Status
 
-Phases 0–2 are complete. The system has vault ingestion, chunking, hybrid search (BM25 + vectors), LLM reranking, answer synthesis, a Gradio chat UI, incremental indexing, and a RAG evaluation framework.
+Phases 0–4 are complete. The system has vault ingestion, chunking, hybrid search (BM25 + vectors), LLM reranking, answer synthesis, metadata extraction, a Next.js frontend ("Mission Control" dashboard), task aggregation with bi-directional vault sync, and secure remote access via Tailscale. The Gradio UI is deprecated.
 
 ## Build & Development Commands
 
@@ -80,7 +84,7 @@ src/secondbrain/
 - **Lexical Search:** SQLite FTS5
 - **Embeddings:** BAAI/bge-base-en-v1.5 (default, local) or OpenAI text-embedding-3-small (API)
 - **LLM:** OpenAI gpt-4o-mini (reranking + synthesis) or local Ollama
-- **UI:** Gradio (mobile-first chat)
+- **UI:** Next.js frontend (dark "mission control" dashboard). Gradio is deprecated.
 - **Knowledge Graph:** Neo4j or Postgres (V2, optional)
 
 ### Data Flow
@@ -94,7 +98,7 @@ src/secondbrain/
 
 Read docs in this order for full context:
 1. `docs/PRD.md` - Product requirements and vision
-2. `docs/ROADMAP.md` - Phased implementation plan (Phase 0-7)
+2. `docs/ROADMAP.md` - Phased implementation plan (Phase 0-8) + decisions log
 3. `docs/SOLUTION_ARCHITECTURE.md` - Tech choices and rationale
 4. `docs/DATA_MODEL.md` - Schema, entities, relations
 5. `docs/INDEXING_PIPELINE.md` - Chunking and embedding details
@@ -102,17 +106,20 @@ Read docs in this order for full context:
 7. `docs/SECURITY_PRIVACY.md` - Threat model and hardening
 8. `docs/OPERATIONS_OBSERVABILITY.md` - Logging, metrics, backups
 9. `docs/UI_DESIGN_SPEC.md` - Frontend redesign spec ("Mission Control" dashboard overhaul)
+10. `docs/features/*.md` - Individual feature specs, explorations, and deferred proposals
 
 ## Implementation Phases
 
 - **Phase 0:** Repo scaffolding, CI/CD, config system, Makefile *(done)*
 - **Phase 1:** POC indexing + retrieval (vault ingestion, chunker, hybrid search) *(done)*
 - **Phase 2:** Quality improvements (incremental re-indexing, reranking, eval framework, embedding upgrade) *(done)*
-- **Phase 3:** Metadata extraction + suggestions
-- **Phase 4:** Secure remote access (VPN/tunnel + auth)
-- **Phase 5:** Chat interface (optional)
-- **Phase 6:** Knowledge graph (V2)
-- **Phase 7:** Write-back workflow (V2+)
+- **Phase 3:** Metadata extraction + suggestions *(done)*
+- **Phase 3.5:** Next.js frontend + UI redesign *(done)*
+- **Phase 4:** Secure remote access (Tailscale) *(done)*
+- **Phase 5:** Retrieval transparency + context-aware recency
+- **Phase 6:** Proactive signals v1 (escalation + recurrence)
+- **Phase 7:** Knowledge graph (V2)
+- **Phase 8:** Write-back workflow (V2+)
 
 ## Security Requirements
 

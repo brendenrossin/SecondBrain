@@ -471,7 +471,11 @@ def _write_aggregate_file(aggregate_file: Path, aggregated: list[AggregatedTask]
 
             lines.append("")
 
-    aggregate_file.write_text("\n".join(lines), encoding="utf-8")
+    new_content = "\n".join(lines)
+    if aggregate_file.exists() and aggregate_file.read_text(encoding="utf-8") == new_content:
+        logger.info("Aggregate file unchanged: %s", aggregate_file)
+        return
+    aggregate_file.write_text(new_content, encoding="utf-8")
     logger.info("Wrote aggregate file: %s", aggregate_file)
 
 
@@ -517,5 +521,9 @@ def _write_completed_file(
                 )
             lines.append("")
 
-    completed_file.write_text("\n".join(lines), encoding="utf-8")
+    new_content = "\n".join(lines)
+    if completed_file.exists() and completed_file.read_text(encoding="utf-8") == new_content:
+        logger.info("Completed file unchanged: %s", completed_file)
+        return
+    completed_file.write_text(new_content, encoding="utf-8")
     logger.info("Wrote completed file: %s", completed_file)

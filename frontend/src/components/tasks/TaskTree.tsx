@@ -166,7 +166,7 @@ export function TaskTree(): React.JSX.Element {
     return (
       <div>
         {/* Stat cards skeleton */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-5 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-5 mb-10">
           {[...Array(4)].map((_, i) => (
             <div key={i} className="stat-card-v2 h-[100px]">
               <div className="flex items-center justify-between mb-3">
@@ -221,7 +221,7 @@ export function TaskTree(): React.JSX.Element {
   return (
     <div>
       {/* Stat cards row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-5 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-5 mb-10">
         <StatCard icon={CircleDot} label="Active" value={stats.open} color="accent" isActive={activeFilter === "active"} onClick={() => toggleFilter("active")} />
         <StatCard icon={AlertTriangle} label="Overdue" value={stats.overdue} color="danger" isActive={activeFilter === "overdue"} onClick={() => toggleFilter("overdue")} />
         <StatCard icon={Clock} label="Due Today" value={stats.dueToday} color="warning" isActive={activeFilter === "dueToday"} onClick={() => toggleFilter("dueToday")} />
@@ -245,7 +245,7 @@ export function TaskTree(): React.JSX.Element {
           <p className="text-xs text-text-dim">No tasks match your current filters.</p>
         </div>
       ) : (
-        <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-6">
           {categories.map(([cat, catTasks]) => (
             <TaskCategory key={cat} category={cat} tasks={catTasks} />
           ))}

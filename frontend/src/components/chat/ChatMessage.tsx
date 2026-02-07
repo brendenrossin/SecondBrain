@@ -13,20 +13,6 @@ interface ChatMessageProps {
   isStreaming?: boolean;
 }
 
-function normalizeContent(text: string): string {
-  // Fix common streaming artifacts: extra spaces before punctuation,
-  // double spaces, spaces around hyphens in compound words
-  return text
-    .replace(/ +,/g, ",")
-    .replace(/ +\./g, ".")
-    .replace(/ +:/g, ":")
-    .replace(/ +;/g, ";")
-    .replace(/ {2,}/g, " ")
-    .replace(/ -/g, "-")
-    .replace(/- /g, "-")
-    .replace(/\n{3,}/g, "\n\n");
-}
-
 function AssistantContent({
   content,
   isStreaming,
@@ -38,7 +24,7 @@ function AssistantContent({
     return (
       <div className="markdown-content text-[13px]">
         <ReactMarkdown remarkPlugins={[remarkGfm]}>
-          {normalizeContent(content)}
+          {content}
         </ReactMarkdown>
       </div>
     );
@@ -74,14 +60,14 @@ export function ChatMessage({ message, isStreaming }: ChatMessageProps) {
         </div>
         <div
           className={cn(
-            "rounded-2xl px-5 py-4",
+            "rounded-2xl px-6 py-5",
             isUser
               ? "glass-card"
-              : "bg-white/[0.02] border border-border shadow-[0_2px_8px_rgba(0,0,0,0.12)]"
+              : "bg-surface border border-border shadow-[0_2px_8px_rgba(0,0,0,0.2)]"
           )}
         >
           {isUser ? (
-            <p className="text-[13px] leading-relaxed">{message.content}</p>
+            <p className="text-[13px] leading-relaxed break-words">{message.content}</p>
           ) : (
             <AssistantContent content={message.content} isStreaming={isStreaming} />
           )}

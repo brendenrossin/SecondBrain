@@ -122,7 +122,7 @@ export function WeeklyAgenda() {
         onToday={() => setWeekOffset(0)}
       />
 
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-4">
         {weekOffset === 0 && <OverdueSection tasks={overdue} />}
 
         {daySections.map((section) => {
@@ -136,7 +136,7 @@ export function WeeklyAgenda() {
             return (
               <div
                 key={section.startDate}
-                className="rounded-xl border border-border bg-white/[0.01] px-5 py-3"
+                className="rounded-xl border border-border bg-white/[0.01] px-7 py-4"
               >
                 <span className="text-xs text-text-dim font-medium">{label} — nothing due</span>
               </div>
@@ -152,8 +152,8 @@ export function WeeklyAgenda() {
         })}
 
         {noDueDate.length > 0 && (
-          <div className="glass-card overflow-hidden">
-            <div className="px-5 py-3 border-b border-border">
+          <div className="glass-card overflow-clip">
+            <div className="px-7 py-4 border-b border-border">
               <span className="text-xs font-bold text-text-dim tracking-tight">
                 No Due Date ({noDueDate.length})
               </span>

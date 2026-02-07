@@ -8,8 +8,8 @@ export function OverdueSection({ tasks }: { tasks: TaskResponse[] }) {
   if (tasks.length === 0) return null;
 
   return (
-    <div className="glass-card glass-card-danger overflow-hidden">
-      <div className="flex items-center gap-2 px-5 py-3 border-b border-danger/15">
+    <div className="glass-card glass-card-danger overflow-clip">
+      <div className="flex items-center gap-2 px-7 py-4 border-b border-danger/15">
         <AlertTriangle className="w-4 h-4 text-danger drop-shadow-[0_0_6px_rgba(248,113,113,0.4)]" />
         <span className="text-xs font-bold text-danger">
           Overdue

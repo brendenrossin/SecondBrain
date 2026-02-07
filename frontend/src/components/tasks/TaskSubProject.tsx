@@ -29,7 +29,7 @@ export function TaskSubProject({ name, tasks }: TaskSubProjectProps): React.JSX.
     <div>
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-2 w-full px-5 py-2.5 text-xs text-text-muted hover:text-text hover:bg-white/[0.03] transition-all duration-150"
+        className="flex items-center gap-2 w-full px-5 py-3 text-xs text-text-muted hover:text-text hover:bg-white/[0.03] transition-all duration-150"
       >
         <ChevronRight
           className={cn(

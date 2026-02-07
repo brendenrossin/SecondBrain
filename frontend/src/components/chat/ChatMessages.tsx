@@ -13,8 +13,8 @@ export function ChatMessages() {
   }, [messages]);
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-4">
-      <div className="max-w-3xl mx-auto flex flex-col gap-4">
+    <div className="flex-1 overflow-y-auto px-5 py-5">
+      <div className="max-w-3xl mx-auto flex flex-col gap-5">
         {messages.map((msg, i) => (
           <ChatMessage
             key={i}

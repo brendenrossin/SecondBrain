@@ -13,7 +13,7 @@ export default function ChatPage() {
   return (
     <div className="flex flex-col h-full">
       {/* Header bar */}
-      <div className="flex items-center justify-between px-6 h-14 shrink-0 border-b border-border">
+      <div className="flex items-center justify-between px-8 h-14 shrink-0 border-b border-border">
         <h1 className="text-base font-bold text-text tracking-tight">Chat</h1>
         <div className="flex items-center gap-3">
           <ProviderToggle />
@@ -32,12 +32,12 @@ export default function ChatPage() {
       {hasMessages ? (
         <>
           <ChatMessages />
-          <div className="px-4 pb-4">
+          <div className="px-6 pb-5">
             <ChatInput variant="bottom" />
           </div>
         </>
       ) : (
-        <div className="flex-1 flex flex-col items-center justify-center px-4">
+        <div className="flex-1 flex flex-col items-center justify-center px-6">
           <ChatInput variant="centered" />
         </div>
       )}

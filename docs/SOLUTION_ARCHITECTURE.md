@@ -27,10 +27,8 @@
    - Optional LLM synthesis (with strict grounding)
    - Structured outputs (summary, action items, constraints)
 6. **Interfaces**
-   - Local CLI
-   - Local web UI (localhost)
-   - Remote web UI (behind auth)
-   - Chat bot gateway (Telegram/WhatsApp)
+   - Next.js web UI (localhost + Tailscale remote access)
+   - Gradio UI (deprecated — replaced by Next.js)
 
 ## 3) Deployment modes (pick one per phase)
 
@@ -80,21 +78,16 @@
 - Everything in cloud; Obsidian vault stored there
 - Highest risk/ops burden; only consider if you need multi-device native access and accept tradeoffs
 
-## 4) Recommended phase architecture
-### POC
-- Mode A
-- Stores: SQLite + (Chroma or Qdrant local) + simple BM25 (SQLite FTS or small embedded BM25 lib)
+## 4) Current architecture (as built)
+### POC → V1 (Phases 0-4, done)
+- Mode B (local core + Tailscale remote access)
+- Stores: SQLite (WAL mode) + ChromaDB (local) + SQLite FTS5
 - API: FastAPI (Python)
-- UI: CLI + minimal web page
+- UI: Next.js frontend (dark "mission control" dashboard)
+- Remote access: Tailscale VPN
+- Metadata extraction + task aggregation from vault
 
-### V1
-- Mode B
-- Stores: Postgres + pgvector OR Qdrant + Postgres
-- Optional: Meilisearch for BM25
-- Add auth, rate limiting, audit logging
-- Add entity extraction with confidence + human approval
-
-### V2
+### V2 (planned)
 - Add Neo4j (or Postgres graph tables) for KG
 - Graph exploration UI
 - Write-back workflow into vault (PR-style suggestions)
@@ -102,7 +95,7 @@
 ## 5) Technology options (opinionated)
 ### Language/runtime
 - Python for ingestion/indexing + API (fast iteration)
-- Optional Go for high-concurrency bot gateway later
+- Next.js/TypeScript for frontend
 
 ### Vector store
 - **pgvector** (if you want one database): simple, durable, ops-friendly

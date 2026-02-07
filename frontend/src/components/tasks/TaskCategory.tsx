@@ -24,11 +24,11 @@ export function TaskCategory({ category, tasks }: TaskCategoryProps): React.JSX.
   }
 
   return (
-    <div className="glass-card overflow-hidden transition-all duration-200">
+    <div className="glass-card overflow-clip transition-all duration-200">
       <button
         onClick={() => setExpanded(!expanded)}
         aria-expanded={expanded}
-        className="flex items-center gap-3 w-full px-5 py-4 hover:bg-white/[0.03] transition-all"
+        className="flex items-center gap-3 w-full px-6 py-4.5 hover:bg-white/[0.03] transition-all"
       >
         <ChevronRight
           className={cn(
@@ -43,7 +43,7 @@ export function TaskCategory({ category, tasks }: TaskCategoryProps): React.JSX.
       </button>
       <div className={cn("accordion-body", expanded && "expanded")}>
         <div>
-          <div className="px-2 pb-2">
+          <div className="px-3 pb-3">
             {Array.from(grouped.entries()).map(([sub, subTasks]) => (
               <TaskSubProject key={sub || "__none"} name={sub} tasks={subTasks} />
             ))}

@@ -94,10 +94,10 @@ Build a personal “memory layer” on top of an Obsidian vault that:
 
 **Interfaces**
 - Local:
-  - CLI + minimal web UI (localhost)
+  - Next.js web UI (localhost, served via launchd)
 - Remote (opt-in):
-  - secure web UI (TLS, auth)
-  - chat interface (Telegram/WhatsApp-style) via a bot gateway
+  - Tailscale VPN for private network access (done)
+  - Next.js frontend accessible from any Tailscale device
 
 **Write-backs (opt-in)**
 - Create “suggested links/tags” report
@@ -144,10 +144,12 @@ Build a personal “memory layer” on top of an Obsidian vault that:
 
 
 ## 8) Milestones (high-level)
-- POC: index + hybrid search + citations (local)
-- V1: incremental updates + entity extraction + suggestions UI + secure remote web
-- V1.5: chat interface + rate limiting + audit logs
-- V2: knowledge graph + graph exploration UI + write-back workflow
+- POC: index + hybrid search + citations (local) *(done)*
+- V1: incremental updates + entity extraction + suggestions UI + secure remote access *(done — Phases 0-4)*
+- V1.5: retrieval transparency + proactive signals *(next — Phases 5-6)*
+- V2: knowledge graph + graph exploration UI + write-back workflow *(Phases 7-8)*
+
+> **Note (2026-02-07):** The original V1.5 milestone ("chat interface + rate limiting + audit logs") is obsolete. The Next.js frontend includes a chat page, replacing the planned bot gateway. Gradio UI is deprecated.
 
 ## 9) Interaction layer (POC → V1)
 
@@ -277,7 +279,7 @@ This document defines the **reference interaction architecture** that an AI codi
 ---
 
 ### Explicit non-goals (until V2)
-- Slack / Telegram / WhatsApp bots
+- Slack / Telegram / WhatsApp bots (bot gateway cut from roadmap — Next.js chat page serves the need)
 - Public API exposure
 - MCP-based tool execution
 - Note write-back or auto-editing

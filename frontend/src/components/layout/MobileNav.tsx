@@ -6,10 +6,10 @@ import { MessageSquare, CheckSquare, Calendar, MoreHorizontal } from "lucide-rea
 import { cn } from "@/lib/utils";
 
 const tabs = [
-  { href: "/chat", label: "Chat", icon: MessageSquare },
-  { href: "/tasks", label: "Tasks", icon: CheckSquare },
-  { href: "/calendar", label: "Calendar", icon: Calendar },
-  { href: "/insights", label: "More", icon: MoreHorizontal },
+  { href: "/chat", label: "Chat", icon: MessageSquare, color: "text-accent", glow: "drop-shadow-[0_0_8px_rgba(79,142,247,0.5)]" },
+  { href: "/tasks", label: "Tasks", icon: CheckSquare, color: "text-success", glow: "drop-shadow-[0_0_8px_rgba(52,211,153,0.5)]" },
+  { href: "/calendar", label: "Calendar", icon: Calendar, color: "text-warning", glow: "drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]" },
+  { href: "/insights", label: "More", icon: MoreHorizontal, color: "text-purple", glow: "drop-shadow-[0_0_8px_rgba(167,139,250,0.5)]" },
 ];
 
 export function MobileNav() {
@@ -25,10 +25,10 @@ export function MobileNav() {
             href={tab.href}
             className={cn(
               "flex-1 flex flex-col items-center gap-1 py-3 text-[10px] font-semibold transition-all duration-200",
-              active ? "text-accent" : "text-text-dim"
+              active ? tab.color : "text-text-dim"
             )}
           >
-            <tab.icon className={cn("w-5 h-5", active && "drop-shadow-[0_0_8px_rgba(79,142,247,0.5)]")} />
+            <tab.icon className={cn("w-5 h-5", active && tab.glow)} />
             {tab.label}
           </Link>
         );

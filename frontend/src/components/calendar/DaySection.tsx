@@ -20,13 +20,13 @@ export function DaySection({ date, tasks }: DaySectionProps) {
   return (
     <div
       className={cn(
-        "overflow-hidden transition-all duration-200",
+        "overflow-clip transition-all duration-200",
         isToday ? "glass-card glass-card-accent" : "glass-card"
       )}
     >
       <div
         className={cn(
-          "flex items-center gap-2 px-5 py-3 border-b",
+          "flex items-center gap-2.5 px-7 py-4 border-b",
           isToday ? "border-accent/15" : "border-border"
         )}
       >
