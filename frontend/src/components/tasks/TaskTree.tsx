@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, CircleDot, AlertTriangle, Clock, CheckCircle2 } from "lucide-react";
+import { CircleDot, AlertTriangle, Clock, CheckCircle2 } from "lucide-react";
 import { getTasks } from "@/lib/api";
 import type { TaskResponse } from "@/lib/types";
-import { toDateStr } from "@/lib/utils";
+import { cn, toDateStr } from "@/lib/utils";
 import { TaskCategory } from "./TaskCategory";
 import { TaskFilters } from "./TaskFilters";
 
@@ -48,12 +48,12 @@ function StatCard({ icon: Icon, label, value, color }: StatCardProps): React.JSX
   const colors = STAT_COLORS[color];
 
   return (
-    <div className={`stat-card-v2 flex flex-col gap-2 ${colors.glow}`}>
+    <div className={cn("stat-card-v2 flex flex-col gap-2", colors.glow)}>
       <div className="flex items-center justify-between">
-        <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${colors.iconBg}`}>
-          <Icon className={`w-4.5 h-4.5 ${colors.icon}`} />
+        <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center", colors.iconBg)}>
+          <Icon className={cn("w-4.5 h-4.5", colors.icon)} />
         </div>
-        <span className={`text-[28px] font-bold tracking-tight ${colors.value}`}>{value}</span>
+        <span className={cn("text-[28px] font-bold tracking-tight", colors.value)}>{value}</span>
       </div>
       <span className="text-[11px] font-medium text-text-dim uppercase tracking-wider">{label}</span>
     </div>
@@ -123,8 +123,42 @@ export function TaskTree(): React.JSX.Element {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-16">
-        <Loader2 className="w-5 h-5 animate-spin text-accent" />
+      <div>
+        {/* Stat cards skeleton */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="stat-card-v2 h-[88px]">
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-9 h-9 rounded-xl skeleton-shimmer" />
+                <div className="w-10 h-7 rounded-lg skeleton-shimmer" />
+              </div>
+              <div className="w-16 h-3 rounded skeleton-shimmer" />
+            </div>
+          ))}
+        </div>
+
+        {/* Search skeleton */}
+        <div className="h-11 rounded-xl skeleton-shimmer border border-border mb-6" />
+
+        {/* Category skeletons */}
+        {[...Array(3)].map((_, i) => (
+          <div key={i} className="glass-card mb-4 p-5">
+            <div className="flex items-center gap-3">
+              <div className="w-4 h-4 rounded skeleton-shimmer" />
+              <div className="w-24 h-4 rounded skeleton-shimmer" />
+              <div className="ml-auto w-14 h-5 rounded-lg skeleton-shimmer" />
+            </div>
+            <div className="mt-4 space-y-1">
+              {[...Array(3 - i)].map((_, j) => (
+                <div key={j} className="flex items-center gap-3 px-4 py-3">
+                  <div className="w-[18px] h-[18px] rounded-full skeleton-shimmer" />
+                  <div className="flex-1 h-3.5 rounded skeleton-shimmer" />
+                  <div className="w-14 h-5 rounded-lg skeleton-shimmer" />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
     );
   }
@@ -160,7 +194,13 @@ export function TaskTree(): React.JSX.Element {
         onSearchChange={setSearch}
       />
       {categories.length === 0 ? (
-        <p className="text-sm text-text-dim text-center py-12">No tasks found</p>
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="w-14 h-14 rounded-2xl bg-accent/10 flex items-center justify-center mb-4">
+            <CheckCircle2 className="w-7 h-7 text-accent/60" />
+          </div>
+          <p className="text-sm font-medium text-text-muted mb-1">All clear</p>
+          <p className="text-xs text-text-dim">No tasks match your current filters.</p>
+        </div>
       ) : (
         <div className="flex flex-col gap-4">
           {categories.map(([cat, catTasks]) => (
