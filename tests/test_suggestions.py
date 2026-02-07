@@ -86,14 +86,18 @@ class TestSuggestionEngine:
 
     def test_suggest_shared_entities(self, tmp_path: Path) -> None:
         engine, store = self._setup_engine(tmp_path)
-        store.upsert(_make_metadata(
-            "source.md",
-            entities=[Entity(text="Alice", entity_type="person", confidence=0.9)],
-        ))
-        store.upsert(_make_metadata(
-            "target.md",
-            entities=[Entity(text="Alice", entity_type="person", confidence=0.85)],
-        ))
+        store.upsert(
+            _make_metadata(
+                "source.md",
+                entities=[Entity(text="Alice", entity_type="person", confidence=0.9)],
+            )
+        )
+        store.upsert(
+            _make_metadata(
+                "target.md",
+                entities=[Entity(text="Alice", entity_type="person", confidence=0.85)],
+            )
+        )
 
         engine.vector_store.search.return_value = [
             ("chunk1", 0.80, {"note_path": "target.md"}, "Text"),
@@ -107,14 +111,18 @@ class TestSuggestionEngine:
 
     def test_suggest_link_from_shared_entity(self, tmp_path: Path) -> None:
         engine, store = self._setup_engine(tmp_path)
-        store.upsert(_make_metadata(
-            "source.md",
-            entities=[Entity(text="Alice", entity_type="person", confidence=0.9)],
-        ))
-        store.upsert(_make_metadata(
-            "target.md",
-            entities=[Entity(text="Alice", entity_type="person", confidence=0.85)],
-        ))
+        store.upsert(
+            _make_metadata(
+                "source.md",
+                entities=[Entity(text="Alice", entity_type="person", confidence=0.9)],
+            )
+        )
+        store.upsert(
+            _make_metadata(
+                "target.md",
+                entities=[Entity(text="Alice", entity_type="person", confidence=0.85)],
+            )
+        )
 
         engine.vector_store.search.return_value = [
             ("chunk1", 0.80, {"note_path": "target.md"}, "Text"),

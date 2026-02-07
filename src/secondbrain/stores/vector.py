@@ -10,6 +10,7 @@ import chromadb
 import numpy as np
 from chromadb.api import ClientAPI
 from chromadb.api.models.Collection import Collection
+from chromadb.api.types import Include, Metadata
 from numpy.typing import NDArray
 
 from secondbrain.models import Chunk
@@ -65,10 +66,12 @@ class VectorStore:
     def set_stored_model(self, model_name: str) -> None:
         """Store the embedding model name in collection metadata."""
         try:
-            self.collection.modify(metadata={
-                "hnsw:space": "cosine",
-                "embedding_model": model_name,
-            })
+            self.collection.modify(
+                metadata={
+                    "hnsw:space": "cosine",
+                    "embedding_model": model_name,
+                }
+            )
         except Exception:
             logger.warning("VectorStore: could not store embedding model metadata")
 
@@ -114,9 +117,7 @@ class VectorStore:
         except FileNotFoundError:
             pass
 
-    def add_chunks(
-        self, chunks: list[Chunk], embeddings: NDArray[np.float32]
-    ) -> None:
+    def add_chunks(self, chunks: list[Chunk], embeddings: NDArray[np.float32]) -> None:
         """Add chunks with their embeddings to the store.
 
         Args:
@@ -128,7 +129,7 @@ class VectorStore:
 
         ids = [c.chunk_id for c in chunks]
         emb_list = embeddings.tolist()
-        metadatas = [
+        metadatas: list[Metadata] = [
             {
                 "note_path": c.note_path,
                 "note_title": c.note_title,
@@ -142,13 +143,19 @@ class VectorStore:
 
         try:
             self.collection.upsert(
-                ids=ids, embeddings=emb_list, metadatas=metadatas, documents=documents,
+                ids=ids,
+                embeddings=emb_list,
+                metadatas=metadatas,
+                documents=documents,
             )
         except Exception:
             logger.warning("VectorStore: error on add_chunks, reconnecting")
             self._reconnect()
             self.collection.upsert(
-                ids=ids, embeddings=emb_list, metadatas=metadatas, documents=documents,
+                ids=ids,
+                embeddings=emb_list,
+                metadatas=metadatas,
+                documents=documents,
             )
 
     def search(
@@ -170,17 +177,21 @@ class VectorStore:
         self._check_epoch()
 
         query_emb = [query_embedding.tolist()]
-        includes: list[str] = ["distances", "metadatas", "documents"]
+        includes: Include = ["distances", "metadatas", "documents"]
 
         try:
             results = self.collection.query(
-                query_embeddings=query_emb, n_results=top_k, include=includes,
+                query_embeddings=query_emb,
+                n_results=top_k,
+                include=includes,
             )
         except Exception:
             logger.warning("VectorStore: error on search, reconnecting")
             self._reconnect()
             results = self.collection.query(
-                query_embeddings=query_emb, n_results=top_k, include=includes,
+                query_embeddings=query_emb,
+                n_results=top_k,
+                include=includes,
             )
 
         # ChromaDB returns distances, convert to similarities
@@ -192,7 +203,9 @@ class VectorStore:
                 similarity = 1 - float(distance)
 
                 if similarity >= min_similarity:
-                    metadata: dict[str, Any] = dict(results["metadatas"][0][i]) if results["metadatas"] else {}
+                    metadata: dict[str, Any] = (
+                        dict(results["metadatas"][0][i]) if results["metadatas"] else {}
+                    )
                     document = str(results["documents"][0][i]) if results["documents"] else ""
                     output.append((chunk_id, similarity, metadata, document))
 
@@ -209,13 +222,15 @@ class VectorStore:
         """
         try:
             results = self.collection.get(
-                ids=[chunk_id], include=["metadatas", "documents"],
+                ids=[chunk_id],
+                include=["metadatas", "documents"],
             )
         except Exception:
             logger.warning("VectorStore: error on get_chunk, reconnecting")
             self._reconnect()
             results = self.collection.get(
-                ids=[chunk_id], include=["metadatas", "documents"],
+                ids=[chunk_id],
+                include=["metadatas", "documents"],
             )
         if results["ids"] and results["metadatas"] and results["documents"]:
             return dict(results["metadatas"][0]), str(results["documents"][0])

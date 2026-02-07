@@ -47,7 +47,9 @@ def match_project(project_name: str, sub_project: str) -> bool:
 
 
 def _extract_daily_notes_mentions(
-    daily_dir: Path, project_name: str, days: int = 30,
+    daily_dir: Path,
+    project_name: str,
+    days: int = 30,
 ) -> list[tuple[str, str]]:
     """Extract notes from daily files that mention the project.
 
@@ -145,7 +147,7 @@ def _update_auto_section(content: str, section_heading: str, new_body: list[str]
 
     match = section_re.search(content)
     if match:
-        return content[:match.start()] + replacement + content[match.end():]
+        return content[: match.start()] + replacement + content[match.end() :]
 
     # Section doesn't exist: append
     if not content.endswith("\n"):
@@ -188,10 +190,7 @@ def sync_projects(
         project_name = project_file.stem
 
         # Match tasks to this project
-        matching_tasks = [
-            t for t in open_tasks
-            if match_project(project_name, t.sub_project)
-        ]
+        matching_tasks = [t for t in open_tasks if match_project(project_name, t.sub_project)]
 
         # Extract note mentions from daily notes
         mentions = _extract_daily_notes_mentions(daily_dir, project_name)

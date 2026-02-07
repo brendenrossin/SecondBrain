@@ -89,17 +89,13 @@ class MetadataStore:
 
     def get(self, note_path: str) -> NoteMetadata | None:
         """Get metadata for a single note."""
-        cursor = self._execute(
-            "SELECT * FROM note_metadata WHERE note_path = ?", (note_path,)
-        )
+        cursor = self._execute("SELECT * FROM note_metadata WHERE note_path = ?", (note_path,))
         row = cursor.fetchone()
         return self._row_to_metadata(row) if row else None
 
     def get_all(self) -> list[NoteMetadata]:
         """Get metadata for all notes."""
-        cursor = self._execute(
-            "SELECT * FROM note_metadata ORDER BY note_path"
-        )
+        cursor = self._execute("SELECT * FROM note_metadata ORDER BY note_path")
         return [self._row_to_metadata(row) for row in cursor.fetchall()]
 
     def delete(self, note_path: str) -> None:
@@ -112,10 +108,7 @@ class MetadataStore:
         cursor = self._execute("SELECT note_path, content_hash FROM note_metadata")
         stored = {row["note_path"]: row["content_hash"] for row in cursor.fetchall()}
 
-        return [
-            path for path, h in current_hashes.items()
-            if stored.get(path) != h
-        ]
+        return [path for path, h in current_hashes.items() if stored.get(path) != h]
 
     def count(self) -> int:
         """Get the number of notes with metadata."""

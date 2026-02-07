@@ -60,7 +60,9 @@ class SentenceTransformerProvider:
         if not texts:
             return np.array([], dtype=np.float32)
         embeddings: Any = self._st_model.encode(
-            texts, convert_to_numpy=True, show_progress_bar=len(texts) > 10,
+            texts,
+            convert_to_numpy=True,
+            show_progress_bar=len(texts) > 10,
         )
         return np.asarray(embeddings, dtype=np.float32)
 

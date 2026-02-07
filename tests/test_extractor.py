@@ -82,7 +82,12 @@ class TestParseResult:
                 {"text": "Python", "entity_type": "product", "confidence": 0.95},
             ],
             "dates": [
-                {"text": "2025-01-15", "normalized_date": "2025-01-15", "date_type": "deadline", "confidence": 0.9},
+                {
+                    "text": "2025-01-15",
+                    "normalized_date": "2025-01-15",
+                    "date_type": "deadline",
+                    "confidence": 0.9,
+                },
             ],
             "action_items": [
                 {"text": "Write more tests", "confidence": 0.8, "priority": "medium"},
@@ -129,7 +134,12 @@ class TestParseResult:
             "key_phrases": [],
             "entities": [],
             "dates": [
-                {"text": "01/15/2025", "normalized_date": None, "date_type": "event", "confidence": 0.8},
+                {
+                    "text": "01/15/2025",
+                    "normalized_date": None,
+                    "date_type": "event",
+                    "confidence": 0.8,
+                },
             ],
             "action_items": [],
         }

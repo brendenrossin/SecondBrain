@@ -216,7 +216,9 @@ def _format_insights(note_path: str) -> str:
     total = store.count()
     tracker_stats = get_index_tracker().get_stats()
     file_count = tracker_stats.get("file_count", 0)
-    parts.append(f"\n---\n*Extracted: {meta.extracted_at[:19]} | Model: {meta.model_used} | {total}/{file_count} notes extracted*")
+    parts.append(
+        f"\n---\n*Extracted: {meta.extracted_at[:19]} | Model: {meta.model_used} | {total}/{file_count} notes extracted*"
+    )
 
     return "\n".join(parts)
 
@@ -251,9 +253,7 @@ def _format_suggestions(note_path: str) -> str:
         parts.append("")
 
     if suggestions.suggested_tags:
-        tags = " | ".join(
-            f"`{t.tag}` ({t.confidence:.0%})" for t in suggestions.suggested_tags
-        )
+        tags = " | ".join(f"`{t.tag}` ({t.confidence:.0%})" for t in suggestions.suggested_tags)
         parts.append(f"### Suggested Tags\n{tags}\n")
 
     if not (suggestions.related_notes or suggestions.suggested_links or suggestions.suggested_tags):
@@ -291,7 +291,9 @@ def create_ui() -> "gr.Blocks":
         metrics: LatencyMetrics | None,
         provider_name: str,
     ) -> Generator[
-        tuple[list[dict[str, str]], str | None, list[Citation], str, LatencyMetrics, str], None, None
+        tuple[list[dict[str, str]], str | None, list[Citation], str, LatencyMetrics, str],
+        None,
+        None,
     ]:
         """Process a chat message with streaming response."""
         start_time = time.time()
@@ -332,7 +334,14 @@ def create_ui() -> "gr.Blocks":
         retrieval_ms = (time.time() - t0) * 1000
         print(f"[TIMING] Retrieval: {retrieval_ms:.0f}ms", flush=True)
 
-        yield history, conv_id, [], f"**Reranking results...** ({provider_name})", metrics, metrics.format_display()
+        yield (
+            history,
+            conv_id,
+            [],
+            f"**Reranking results...** ({provider_name})",
+            metrics,
+            metrics.format_display(),
+        )
 
         # Rerank
         t0 = time.time()
@@ -361,7 +370,14 @@ def create_ui() -> "gr.Blocks":
         label_info = f"\n\n**Retrieval Status:** `{retrieval_label.value}`"
 
         # Show sources while generating
-        yield history, conv_id, citations, citations_display + label_info, metrics, metrics.format_display()
+        yield (
+            history,
+            conv_id,
+            citations,
+            citations_display + label_info,
+            metrics,
+            metrics.format_display(),
+        )
 
         # Stream the answer
         t0 = time.time()
@@ -374,7 +390,14 @@ def create_ui() -> "gr.Blocks":
         ):
             answer_text += token
             history[-1]["content"] = answer_text
-            yield history, conv_id, citations, citations_display + label_info, metrics, metrics.format_display()
+            yield (
+                history,
+                conv_id,
+                citations,
+                citations_display + label_info,
+                metrics,
+                metrics.format_display(),
+            )
 
         generation_ms = (time.time() - t0) * 1000
         print(f"[TIMING] Answer generation: {generation_ms:.0f}ms", flush=True)
@@ -397,7 +420,14 @@ def create_ui() -> "gr.Blocks":
         )
 
         # Final yield — performance goes to admin panel, not sources
-        yield history, conv_id, citations, citations_display + label_info, metrics, metrics.format_display()
+        yield (
+            history,
+            conv_id,
+            citations,
+            citations_display + label_info,
+            metrics,
+            metrics.format_display(),
+        )
 
     def clear_chat() -> tuple[list[dict[str, str]], None, list[Any], str, LatencyMetrics, str]:
         """Clear the chat and start a new conversation."""

@@ -53,13 +53,13 @@ You might want to:
     def client(self) -> OpenAI:
         """Lazy-load the OpenAI client."""
         if self._client is None:
-            kwargs: dict[str, str] = {}
-            if self.api_key:
-                kwargs["api_key"] = self.api_key
-            if self.base_url:
-                kwargs["base_url"] = self.base_url
-                kwargs.setdefault("api_key", "ollama")
-            self._client = OpenAI(**kwargs)
+            api_key = self.api_key
+            if self.base_url and not api_key:
+                api_key = "ollama"
+            self._client = OpenAI(
+                api_key=api_key,
+                base_url=self.base_url,
+            )
         return self._client
 
     def answer(
@@ -88,15 +88,15 @@ You might want to:
         context = self._build_context(ranked_candidates)
 
         # Build messages
-        messages: list[dict[str, Any]] = [
-            {"role": "system", "content": self.SYSTEM_PROMPT}
-        ]
+        messages: list[dict[str, Any]] = [{"role": "system", "content": self.SYSTEM_PROMPT}]
 
         # Add sources as system context
-        messages.append({
-            "role": "system",
-            "content": f"SOURCES FROM USER'S NOTES:\n\n{context}",
-        })
+        messages.append(
+            {
+                "role": "system",
+                "content": f"SOURCES FROM USER'S NOTES:\n\n{context}",
+            }
+        )
 
         # Add conversation history
         if conversation_history:
@@ -143,14 +143,14 @@ You might want to:
         context = self._build_context(ranked_candidates)
 
         # Build messages
-        messages: list[dict[str, Any]] = [
-            {"role": "system", "content": self.SYSTEM_PROMPT}
-        ]
+        messages: list[dict[str, Any]] = [{"role": "system", "content": self.SYSTEM_PROMPT}]
 
-        messages.append({
-            "role": "system",
-            "content": f"SOURCES FROM USER'S NOTES:\n\n{context}",
-        })
+        messages.append(
+            {
+                "role": "system",
+                "content": f"SOURCES FROM USER'S NOTES:\n\n{context}",
+            }
+        )
 
         if conversation_history:
             for msg in conversation_history[-10:]:

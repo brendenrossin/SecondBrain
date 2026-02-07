@@ -62,9 +62,7 @@ async def ask(
         answerer = get_answerer()
 
     # Get or create conversation
-    conversation_id = conversation_store.get_or_create_conversation(
-        request.conversation_id
-    )
+    conversation_id = conversation_store.get_or_create_conversation(request.conversation_id)
 
     # Get conversation history
     history = conversation_store.get_recent_messages(conversation_id, limit=10)
@@ -129,9 +127,7 @@ async def ask_stream(
         answerer = get_answerer()
 
     # Get or create conversation
-    conversation_id = conversation_store.get_or_create_conversation(
-        request.conversation_id
-    )
+    conversation_id = conversation_store.get_or_create_conversation(request.conversation_id)
 
     # Get conversation history
     history = conversation_store.get_recent_messages(conversation_id, limit=10)

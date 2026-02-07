@@ -63,10 +63,7 @@ class TestParseTasksFromFile:
     def test_due_date_extraction(self, tmp_path):
         md = tmp_path / "2026-02-05.md"
         md.write_text(
-            "## Tasks\n"
-            "### Personal\n"
-            "- [ ] Send resume (due: 2026-02-06)\n"
-            "- [ ] No deadline task\n"
+            "## Tasks\n### Personal\n- [ ] Send resume (due: 2026-02-06)\n- [ ] No deadline task\n"
         )
         tasks = _parse_tasks_from_file(md, "2026-02-05")
         assert len(tasks) == 2
@@ -76,12 +73,7 @@ class TestParseTasksFromFile:
 
     def test_stops_at_next_h2(self, tmp_path):
         md = tmp_path / "2026-02-05.md"
-        md.write_text(
-            "## Tasks\n"
-            "- [ ] Real task\n"
-            "## Links surfaced today\n"
-            "- [ ] Not a task\n"
-        )
+        md.write_text("## Tasks\n- [ ] Real task\n## Links surfaced today\n- [ ] Not a task\n")
         tasks = _parse_tasks_from_file(md, "2026-02-05")
         assert len(tasks) == 1
         assert tasks[0].text == "Real task"
@@ -231,10 +223,7 @@ class TestReadAggregateCompletions:
 
     def test_list_format(self, tmp_path):
         f = tmp_path / "Completed.md"
-        f.write_text(
-            "## 2026-02-05\n"
-            "- [x] Finished task [[2026-02-05]] *(Personal)*\n"
-        )
+        f.write_text("## 2026-02-05\n- [x] Finished task [[2026-02-05]] *(Personal)*\n")
         completions = _read_aggregate_completions(f)
         assert completions[_normalize("Finished task")] is True
 
@@ -309,11 +298,7 @@ class TestSyncTasks:
         tasks_dir.mkdir()
 
         (daily_dir / "2026-02-04.md").write_text(
-            "## Tasks\n"
-            "### AT&T\n"
-            "- [ ] Old task\n"
-            "### Personal\n"
-            "- [ ] Buy milk (due: 2026-02-05)\n"
+            "## Tasks\n### AT&T\n- [ ] Old task\n### Personal\n- [ ] Buy milk (due: 2026-02-05)\n"
         )
         (daily_dir / "2026-02-05.md").write_text(
             "## Tasks\n"

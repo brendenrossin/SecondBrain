@@ -11,6 +11,7 @@ from secondbrain.stores.lexical import LexicalStore
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_chunk(chunk_id: str = "c1", text: str = "hello world") -> Chunk:
     return Chunk(
         chunk_id=chunk_id,
@@ -123,6 +124,7 @@ class TestLexicalStoreEpoch:
 
         # "New" epoch (touch the file with a newer mtime)
         import time
+
         time.sleep(0.05)
         epoch_file.write_text("2")
 
@@ -190,18 +192,16 @@ class TestLexicalStoreFTSIntegrity:
 
             # Verify FTS integrity after each reindex
             results = store.search("Python")
-            assert len(results) >= 1, f"FTS search failed on reindex {i+1}"
+            assert len(results) >= 1, f"FTS search failed on reindex {i + 1}"
             assert results[0][0] == "c1"
 
             results = store.search("JavaScript")
-            assert len(results) >= 1, f"FTS search failed on reindex {i+1}"
+            assert len(results) >= 1, f"FTS search failed on reindex {i + 1}"
 
-            assert store.count() == 3, f"Count wrong on reindex {i+1}"
+            assert store.count() == 3, f"Count wrong on reindex {i + 1}"
 
         # Run SQLite integrity check on FTS5
-        cursor = store.conn.execute(
-            "INSERT INTO chunks_fts(chunks_fts) VALUES('integrity-check')"
-        )
+        cursor = store.conn.execute("INSERT INTO chunks_fts(chunks_fts) VALUES('integrity-check')")
         # integrity-check returns 'ok' if clean, or error rows
         rows = cursor.fetchall()
         assert rows == [] or (len(rows) == 1 and rows[0][0] == "ok"), (
@@ -215,10 +215,12 @@ class TestLexicalStoreFTSIntegrity:
         store = LexicalStore(tmp_path / "test.db")
 
         # Add initial chunks
-        store.add_chunks([
-            _make_chunk("c1", "alpha bravo charlie"),
-            _make_chunk("c2", "delta echo foxtrot"),
-        ])
+        store.add_chunks(
+            [
+                _make_chunk("c1", "alpha bravo charlie"),
+                _make_chunk("c2", "delta echo foxtrot"),
+            ]
+        )
         assert store.count() == 2
         assert len(store.search("alpha")) >= 1
 
@@ -229,10 +231,12 @@ class TestLexicalStoreFTSIntegrity:
         assert len(store.search("delta")) >= 1
 
         # Add new chunks (including a replacement for c2)
-        store.add_chunks([
-            _make_chunk("c2", "delta echo updated"),
-            _make_chunk("c3", "golf hotel india"),
-        ])
+        store.add_chunks(
+            [
+                _make_chunk("c2", "delta echo updated"),
+                _make_chunk("c3", "golf hotel india"),
+            ]
+        )
         assert store.count() == 2
         assert len(store.search("golf")) >= 1
         assert len(store.search("updated")) >= 1
@@ -245,9 +249,7 @@ class TestLexicalStoreFTSIntegrity:
         # Force schema init
         _ = store.conn
 
-        cursor = store.conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='trigger'"
-        )
+        cursor = store.conn.execute("SELECT name FROM sqlite_master WHERE type='trigger'")
         triggers = [row[0] for row in cursor.fetchall()]
         assert triggers == [], f"Unexpected triggers found: {triggers}"
 
@@ -363,7 +365,9 @@ class TestVectorStoreReconnect:
         mock_new_client = MagicMock()
         mock_new_client.get_or_create_collection.return_value = good_collection
 
-        with patch("secondbrain.stores.vector.chromadb.PersistentClient", return_value=mock_new_client):
+        with patch(
+            "secondbrain.stores.vector.chromadb.PersistentClient", return_value=mock_new_client
+        ):
             query_emb = np.zeros(384, dtype=np.float32)
             results = store.search(query_emb, top_k=5)
 
@@ -387,7 +391,8 @@ class TestVectorStoreDeleteByNotePath:
         deleted = store.delete_by_note_path("notes/test.md")
         assert deleted == ["c1", "c2"]
         mock_collection.get.assert_called_once_with(
-            where={"note_path": "notes/test.md"}, include=[],
+            where={"note_path": "notes/test.md"},
+            include=[],
         )
         mock_collection.delete.assert_called_once_with(ids=["c1", "c2"])
 
@@ -422,7 +427,9 @@ class TestVectorStoreDeleteByNotePath:
         mock_new_client = MagicMock()
         mock_new_client.get_or_create_collection.return_value = good_collection
 
-        with patch("secondbrain.stores.vector.chromadb.PersistentClient", return_value=mock_new_client):
+        with patch(
+            "secondbrain.stores.vector.chromadb.PersistentClient", return_value=mock_new_client
+        ):
             deleted = store.delete_by_note_path("notes/test.md")
 
         assert deleted == ["c1"]

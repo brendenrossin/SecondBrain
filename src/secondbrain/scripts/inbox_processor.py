@@ -3,6 +3,7 @@
 import logging
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import frontmatter
 
@@ -112,7 +113,7 @@ def _process_single_file(md_file: Path, vault_path: Path, llm: LLMClient) -> str
     return action
 
 
-def _route_daily_note(classification: dict, vault_path: Path) -> str:
+def _route_daily_note(classification: dict[str, Any], vault_path: Path) -> str:
     """Route a daily_note classification to the daily notes folder."""
     date_str = classification.get("date", datetime.now().strftime("%Y-%m-%d"))
     daily_dir = vault_path / "00_Daily"
@@ -129,7 +130,7 @@ def _route_daily_note(classification: dict, vault_path: Path) -> str:
         return f"Created 00_Daily/{date_str}.md"
 
 
-def _append_to_daily(daily_file: Path, classification: dict) -> None:
+def _append_to_daily(daily_file: Path, classification: dict[str, Any]) -> None:
     """Append classified items to an existing daily note."""
     content = daily_file.read_text(encoding="utf-8")
 
@@ -165,7 +166,7 @@ def _append_to_daily(daily_file: Path, classification: dict) -> None:
     daily_file.write_text(content, encoding="utf-8")
 
 
-def _create_daily_note(daily_file: Path, classification: dict, date_str: str) -> None:
+def _create_daily_note(daily_file: Path, classification: dict[str, Any], date_str: str) -> None:
     """Create a new daily note from classification data."""
     tags = classification.get("tags", [])
 
@@ -196,7 +197,7 @@ def _create_daily_note(daily_file: Path, classification: dict, date_str: str) ->
     lines.append("## Tasks")
     # Group tasks by category and sub_project
     tasks = classification.get("tasks", [])
-    tasks_by_cat: dict[str, dict[str, list[dict]]] = {}
+    tasks_by_cat: dict[str, dict[str, list[dict[str, Any]]]] = {}
     for task in tasks:
         cat = task.get("category", "Uncategorized")
         sub = task.get("sub_project", "")
@@ -222,7 +223,7 @@ def _create_daily_note(daily_file: Path, classification: dict, date_str: str) ->
 
 
 def _route_to_folder(
-    classification: dict, vault_path: Path, folder: str, note_type: str
+    classification: dict[str, Any], vault_path: Path, folder: str, note_type: str
 ) -> str:
     """Route a note/project/concept to its target folder."""
     title = classification.get("suggested_title", "Untitled")
@@ -288,9 +289,7 @@ def _append_under_heading(content: str, heading: str, line: str) -> str:
     return "\n".join(lines)
 
 
-def _ensure_task_hierarchy(
-    content: str, category: str, sub_project: str, task_line: str
-) -> str:
+def _ensure_task_hierarchy(content: str, category: str, sub_project: str, task_line: str) -> str:
     """Ensure ### category and #### sub_project exist under ## Tasks, then append task."""
     lines = content.split("\n")
     tasks_idx = None

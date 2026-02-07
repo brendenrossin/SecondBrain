@@ -121,9 +121,7 @@ class ConversationStore:
 
         return self.create_conversation()
 
-    def add_message(
-        self, conversation_id: str, role: str, content: str
-    ) -> None:
+    def add_message(self, conversation_id: str, role: str, content: str) -> None:
         """Add a message to a conversation.
 
         Args:

@@ -217,7 +217,9 @@ def check_and_reindex(full_rebuild: bool = False) -> str | None:
         return "Reindex: 0 notes"
 
     # Step 2: Classify changes
-    new_files, modified_files, deleted_files, unchanged_files = tracker.classify_changes(vault_files)
+    new_files, modified_files, deleted_files, unchanged_files = tracker.classify_changes(
+        vault_files
+    )
 
     # Step 3: Delete chunks for deleted + modified files
     for file_path in deleted_files + modified_files:

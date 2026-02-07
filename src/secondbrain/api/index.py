@@ -85,7 +85,9 @@ async def index_vault(
             message="No notes found in vault",
         )
 
-    new_files, modified_files, deleted_files, unchanged_files = tracker.classify_changes(vault_files)
+    new_files, modified_files, deleted_files, unchanged_files = tracker.classify_changes(
+        vault_files
+    )
 
     # Delete chunks for deleted + modified files
     for file_path in deleted_files + modified_files:

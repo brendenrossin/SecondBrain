@@ -90,11 +90,13 @@ def _parse_result(raw: dict[str, Any], note: Note, model_used: str) -> NoteMetad
     entities = []
     for e in raw.get("entities", []):
         if isinstance(e, dict):
-            entities.append(Entity(
-                text=str(e.get("text", "")),
-                entity_type=str(e.get("entity_type", "unknown")),
-                confidence=float(e.get("confidence", 0.5)),
-            ))
+            entities.append(
+                Entity(
+                    text=str(e.get("text", "")),
+                    entity_type=str(e.get("entity_type", "unknown")),
+                    confidence=float(e.get("confidence", 0.5)),
+                )
+            )
 
     dates = []
     for d in raw.get("dates", []):
@@ -103,22 +105,26 @@ def _parse_result(raw: dict[str, Any], note: Note, model_used: str) -> NoteMetad
             normalized = d.get("normalized_date")
             if normalized is None:
                 normalized = _normalize_date(text)
-            dates.append(DateMention(
-                text=text,
-                normalized_date=str(normalized) if normalized else None,
-                date_type=str(d.get("date_type", "reference")),
-                confidence=float(d.get("confidence", 0.5)),
-            ))
+            dates.append(
+                DateMention(
+                    text=text,
+                    normalized_date=str(normalized) if normalized else None,
+                    date_type=str(d.get("date_type", "reference")),
+                    confidence=float(d.get("confidence", 0.5)),
+                )
+            )
 
     action_items = []
     for a in raw.get("action_items", []):
         if isinstance(a, dict):
             priority_val = a.get("priority")
-            action_items.append(ActionItem(
-                text=str(a.get("text", "")),
-                confidence=float(a.get("confidence", 0.5)),
-                priority=str(priority_val) if priority_val else None,
-            ))
+            action_items.append(
+                ActionItem(
+                    text=str(a.get("text", "")),
+                    confidence=float(a.get("confidence", 0.5)),
+                    priority=str(priority_val) if priority_val else None,
+                )
+            )
 
     key_phrases_raw = raw.get("key_phrases", [])
     key_phrases = [str(kp) for kp in key_phrases_raw] if isinstance(key_phrases_raw, list) else []

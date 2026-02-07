@@ -148,8 +148,10 @@ def print_report(report: EvalReport) -> None:
         status = "PASS" if r.recall_at_5 == 1.0 else "FAIL"
         print(f"\n[{status}] {r.query}")
         print(f"  Tags:       {', '.join(r.tags)}")
-        print(f"  Recall@5:   {r.recall_at_5:.2f}  Recall@10: {r.recall_at_10:.2f}  "
-              f"P@5: {r.precision_at_5:.2f}  MRR: {r.mrr:.2f}")
+        print(
+            f"  Recall@5:   {r.recall_at_5:.2f}  Recall@10: {r.recall_at_10:.2f}  "
+            f"P@5: {r.precision_at_5:.2f}  MRR: {r.mrr:.2f}"
+        )
         if r.hits_at_5:
             print(f"  Hits@5:     {r.hits_at_5}")
         if r.misses_at_5:

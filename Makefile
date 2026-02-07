@@ -1,4 +1,4 @@
-.PHONY: install dev ui test lint format typecheck check clean index reindex extract process-inbox sync-tasks daily-sync install-cron uninstall-cron install-ui-service uninstall-ui-service eval frontend-install frontend-dev frontend-build dev-all
+.PHONY: install dev ui test lint format format-check typecheck check clean index reindex extract process-inbox sync-tasks daily-sync install-cron uninstall-cron install-ui-service uninstall-ui-service eval frontend-install frontend-dev frontend-build dev-all setup-hooks
 
 # Install dependencies
 install:
@@ -40,8 +40,12 @@ format:
 typecheck:
 	uv run mypy src
 
-# Run all checks (lint + typecheck + test)
-check: lint typecheck test
+# Run format check (verify formatting without modifying files)
+format-check:
+	uv run ruff format --check src tests
+
+# Run all checks (lint + format-check + typecheck + test)
+check: lint format-check typecheck test
 
 # Process inbox notes
 process-inbox:
@@ -94,6 +98,11 @@ frontend-build:
 # Run FastAPI + Next.js dev servers together
 dev-all:
 	$(MAKE) dev & $(MAKE) frontend-dev
+
+# Set up git hooks (pre-push runs make check)
+setup-hooks:
+	git config core.hooksPath .githooks
+	@echo "Git hooks configured to use .githooks/"
 
 # Clean build artifacts
 clean:

@@ -38,10 +38,7 @@ class VaultConnector:
 
     def _should_exclude(self, relative_path: str) -> bool:
         """Check if a file should be excluded based on patterns."""
-        return any(
-            fnmatch.fnmatch(relative_path, pattern)
-            for pattern in self.exclude_patterns
-        )
+        return any(fnmatch.fnmatch(relative_path, pattern) for pattern in self.exclude_patterns)
 
     def list_notes(self) -> list[Path]:
         """List all note files in the vault.

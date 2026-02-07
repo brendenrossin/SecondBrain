@@ -72,7 +72,9 @@ def extract_metadata(vault_path: Path, data_path: Path | None = None) -> str:
             failed += 1
 
     metadata_store.close()
-    return f"Extracted {extracted}, failed {failed}, skipped {len(vault_files) - extracted - failed}"
+    return (
+        f"Extracted {extracted}, failed {failed}, skipped {len(vault_files) - extracted - failed}"
+    )
 
 
 def main() -> None:
@@ -91,7 +93,8 @@ def main() -> None:
         help="Override vault path (default: from config/env)",
     )
     parser.add_argument(
-        "--verbose", "-v",
+        "--verbose",
+        "-v",
         action="store_true",
         help="Enable verbose logging",
     )

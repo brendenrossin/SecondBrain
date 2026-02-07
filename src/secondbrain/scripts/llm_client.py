@@ -2,8 +2,10 @@
 
 import json
 import logging
+from typing import Any
 
 from openai import OpenAI
+from openai.types.chat import ChatCompletionMessageParam
 
 from secondbrain.config import get_settings
 
@@ -41,7 +43,7 @@ class LLMClient:
 
         Returns the assistant's response text.
         """
-        messages = [
+        messages: list[ChatCompletionMessageParam] = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
@@ -78,7 +80,7 @@ class LLMClient:
 
         raise RuntimeError("Both Ollama and OpenAI LLM calls failed")
 
-    def chat_json(self, system_prompt: str, user_prompt: str) -> dict:
+    def chat_json(self, system_prompt: str, user_prompt: str) -> dict[str, Any]:
         """Send a chat completion and parse the response as JSON.
 
         The system prompt should instruct the model to return valid JSON.
@@ -95,4 +97,5 @@ class LLMClient:
                 lines = lines[:-1]
             cleaned = "\n".join(lines)
 
-        return json.loads(cleaned)
+        result: dict[str, Any] = json.loads(cleaned)
+        return result

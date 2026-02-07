@@ -85,16 +85,19 @@ class SuggestionEngine:
             title = _title_from_path(path)
             target_meta = self.metadata_store.get(path)
             shared = [
-                e.text for e in (target_meta.entities if target_meta else [])
+                e.text
+                for e in (target_meta.entities if target_meta else [])
                 if e.text.lower() in source_entities
             ]
 
-            related.append(RelatedNote(
-                note_path=path,
-                note_title=title,
-                similarity_score=round(sim, 4),
-                shared_entities=shared,
-            ))
+            related.append(
+                RelatedNote(
+                    note_path=path,
+                    note_title=title,
+                    similarity_score=round(sim, 4),
+                    shared_entities=shared,
+                )
+            )
 
         return related
 
@@ -120,13 +123,15 @@ class SuggestionEngine:
             if not rel.shared_entities:
                 continue
             for entity_text in rel.shared_entities[:2]:
-                suggestions.append(LinkSuggestion(
-                    target_note_path=rel.note_path,
-                    target_note_title=rel.note_title,
-                    anchor_text=entity_text,
-                    confidence=rel.similarity_score,
-                    reason=f"Shared entity: {entity_text}",
-                ))
+                suggestions.append(
+                    LinkSuggestion(
+                        target_note_path=rel.note_path,
+                        target_note_title=rel.note_title,
+                        anchor_text=entity_text,
+                        confidence=rel.similarity_score,
+                        reason=f"Shared entity: {entity_text}",
+                    )
+                )
 
         # Suggest links where source entities match other note titles
         for entity_lower, entity in source_entities.items():
@@ -135,13 +140,15 @@ class SuggestionEngine:
                 target_title = _title_from_path(target_path)
                 # Avoid duplicates
                 if not any(s.target_note_path == target_path for s in suggestions):
-                    suggestions.append(LinkSuggestion(
-                        target_note_path=target_path,
-                        target_note_title=target_title,
-                        anchor_text=entity.text,
-                        confidence=entity.confidence,
-                        reason=f"Entity matches note title: {entity.text}",
-                    ))
+                    suggestions.append(
+                        LinkSuggestion(
+                            target_note_path=target_path,
+                            target_note_title=target_title,
+                            anchor_text=entity.text,
+                            confidence=entity.confidence,
+                            reason=f"Entity matches note title: {entity.text}",
+                        )
+                    )
 
         # Deduplicate and limit
         seen_targets: set[str] = set()
@@ -184,11 +191,13 @@ class SuggestionEngine:
                 continue
             # Normalize confidence: divide by number of related notes to get 0-1 range
             confidence = min(weighted_score / max(len(related), 1), 1.0)
-            suggestions.append(TagSuggestion(
-                tag=tag,
-                confidence=round(confidence, 3),
-                source_notes=tag_sources.get(tag, [])[:5],
-            ))
+            suggestions.append(
+                TagSuggestion(
+                    tag=tag,
+                    confidence=round(confidence, 3),
+                    source_notes=tag_sources.get(tag, [])[:5],
+                )
+            )
             if len(suggestions) >= 10:
                 break
 

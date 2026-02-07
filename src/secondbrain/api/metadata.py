@@ -161,12 +161,14 @@ async def list_entities(
         for entity in meta.entities:
             if entity_type and entity.entity_type != entity_type:
                 continue
-            entities.append({
-                "text": entity.text,
-                "entity_type": entity.entity_type,
-                "confidence": entity.confidence,
-                "note_path": meta.note_path,
-            })
+            entities.append(
+                {
+                    "text": entity.text,
+                    "entity_type": entity.entity_type,
+                    "confidence": entity.confidence,
+                    "note_path": meta.note_path,
+                }
+            )
 
     return {"entities": entities, "total": len(entities)}
 
@@ -180,12 +182,14 @@ async def list_action_items(
     items: list[dict[str, object]] = []
     for meta in all_meta:
         for action in meta.action_items:
-            items.append({
-                "text": action.text,
-                "confidence": action.confidence,
-                "priority": action.priority,
-                "note_path": meta.note_path,
-            })
+            items.append(
+                {
+                    "text": action.text,
+                    "confidence": action.confidence,
+                    "priority": action.priority,
+                    "note_path": meta.note_path,
+                }
+            )
 
     # Sort by priority (high first)
     priority_order = {"high": 0, "medium": 1, "low": 2}

@@ -62,13 +62,13 @@ The array MUST have exactly the same number of elements as chunks provided."""
     def client(self) -> OpenAI:
         """Lazy-load the OpenAI client."""
         if self._client is None:
-            kwargs: dict[str, str] = {}
-            if self.api_key:
-                kwargs["api_key"] = self.api_key
-            if self.base_url:
-                kwargs["base_url"] = self.base_url
-                kwargs.setdefault("api_key", "ollama")
-            self._client = OpenAI(**kwargs)
+            api_key = self.api_key
+            if self.base_url and not api_key:
+                api_key = "ollama"
+            self._client = OpenAI(
+                api_key=api_key,
+                base_url=self.base_url,
+            )
         return self._client
 
     def rerank(
@@ -99,10 +99,7 @@ The array MUST have exactly the same number of elements as chunks provided."""
 
         for candidate, score in zip(candidates, scores, strict=True):
             # Check for hallucination risk
-            if (
-                candidate.similarity_score > 0.7
-                and score < self.hallucination_threshold
-            ):
+            if candidate.similarity_score > 0.7 and score < self.hallucination_threshold:
                 has_hallucination_risk = True
 
             ranked.append(RankedCandidate(candidate=candidate, rerank_score=score))
@@ -132,7 +129,7 @@ The array MUST have exactly the same number of elements as chunks provided."""
         # Build chunks text
         chunks_text = []
         for i, candidate in enumerate(candidates):
-            context = f"[{i+1}] Note: {candidate.note_title}"
+            context = f"[{i + 1}] Note: {candidate.note_title}"
             if candidate.heading_path:
                 context += f" > {' > '.join(candidate.heading_path)}"
             context += f"\n{candidate.chunk_text[:500]}"  # Truncate for efficiency

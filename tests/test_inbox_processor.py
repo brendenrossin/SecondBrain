@@ -24,22 +24,28 @@ class TestAppendToDaily:
     def test_appends_tasks_with_due_date(self, tmp_path):
         f = tmp_path / "2026-02-05.md"
         f.write_text("## Tasks\n### Personal\n- [ ] Existing\n\n## Links\n")
-        _append_to_daily(f, {
-            "focus_items": [],
-            "notes_items": [],
-            "tasks": [{"text": "New task", "category": "Personal", "due_date": "2026-03-01"}],
-        })
+        _append_to_daily(
+            f,
+            {
+                "focus_items": [],
+                "notes_items": [],
+                "tasks": [{"text": "New task", "category": "Personal", "due_date": "2026-03-01"}],
+            },
+        )
         content = f.read_text()
         assert "- [ ] New task (due: 2026-03-01)" in content
 
     def test_appends_tasks_without_due_date(self, tmp_path):
         f = tmp_path / "2026-02-05.md"
         f.write_text("## Tasks\n### Personal\n- [ ] Existing\n\n## Links\n")
-        _append_to_daily(f, {
-            "focus_items": [],
-            "notes_items": [],
-            "tasks": [{"text": "No deadline", "category": "Personal"}],
-        })
+        _append_to_daily(
+            f,
+            {
+                "focus_items": [],
+                "notes_items": [],
+                "tasks": [{"text": "No deadline", "category": "Personal"}],
+            },
+        )
         content = f.read_text()
         assert "- [ ] No deadline\n" in content
         assert "(due:" not in content.split("No deadline")[1].split("\n")[0]
@@ -47,11 +53,14 @@ class TestAppendToDaily:
     def test_skips_duplicate_task(self, tmp_path):
         f = tmp_path / "2026-02-05.md"
         f.write_text("## Tasks\n### Personal\n- [ ] Already here\n")
-        _append_to_daily(f, {
-            "focus_items": [],
-            "notes_items": [],
-            "tasks": [{"text": "Already here", "category": "Personal"}],
-        })
+        _append_to_daily(
+            f,
+            {
+                "focus_items": [],
+                "notes_items": [],
+                "tasks": [{"text": "Already here", "category": "Personal"}],
+            },
+        )
         content = f.read_text()
         assert content.count("Already here") == 1
 
@@ -59,15 +68,19 @@ class TestAppendToDaily:
 class TestCreateDailyNote:
     def test_creates_with_due_dates(self, tmp_path):
         f = tmp_path / "2026-02-05.md"
-        _create_daily_note(f, {
-            "tags": ["personal"],
-            "focus_items": ["Focus area"],
-            "notes_items": ["A note"],
-            "tasks": [
-                {"text": "Task with due", "category": "Personal", "due_date": "2026-03-01"},
-                {"text": "Task no due", "category": "Personal"},
-            ],
-        }, "2026-02-05")
+        _create_daily_note(
+            f,
+            {
+                "tags": ["personal"],
+                "focus_items": ["Focus area"],
+                "notes_items": ["A note"],
+                "tasks": [
+                    {"text": "Task with due", "category": "Personal", "due_date": "2026-03-01"},
+                    {"text": "Task no due", "category": "Personal"},
+                ],
+            },
+            "2026-02-05",
+        )
         content = f.read_text()
         assert "- [ ] Task with due (due: 2026-03-01)" in content
         assert "- [ ] Task no due\n" in content

@@ -90,9 +90,7 @@ async def upcoming_tasks(
     return [
         t
         for t in tasks
-        if not t.completed
-        and t.due_date
-        and (t.due_date < today_str or t.due_date <= cutoff)
+        if not t.completed and t.due_date and (t.due_date < today_str or t.due_date <= cutoff)
     ]
 
 
@@ -115,8 +113,7 @@ async def task_categories(
         {
             "category": cat,
             "sub_projects": [
-                {"name": name, "count": count}
-                for name, count in sorted(subs.items())
+                {"name": name, "count": count} for name, count in sorted(subs.items())
             ],
             "total": sum(subs.values()),
         }

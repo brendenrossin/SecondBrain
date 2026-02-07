@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Pre-push hook: runs lint, format check, typecheck, and tests before pushing.
+# Install with: make setup-hooks
+
+set -e
+
+echo "Running pre-push checks..."
+make check
+echo "All checks passed."

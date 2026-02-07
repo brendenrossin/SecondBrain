@@ -49,7 +49,8 @@ class IndexTracker:
         self.conn.commit()
 
     def classify_changes(
-        self, vault_files: dict[str, tuple[float, str]],
+        self,
+        vault_files: dict[str, tuple[float, str]],
     ) -> tuple[list[str], list[str], list[str], list[str]]:
         """Classify vault files into new, modified, deleted, unchanged.
 
@@ -60,11 +61,15 @@ class IndexTracker:
             Tuple of (new_files, modified_files, deleted_files, unchanged_files).
         """
         try:
-            cursor = self.conn.execute("SELECT file_path, content_hash, last_modified FROM indexed_files")
+            cursor = self.conn.execute(
+                "SELECT file_path, content_hash, last_modified FROM indexed_files"
+            )
         except sqlite3.DatabaseError:
             logger.warning("IndexTracker: DatabaseError on classify, reconnecting")
             self._reconnect()
-            cursor = self.conn.execute("SELECT file_path, content_hash, last_modified FROM indexed_files")
+            cursor = self.conn.execute(
+                "SELECT file_path, content_hash, last_modified FROM indexed_files"
+            )
 
         indexed: dict[str, tuple[str, float]] = {}
         for row in cursor.fetchall():
@@ -95,7 +100,11 @@ class IndexTracker:
         return new_files, modified_files, deleted_files, unchanged_files
 
     def mark_indexed(
-        self, file_path: str, content_hash: str, mtime: float, chunk_count: int,
+        self,
+        file_path: str,
+        content_hash: str,
+        mtime: float,
+        chunk_count: int,
     ) -> None:
         """Record that a file has been indexed."""
         now = datetime.now(UTC).isoformat()

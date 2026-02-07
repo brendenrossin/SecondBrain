@@ -66,10 +66,7 @@ class TestExtractDailyNotesMentions:
     def test_ignores_non_bullet_lines(self, tmp_path):
         daily_dir = tmp_path / "00_Daily"
         daily_dir.mkdir()
-        (daily_dir / "2026-02-05.md").write_text(
-            "## Notes\n"
-            "SecondBrain stuff (not a bullet)\n"
-        )
+        (daily_dir / "2026-02-05.md").write_text("## Notes\nSecondBrain stuff (not a bullet)\n")
         mentions = _extract_daily_notes_mentions(daily_dir, "SecondBrain")
         assert len(mentions) == 0
 
@@ -77,10 +74,7 @@ class TestExtractDailyNotesMentions:
         daily_dir = tmp_path / "00_Daily"
         daily_dir.mkdir()
         # Old note (beyond 30 days)
-        (daily_dir / "2025-01-01.md").write_text(
-            "## Notes\n"
-            "- Old SecondBrain note\n"
-        )
+        (daily_dir / "2025-01-01.md").write_text("## Notes\n- Old SecondBrain note\n")
         mentions = _extract_daily_notes_mentions(daily_dir, "SecondBrain", days=30)
         assert len(mentions) == 0
 
@@ -116,13 +110,7 @@ class TestUpdateAutoSection:
         assert "## Other Section" in result
 
     def test_preserves_content_after_section(self):
-        content = (
-            "## Open Tasks\n"
-            f"{AUTO_START}\n"
-            "old\n"
-            f"{AUTO_END}\n"
-            "\nManual notes below.\n"
-        )
+        content = f"## Open Tasks\n{AUTO_START}\nold\n{AUTO_END}\n\nManual notes below.\n"
         result = _update_auto_section(content, "## Open Tasks", ["new"])
         assert "Manual notes below." in result
         assert "new" in result
@@ -135,7 +123,9 @@ class TestBuildTaskTable:
 
     def test_builds_table(self):
         t = AggregatedTask("Do thing", "do thing", "Personal", "SecondBrain", due_date="2026-03-01")
-        t.appearances = [Task("Do thing", False, "2026-02-05", "Personal", "SecondBrain", 5, "2026-03-01")]
+        t.appearances = [
+            Task("Do thing", False, "2026-02-05", "Personal", "SecondBrain", 5, "2026-03-01")
+        ]
         lines = _build_task_table([t])
         joined = "\n".join(lines)
         assert "| Status | Task | Added | Due | Timeline |" in joined
@@ -205,9 +195,7 @@ class TestSyncProjects:
         daily_dir.mkdir()
 
         (projects_dir / "UnrelatedProject.md").write_text("# Unrelated\n")
-        (daily_dir / "2026-02-05.md").write_text(
-            "## Tasks\n### Personal\n- [ ] Buy milk\n"
-        )
+        (daily_dir / "2026-02-05.md").write_text("## Tasks\n### Personal\n- [ ] Buy milk\n")
 
         summary = sync_projects(tmp_path)
         assert "0 project files updated" in summary

@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 # Due date pattern in daily notes: (due: YYYY-MM-DD)
 DUE_DATE_RE = re.compile(r"\s*\(due:\s*(\d{4}-\d{2}-\d{2})\)\s*$")
 
-BADGE_STYLE = 'padding:2px 8px;border-radius:4px;font-size:0.85em;color:white'
+BADGE_STYLE = "padding:2px 8px;border-radius:4px;font-size:0.85em;color:white"
 
 
 def _badge(text: str, color: str) -> str:
@@ -124,9 +124,7 @@ def sync_tasks(vault_path: Path) -> str:
     all_tasks = scan_daily_notes(daily_dir)
 
     # Step 3: Bi-directional sync — push completions + due dates from aggregate back to daily notes
-    updates = _sync_changes_to_daily(
-        daily_dir, all_tasks, existing_completions, existing_due_dates
-    )
+    updates = _sync_changes_to_daily(daily_dir, all_tasks, existing_completions, existing_due_dates)
 
     # Step 4: Re-scan daily notes after sync (picks up any changes)
     if updates > 0:
@@ -141,10 +139,7 @@ def sync_tasks(vault_path: Path) -> str:
 
     open_count = sum(1 for t in aggregated if not t.completed)
     done_count = sum(1 for t in aggregated if t.completed)
-    return (
-        f"Synced tasks: {open_count} open, {done_count} completed, "
-        f"{updates} daily notes updated"
-    )
+    return f"Synced tasks: {open_count} open, {done_count} completed, {updates} daily notes updated"
 
 
 def _normalize(text: str) -> str:
@@ -218,15 +213,17 @@ def _parse_tasks_from_file(md_file: Path, date_str: str) -> list[Task]:
                 raw_text = DUE_DATE_RE.sub("", raw_text).strip()
 
             if raw_text:
-                tasks.append(Task(
-                    text=raw_text,
-                    completed=completed,
-                    source_date=date_str,
-                    category=current_category,
-                    sub_project=current_sub_project,
-                    line_number=i,
-                    due_date=due_date,
-                ))
+                tasks.append(
+                    Task(
+                        text=raw_text,
+                        completed=completed,
+                        source_date=date_str,
+                        category=current_category,
+                        sub_project=current_sub_project,
+                        line_number=i,
+                        due_date=due_date,
+                    )
+                )
 
     return tasks
 
@@ -386,9 +383,7 @@ def _sync_changes_to_daily(
                         lines[task.line_number] = new_line
                         old_line = new_line
                         file_changed = True
-                        logger.info(
-                            "Synced completion: %s in %s", task.text, date_str
-                        )
+                        logger.info("Synced completion: %s in %s", task.text, date_str)
 
             # Sync due dates: aggregate due date -> daily note
             # Only sync non-empty due dates from aggregate. If aggregate
@@ -406,7 +401,9 @@ def _sync_changes_to_daily(
                         file_changed = True
                         logger.info(
                             "Synced due date: %s -> %s in %s",
-                            task.text, agg_due, date_str,
+                            task.text,
+                            agg_due,
+                            date_str,
                         )
 
         if file_changed:
@@ -414,7 +411,6 @@ def _sync_changes_to_daily(
             updated_files += 1
 
     return updated_files
-
 
 
 def _write_aggregate_file(aggregate_file: Path, aggregated: list[AggregatedTask]) -> None:
@@ -465,9 +461,7 @@ def _write_aggregate_file(aggregate_file: Path, aggregated: list[AggregatedTask]
                 due_col = task.due_date if task.due_date else ""
                 label = task.due_label()
 
-                lines.append(
-                    f"| {status} | {task.text} | {added} | {due_col} | {label} |"
-                )
+                lines.append(f"| {status} | {task.text} | {added} | {due_col} | {label} |")
 
             lines.append("")
 
@@ -479,9 +473,7 @@ def _write_aggregate_file(aggregate_file: Path, aggregated: list[AggregatedTask]
     logger.info("Wrote aggregate file: %s", aggregate_file)
 
 
-def _write_completed_file(
-    completed_file: Path, aggregated: list[AggregatedTask]
-) -> None:
+def _write_completed_file(completed_file: Path, aggregated: list[AggregatedTask]) -> None:
     """Generate Completed Tasks.md with completed tasks ordered by completion date."""
     today = datetime.now().strftime("%Y-%m-%d")
 
@@ -516,9 +508,7 @@ def _write_completed_file(
                 if task.sub_project:
                     cat_label += f" > {task.sub_project}"
                 cat_label += ")*"
-                lines.append(
-                    f"- [x] {task.text} [[{task.first_date}]]{cat_label}"
-                )
+                lines.append(f"- [x] {task.text} [[{task.first_date}]]{cat_label}")
             lines.append("")
 
     new_content = "\n".join(lines)

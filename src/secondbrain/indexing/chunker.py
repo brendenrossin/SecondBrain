@@ -11,16 +11,16 @@ class Chunker:
 
     # Recursive separators in order of preference
     SEPARATORS = [
-        "\n# ",      # H1
-        "\n## ",     # H2
-        "\n### ",    # H3
-        "\n#### ",   # H4
-        "\n\n",      # Paragraphs
-        "\n- ",      # Unordered lists
-        "\n* ",      # Unordered lists (alt)
-        "\n1. ",     # Ordered lists
-        "\n",        # Line breaks
-        ". ",        # Sentences
+        "\n# ",  # H1
+        "\n## ",  # H2
+        "\n### ",  # H3
+        "\n#### ",  # H4
+        "\n\n",  # Paragraphs
+        "\n- ",  # Unordered lists
+        "\n* ",  # Unordered lists (alt)
+        "\n1. ",  # Ordered lists
+        "\n",  # Line breaks
+        ". ",  # Sentences
         "? ",
         "! ",
         "; ",
@@ -67,9 +67,7 @@ class Chunker:
                 if len(text.strip()) < self.min_chunk_size:
                     continue
 
-                chunk_id = self._generate_chunk_id(
-                    note.path, heading_path, chunk_index, text
-                )
+                chunk_id = self._generate_chunk_id(note.path, heading_path, chunk_index, text)
                 checksum = self._generate_checksum(text)
 
                 chunks.append(
