@@ -119,7 +119,7 @@ export function Sidebar(): React.JSX.Element {
   const [showHistory, setShowHistory] = useState(false);
 
   return (
-    <aside className="hidden md:flex flex-col w-60 h-full border-r border-border bg-sidebar shadow-[2px_0_16px_rgba(0,0,0,0.3)]">
+    <aside className="hidden md:flex flex-col w-60 shrink-0 h-full border-r border-border bg-sidebar shadow-[2px_0_16px_rgba(0,0,0,0.3)]">
       {/* Logo */}
       <div className="flex items-center gap-3 px-6 h-16 shrink-0">
         <div className="w-9 h-9 rounded-xl bg-accent/15 flex items-center justify-center shadow-[0_0_12px_rgba(79,142,247,0.15)]">
