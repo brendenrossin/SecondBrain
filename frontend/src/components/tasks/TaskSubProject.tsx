@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { TaskResponse } from "@/lib/types";
 import { TaskItem } from "./TaskItem";
 
@@ -10,7 +11,7 @@ interface TaskSubProjectProps {
   tasks: TaskResponse[];
 }
 
-export function TaskSubProject({ name, tasks }: TaskSubProjectProps) {
+export function TaskSubProject({ name, tasks }: TaskSubProjectProps): React.JSX.Element {
   const [expanded, setExpanded] = useState(true);
   const openCount = tasks.filter((t) => !t.completed).length;
 
@@ -28,23 +29,26 @@ export function TaskSubProject({ name, tasks }: TaskSubProjectProps) {
     <div>
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-2 w-full px-5 py-2.5 text-xs text-text-muted hover:text-text hover:bg-white/[0.02] transition-all duration-150 border-b border-border"
+        className="flex items-center gap-2 w-full px-5 py-2.5 text-xs text-text-muted hover:text-text hover:bg-white/[0.03] transition-all duration-150"
       >
-        {expanded ? (
-          <ChevronDown className="w-3 h-3" />
-        ) : (
-          <ChevronRight className="w-3 h-3" />
-        )}
+        <ChevronRight
+          className={cn(
+            "w-3 h-3 transition-transform duration-200",
+            expanded && "rotate-90"
+          )}
+        />
         <span className="font-medium">{name}</span>
         <span className="text-text-dim ml-auto">{openCount}</span>
       </button>
-      {expanded && (
-        <div className="flex flex-col">
-          {tasks.map((task, i) => (
-            <TaskItem key={i} task={task} />
-          ))}
+      <div className={cn("accordion-body", expanded && "expanded")}>
+        <div>
+          <div className="flex flex-col">
+            {tasks.map((task, i) => (
+              <TaskItem key={i} task={task} />
+            ))}
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

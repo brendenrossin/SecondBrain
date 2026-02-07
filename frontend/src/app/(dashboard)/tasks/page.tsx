@@ -2,13 +2,18 @@
 
 import { TaskTree } from "@/components/tasks/TaskTree";
 
-export default function TasksPage() {
+export default function TasksPage(): React.JSX.Element {
   return (
-    <div className="h-full">
-      <div className="flex items-center px-6 h-14 shrink-0 border-b border-border">
-        <h1 className="text-base font-bold text-text tracking-tight">Tasks</h1>
+    <div className="h-full flex flex-col">
+      <div className="flex items-center justify-between px-8 pt-6 pb-2">
+        <div>
+          <h1 className="text-xl font-bold text-text tracking-tight">Tasks</h1>
+          <p className="text-[13px] text-text-muted mt-0.5">
+            Mission control for everything on your plate
+          </p>
+        </div>
       </div>
-      <div className="overflow-y-auto px-6 pb-6 pt-5" style={{ height: "calc(100% - 3.5rem)" }}>
+      <div className="overflow-y-auto flex-1 px-8 pb-6 pt-4">
         <TaskTree />
       </div>
     </div>

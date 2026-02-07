@@ -101,6 +101,7 @@ Read docs in this order for full context:
 6. `docs/API_SPEC.md` - REST endpoint specifications
 7. `docs/SECURITY_PRIVACY.md` - Threat model and hardening
 8. `docs/OPERATIONS_OBSERVABILITY.md` - Logging, metrics, backups
+9. `docs/UI_DESIGN_SPEC.md` - Frontend redesign spec ("Mission Control" dashboard overhaul)
 
 ## Implementation Phases
 

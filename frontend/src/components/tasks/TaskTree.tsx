@@ -8,53 +8,59 @@ import { toDateStr } from "@/lib/utils";
 import { TaskCategory } from "./TaskCategory";
 import { TaskFilters } from "./TaskFilters";
 
-function StatCard({
-  icon: Icon,
-  label,
-  value,
-  color,
-}: {
+type StatColor = "accent" | "danger" | "warning" | "success";
+
+interface StatCardProps {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: number;
-  color: "accent" | "danger" | "warning" | "success";
-}) {
-  const colorMap = {
-    accent: {
-      icon: "text-accent drop-shadow-[0_0_6px_rgba(79,142,247,0.4)]",
-      value: "text-accent",
-      bg: "shadow-[0_0_20px_rgba(79,142,247,0.06)]",
-    },
-    danger: {
-      icon: "text-danger drop-shadow-[0_0_6px_rgba(248,113,113,0.4)]",
-      value: "text-danger",
-      bg: "shadow-[0_0_20px_rgba(248,113,113,0.06)]",
-    },
-    warning: {
-      icon: "text-warning drop-shadow-[0_0_6px_rgba(251,191,36,0.4)]",
-      value: "text-warning",
-      bg: "shadow-[0_0_20px_rgba(251,191,36,0.06)]",
-    },
-    success: {
-      icon: "text-success drop-shadow-[0_0_6px_rgba(52,211,153,0.4)]",
-      value: "text-success",
-      bg: "shadow-[0_0_20px_rgba(52,211,153,0.06)]",
-    },
-  };
-  const c = colorMap[color];
+  color: StatColor;
+}
+
+const STAT_COLORS: Record<StatColor, { icon: string; iconBg: string; value: string; glow: string }> = {
+  accent: {
+    icon: "text-accent",
+    iconBg: "bg-accent/12",
+    value: "text-accent",
+    glow: "shadow-[0_0_20px_rgba(79,142,247,0.06)]",
+  },
+  danger: {
+    icon: "text-danger",
+    iconBg: "bg-danger/12",
+    value: "text-danger",
+    glow: "shadow-[0_0_20px_rgba(248,113,113,0.06)]",
+  },
+  warning: {
+    icon: "text-warning",
+    iconBg: "bg-warning/12",
+    value: "text-warning",
+    glow: "shadow-[0_0_20px_rgba(251,191,36,0.06)]",
+  },
+  success: {
+    icon: "text-success",
+    iconBg: "bg-success/12",
+    value: "text-success",
+    glow: "shadow-[0_0_20px_rgba(52,211,153,0.06)]",
+  },
+};
+
+function StatCard({ icon: Icon, label, value, color }: StatCardProps): React.JSX.Element {
+  const colors = STAT_COLORS[color];
 
   return (
-    <div className={`stat-card flex flex-col gap-1 ${c.bg}`}>
-      <div className="flex items-center gap-2">
-        <Icon className={`w-4 h-4 ${c.icon}`} />
-        <span className="text-[11px] font-medium text-text-dim uppercase tracking-wider">{label}</span>
+    <div className={`stat-card-v2 flex flex-col gap-2 ${colors.glow}`}>
+      <div className="flex items-center justify-between">
+        <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${colors.iconBg}`}>
+          <Icon className={`w-4.5 h-4.5 ${colors.icon}`} />
+        </div>
+        <span className={`text-[28px] font-bold tracking-tight ${colors.value}`}>{value}</span>
       </div>
-      <span className={`text-2xl font-bold tracking-tight ${c.value}`}>{value}</span>
+      <span className="text-[11px] font-medium text-text-dim uppercase tracking-wider">{label}</span>
     </div>
   );
 }
 
-export function TaskTree() {
+export function TaskTree(): React.JSX.Element {
   const [tasks, setTasks] = useState<TaskResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -140,7 +146,7 @@ export function TaskTree() {
   return (
     <div>
       {/* Stat cards row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <StatCard icon={CircleDot} label="Active" value={stats.open} color="accent" />
         <StatCard icon={AlertTriangle} label="Overdue" value={stats.overdue} color="danger" />
         <StatCard icon={Clock} label="Due Today" value={stats.dueToday} color="warning" />

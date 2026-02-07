@@ -2,19 +2,23 @@
 
 import { cn, daysUntil } from "@/lib/utils";
 
-export function DueBadge({ dueDate }: { dueDate: string }) {
-  if (!dueDate) return <span className="text-text-dim text-[10px] font-medium">No date</span>;
+interface DueBadgeProps {
+  dueDate: string;
+}
+
+export function DueBadge({ dueDate }: DueBadgeProps): React.JSX.Element | null {
+  if (!dueDate) {
+    return <span className="text-text-dim text-[10px] font-medium">No date</span>;
+  }
 
   const days = daysUntil(dueDate);
+  const isOverdue = days < 0;
 
   let label: string;
   let colorClass: string;
 
-  if (days < -1) {
+  if (days < 0) {
     label = `${Math.abs(days)}d overdue`;
-    colorClass = "bg-danger-dim text-danger shadow-[0_0_8px_rgba(248,113,113,0.15)]";
-  } else if (days === -1) {
-    label = "1d overdue";
     colorClass = "bg-danger-dim text-danger shadow-[0_0_8px_rgba(248,113,113,0.15)]";
   } else if (days === 0) {
     label = "Today";
@@ -36,10 +40,13 @@ export function DueBadge({ dueDate }: { dueDate: string }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-semibold shrink-0",
+        "inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-semibold shrink-0 tabular-nums",
         colorClass
       )}
     >
+      {isOverdue && (
+        <span className="w-1.5 h-1.5 rounded-full bg-danger mr-1 animate-pulse shadow-[0_0_4px_rgba(248,113,113,0.5)]" />
+      )}
       {label}
     </span>
   );
