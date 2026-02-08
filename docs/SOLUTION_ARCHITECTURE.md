@@ -28,6 +28,7 @@
    - Structured outputs (summary, action items, constraints)
 6. **Interfaces**
    - Next.js web UI (localhost + Tailscale remote access)
+   - Voice chat via OpenAI Realtime API (opt-in, WebSocket relay through backend)
    - Gradio UI (deprecated — replaced by Next.js)
 
 ## 3) Deployment modes (pick one per phase)
@@ -84,6 +85,7 @@
 - Stores: SQLite (WAL mode) + ChromaDB (local) + SQLite FTS5
 - API: FastAPI (Python)
 - UI: Next.js frontend (dark "mission control" dashboard)
+- Voice: OpenAI Realtime API via backend WebSocket relay (planned, opt-in)
 - Remote access: Tailscale VPN
 - Metadata extraction + task aggregation from vault
 

@@ -21,9 +21,10 @@ Captured 2026-02-07 after roadmap review session. The original brainstorm (with 
 | **Scoped down Phase 3.7** | Removed contradiction detection (research problem, low precision) and drift detection (requires state tracking we don't have). Kept escalation and recurrence signals. |
 | **Recency handling** | Not a scoring multiplier. When two similar notes exist (e.g., two grocery lists), the LLM should contextually prefer the recent one during synthesis. No decay formula needed. |
 | **Marked Phase 4 done** | Tailscale is live. Remote access from phone works. |
-| **Marked Phase 5 obsolete** | Next.js frontend already has a working `/chat` page. Bot gateway is unnecessary. |
+| **Replaced old Phase 5 (bot gateway) with retrieval transparency** | Next.js frontend already has a working `/chat` page. Bot gateway is unnecessary. Current Phase 5 is retrieval transparency + context-aware recency. |
 | **Deprecated Gradio UI** | Next.js frontend is the sole UI going forward. Gradio code can be removed. |
 | **Vault stays authoritative** | No task state, signal state, or other application state outside the vault and its derived indexes. The system is always a read-only view on top of personal notes. |
+| **Voice chat: resolve open questions for v1** | Single voice default (alloy, no UI picker). Fresh sessions (no text history injection). Error on offline (no Whisper STT fallback). Server VAD only (no push-to-talk). Keep reranker enabled but monitor latency. See resolved decisions in `docs/features/voice-chat-realtime-api.md`. |
 
 ---
 
@@ -137,6 +138,26 @@ Goal: make retrieval results explainable and let the LLM handle recency contextu
 Deliverable: transparent ranking + LLM-driven recency awareness.
 
 See `docs/features/retrieval-transparency.md` for full spec.
+
+---
+
+## Phase 5.5 — Voice chat via OpenAI Realtime API (~2-3 weeks)
+Goal: hands-free voice interaction with the knowledge base using speech-to-speech.
+
+- [ ] Backend WebSocket relay (`/api/v1/voice`) proxying audio to OpenAI Realtime API
+- [ ] `gpt-realtime-mini` model (cost-efficient, strong tool calling)
+- [ ] Tool call interception: `search_knowledge_base` calls existing RAG pipeline
+- [ ] Frontend audio capture/playback via AudioWorklet + Web Audio API (Mac + iPhone)
+- [ ] User interrupt / barge-in: flush playback queue on `speech_started`, conditional `response.cancel` + `conversation.item.truncate` with tracked `audio_end_ms`
+- [ ] Response state machine: `idle` → `in_progress` → `done` | `interrupted`
+- [ ] Microphone button in chat UI (opt-in, text input remains default)
+- [ ] Server VAD for natural turn-taking
+- [ ] JSONL event logging (transcripts, tool calls, interrupts, errors)
+- [ ] Feature flag: `SECONDBRAIN_VOICE_ENABLED` (default off)
+
+Deliverable: talk to your vault hands-free from any device.
+
+See `docs/features/voice-chat-realtime-api.md` for full spec.
 
 ---
 

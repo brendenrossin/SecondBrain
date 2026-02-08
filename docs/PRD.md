@@ -33,6 +33,7 @@ Build a personal “memory layer” on top of an Obsidian vault that:
    - Convert scattered notes into canonical “spec pages” + timeline
 5. **Mobile access**
    - Query memory via secure web or chat when away from the Mac Studio
+   - Hands-free voice queries via OpenAI Realtime API (speech-to-speech with RAG tool calling)
 6. **Auditability**
    - Show sources for every answer (citations to notes/chunks)
 
@@ -98,6 +99,10 @@ Build a personal “memory layer” on top of an Obsidian vault that:
 - Remote (opt-in):
   - Tailscale VPN for private network access (done)
   - Next.js frontend accessible from any Tailscale device
+- Voice (opt-in):
+  - Speech-to-speech via OpenAI Realtime API with RAG tool calling
+  - Mic button in chat UI; browser audio I/O (Mac + iPhone + AirPods)
+  - See `docs/features/voice-chat-realtime-api.md`
 
 **Write-backs (opt-in)**
 - Create “suggested links/tags” report
@@ -146,7 +151,7 @@ Build a personal “memory layer” on top of an Obsidian vault that:
 ## 8) Milestones (high-level)
 - POC: index + hybrid search + citations (local) *(done)*
 - V1: incremental updates + entity extraction + suggestions UI + secure remote access *(done — Phases 0-4)*
-- V1.5: retrieval transparency + proactive signals *(next — Phases 5-6)*
+- V1.5: retrieval transparency + proactive signals + voice chat *(next — Phases 5-6)*
 - V2: knowledge graph + graph exploration UI + write-back workflow *(Phases 7-8)*
 
 > **Note (2026-02-07):** The original V1.5 milestone ("chat interface + rate limiting + audit logs") is obsolete. The Next.js frontend includes a chat page, replacing the planned bot gateway. Gradio UI is deprecated.
