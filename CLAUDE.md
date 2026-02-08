@@ -106,7 +106,8 @@ Read docs in this order for full context:
 7. `docs/SECURITY_PRIVACY.md` - Threat model and hardening
 8. `docs/OPERATIONS_OBSERVABILITY.md` - Logging, metrics, backups
 9. `docs/UI_DESIGN_SPEC.md` - Frontend redesign spec ("Mission Control" dashboard overhaul)
-10. `docs/features/*.md` - Individual feature specs, explorations, and deferred proposals
+10. `docs/ENGINEERING_REVIEW.md` - System health assessment, improvement priorities, and review criteria for changes
+11. `docs/features/*.md` - Individual feature specs, explorations, and deferred proposals
 
 ## Implementation Phases
 
@@ -117,6 +118,7 @@ Read docs in this order for full context:
 - **Phase 3.5:** Next.js frontend + UI redesign *(done)*
 - **Phase 4:** Secure remote access (Tailscale) *(done)*
 - **Phase 5:** Retrieval transparency + context-aware recency
+- **Phase 5.5:** Voice chat via OpenAI Realtime API
 - **Phase 6:** Proactive signals v1 (escalation + recurrence)
 - **Phase 7:** Knowledge graph (V2)
 - **Phase 8:** Write-back workflow (V2+)
