@@ -55,14 +55,7 @@ export async function askStream(
   let buffer = "";
   let currentEvent = "";
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || "";
-
+  function processLines(lines: string[]) {
     for (const rawLine of lines) {
       // Strip \r from CRLF line endings (sse_starlette uses \r\n)
       const line = rawLine.replace(/\r$/, "");
@@ -86,6 +79,22 @@ export async function askStream(
         }
       }
     }
+  }
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+    processLines(lines);
+  }
+
+  // Flush decoder and process any remaining buffered data
+  buffer += decoder.decode();
+  if (buffer) {
+    processLines(buffer.split("\n"));
   }
 }
 

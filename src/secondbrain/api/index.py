@@ -15,7 +15,7 @@ from secondbrain.api.dependencies import (
 )
 from secondbrain.config import Settings
 from secondbrain.indexing.chunker import Chunker
-from secondbrain.indexing.embedder import Embedder
+from secondbrain.indexing.embedder import Embedder, build_embedding_text, extract_note_metadata
 from secondbrain.stores.index_tracker import IndexTracker
 from secondbrain.stores.lexical import LexicalStore
 from secondbrain.stores.vector import VectorStore
@@ -106,7 +106,11 @@ async def index_vault(
             continue
         chunks = chunker.chunk_note(note)
         if chunks:
-            texts = [c.chunk_text for c in chunks]
+            note_folder, note_date = extract_note_metadata(note.path, note.frontmatter)
+            for c in chunks:
+                c.note_folder = note_folder
+                c.note_date = note_date
+            texts = [build_embedding_text(c) for c in chunks]
             embeddings = embedder.embed(texts)
             vector_store.add_chunks(chunks, embeddings)
             lexical_store.add_chunks(chunks)

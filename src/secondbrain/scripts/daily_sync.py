@@ -3,6 +3,7 @@
 import argparse
 import logging
 import sys
+import urllib.request
 from pathlib import Path
 
 from secondbrain.config import get_settings
@@ -29,7 +30,19 @@ def reindex_vault(vault_path: Path, data_path: Path | None = None) -> str:
 
     trigger = data_path / ".reindex_needed"
     trigger.write_text(str(vault_path))
-    return "Reindex trigger written (UI will reindex on next query)"
+
+    # Try to tell the running server to reindex immediately
+    try:
+        req = urllib.request.Request(
+            f"http://{settings.host}:{settings.port}/api/v1/index",
+            method="POST",
+            headers={"Content-Type": "application/json"},
+            data=b"{}",
+        )
+        urllib.request.urlopen(req, timeout=120)
+        return "Reindex triggered via API (server reindexed immediately)"
+    except Exception:
+        return "Reindex trigger written (server not reachable; will reindex on next query)"
 
 
 def extract_metadata(vault_path: Path, data_path: Path | None = None) -> str:

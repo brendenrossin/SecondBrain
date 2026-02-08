@@ -17,6 +17,10 @@ class VaultConnector:
         "node_modules/*",
         ".git/*",
         "*.excalidraw.md",
+        "Inbox/*",
+        "Tasks/All Tasks.md",
+        "Tasks/Completed Tasks.md",
+        "90_Meta/Templates/*",
     ]
 
     def __init__(

@@ -23,6 +23,8 @@ class LLMReranker:
 
     SYSTEM_PROMPT = """You are a relevance scorer. Given a query and multiple text chunks from a personal knowledge base, rate how relevant each chunk is to answering the query.
 
+Each chunk includes metadata: the vault folder it's from (e.g. 00_Daily, 10_Notes, 20_Projects) and optionally a date. Use dates to assess relevance for temporal queries (e.g. "yesterday", "this week", "recent").
+
 Score from 0-10:
 - 0-2: Not relevant at all
 - 3-4: Tangentially related but doesn't help answer the query
@@ -129,10 +131,15 @@ The array MUST have exactly the same number of elements as chunks provided."""
         # Build chunks text
         chunks_text = []
         for i, candidate in enumerate(candidates):
-            context = f"[{i + 1}] Note: {candidate.note_title}"
+            context = f"[{i + 1}]"
+            if candidate.note_folder:
+                context += f" [{candidate.note_folder}]"
+            if candidate.note_date:
+                context += f" ({candidate.note_date})"
+            context += f" {candidate.note_title}"
             if candidate.heading_path:
                 context += f" > {' > '.join(candidate.heading_path)}"
-            context += f"\n{candidate.chunk_text[:500]}"  # Truncate for efficiency
+            context += f"\n{candidate.chunk_text[:500]}"
             chunks_text.append(context)
 
         all_chunks = "\n\n---\n\n".join(chunks_text)

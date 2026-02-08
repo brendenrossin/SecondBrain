@@ -1,6 +1,7 @@
 """Embedding providers for document and query embedding."""
 
 import logging
+import re
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
@@ -10,7 +11,55 @@ from numpy.typing import NDArray
 if TYPE_CHECKING:
     from sentence_transformers import SentenceTransformer
 
+    from secondbrain.models import Chunk
+
 logger = logging.getLogger(__name__)
+
+# Pattern for daily notes: YYYY-MM-DD.md
+_DAILY_NOTE_PATTERN = re.compile(r"(\d{4}-\d{2}-\d{2})\.md$")
+
+
+def extract_note_metadata(note_path: str, frontmatter: dict[str, object]) -> tuple[str, str | None]:
+    """Extract folder and date from a note for chunk metadata.
+
+    Returns:
+        (note_folder, note_date) where note_date may be None.
+    """
+    # Extract folder: first path component (e.g. "00_Daily", "10_Notes")
+    parts = note_path.replace("\\", "/").split("/")
+    note_folder = parts[0] if len(parts) > 1 else ""
+
+    # Extract date: prefer frontmatter 'date', then daily note filename pattern
+    note_date: str | None = None
+    fm_date = frontmatter.get("date")
+    if isinstance(fm_date, str) and fm_date:
+        note_date = fm_date
+    else:
+        # Check if filename matches daily note pattern
+        filename = parts[-1]
+        m = _DAILY_NOTE_PATTERN.match(filename)
+        if m:
+            note_date = m.group(1)
+
+    return note_folder, note_date
+
+
+def build_embedding_text(chunk: "Chunk") -> str:
+    """Build text for embedding by prepending heading context.
+
+    Produces text like:
+        Tasks > AT&T > AI Receptionist
+        Review MCP client integration for welcome agent
+
+    This gives the embedding model structural context that would
+    otherwise be invisible in the raw chunk text.
+    """
+    parts: list[str] = []
+    if chunk.heading_path:
+        parts.append(" > ".join(chunk.heading_path))
+    parts.append(chunk.chunk_text)
+    return "\n".join(parts)
+
 
 # BGE models that benefit from a query prefix
 _BGE_QUERY_PREFIX = "Represent this sentence for searching relevant passages: "

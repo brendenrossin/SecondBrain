@@ -136,7 +136,22 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           },
         },
         controller.signal
-      );
+      ).catch((err) => {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        setMessages((prev) => {
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+          if (last.role === "assistant") {
+            updated[updated.length - 1] = {
+              ...last,
+              content: `Error: ${err.message}`,
+            };
+          }
+          return updated;
+        });
+        setIsStreaming(false);
+        abortRef.current = null;
+      });
     },
     [conversationId, isStreaming, provider]
   );

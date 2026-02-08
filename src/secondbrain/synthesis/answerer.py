@@ -21,6 +21,7 @@ IMPORTANT RULES:
 4. When referencing information, you may mention which note it came from
 5. Do not make up information that isn't in the sources
 6. If asked to brainstorm or speculate, you may do so but clearly label it as speculation
+7. Sources include dates and folder context. Use dates to answer temporal queries like "yesterday", "this week", "most recent", etc.
 
 The user's relevant notes are provided below."""
 
@@ -179,7 +180,12 @@ You might want to:
 
         for i, rc in enumerate(ranked_candidates, 1):
             candidate = rc.candidate
-            header = f"[{i}] {candidate.note_title}"
+            header = f"[{i}]"
+            if candidate.note_folder:
+                header += f" [{candidate.note_folder}]"
+            if candidate.note_date:
+                header += f" ({candidate.note_date})"
+            header += f" {candidate.note_title}"
             if candidate.heading_path:
                 header += f" > {' > '.join(candidate.heading_path)}"
 

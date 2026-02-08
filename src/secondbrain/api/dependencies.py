@@ -11,6 +11,8 @@ from secondbrain.indexing.embedder import (
     EmbeddingProvider,
     OpenAIEmbeddingProvider,
     SentenceTransformerProvider,
+    build_embedding_text,
+    extract_note_metadata,
 )
 from secondbrain.logging.query_logger import QueryLogger
 from secondbrain.retrieval.hybrid import HybridRetriever
@@ -240,7 +242,11 @@ def check_and_reindex(full_rebuild: bool = False) -> str | None:
 
         chunks = chunker.chunk_note(note)
         if chunks:
-            texts = [c.chunk_text for c in chunks]
+            note_folder, note_date = extract_note_metadata(note.path, note.frontmatter)
+            for c in chunks:
+                c.note_folder = note_folder
+                c.note_date = note_date
+            texts = [build_embedding_text(c) for c in chunks]
             embeddings = embedder.embed(texts)
             vector_store.add_chunks(chunks, embeddings)
             lexical_store.add_chunks(chunks)

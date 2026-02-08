@@ -136,6 +136,8 @@ class VectorStore:
                 "heading_path": "|".join(c.heading_path),
                 "chunk_index": c.chunk_index,
                 "checksum": c.checksum,
+                "note_folder": c.note_folder or "",
+                "note_date": c.note_date or "",
             }
             for c in chunks
         ]

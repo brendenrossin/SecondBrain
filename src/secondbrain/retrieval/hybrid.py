@@ -20,6 +20,8 @@ class RetrievalCandidate:
     similarity_score: float
     bm25_score: float
     rrf_score: float
+    note_folder: str = ""
+    note_date: str = ""
 
 
 class HybridRetriever:
@@ -133,6 +135,8 @@ class HybridRetriever:
                     similarity_score=vector_scores.get(chunk_id, 0.0),
                     bm25_score=lexical_scores.get(chunk_id, 0.0),
                     rrf_score=rrf_score,
+                    note_folder=str(metadata.get("note_folder", "")),
+                    note_date=str(metadata.get("note_date", "")),
                 )
             )
 

@@ -72,6 +72,9 @@ class LexicalStore:
         except FileNotFoundError:
             pass
 
+    # Bump this when the FTS5 schema changes to trigger automatic recreation.
+    _FTS_SCHEMA_VERSION = 2  # v2: added heading_path column
+
     def _init_schema(self) -> None:
         """Initialize the database schema.
 
@@ -91,16 +94,15 @@ class LexicalStore:
                 heading_path TEXT NOT NULL,
                 chunk_index INTEGER NOT NULL,
                 chunk_text TEXT NOT NULL,
-                checksum TEXT NOT NULL
+                checksum TEXT NOT NULL,
+                note_folder TEXT NOT NULL DEFAULT '',
+                note_date TEXT
             );
 
-            -- FTS5 virtual table for full-text search (external content, NO triggers)
-            CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
-                chunk_id,
-                note_title,
-                chunk_text,
-                content='chunks',
-                content_rowid='rowid'
+            -- Schema version tracking
+            CREATE TABLE IF NOT EXISTS schema_meta (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
             );
 
             -- Drop legacy triggers that cause FTS5 corruption
@@ -112,6 +114,67 @@ class LexicalStore:
             CREATE INDEX IF NOT EXISTS idx_chunks_note_path ON chunks(note_path);
         """)
         self.conn.commit()
+
+        # Migrate: add note_folder/note_date columns to existing tables
+        self._migrate_chunk_columns()
+
+        self._ensure_fts_schema()
+
+    def _migrate_chunk_columns(self) -> None:
+        """Add note_folder/note_date columns if missing (for existing databases)."""
+        cursor = self.conn.execute("PRAGMA table_info(chunks)")
+        columns = {row["name"] for row in cursor.fetchall()}
+        if "note_folder" not in columns:
+            self.conn.execute("ALTER TABLE chunks ADD COLUMN note_folder TEXT NOT NULL DEFAULT ''")
+        if "note_date" not in columns:
+            self.conn.execute("ALTER TABLE chunks ADD COLUMN note_date TEXT")
+        self.conn.commit()
+
+    def _ensure_fts_schema(self) -> None:
+        """Ensure the FTS5 virtual table matches the current schema version.
+
+        If the stored schema version is older than _FTS_SCHEMA_VERSION,
+        drop and recreate the FTS5 table, then rebuild from the content table.
+        """
+        cur = self.conn.execute("SELECT value FROM schema_meta WHERE key = 'fts_schema_version'")
+        row = cur.fetchone()
+        stored_version = int(row["value"]) if row else 0
+
+        if stored_version < self._FTS_SCHEMA_VERSION:
+            logger.info(
+                "FTS5 schema version %d -> %d, recreating virtual table",
+                stored_version,
+                self._FTS_SCHEMA_VERSION,
+            )
+            self.conn.execute("DROP TABLE IF EXISTS chunks_fts")
+            self.conn.execute("""
+                CREATE VIRTUAL TABLE chunks_fts USING fts5(
+                    chunk_id,
+                    note_title,
+                    heading_path,
+                    chunk_text,
+                    content='chunks',
+                    content_rowid='rowid'
+                )
+            """)
+            self.conn.execute(
+                "INSERT OR REPLACE INTO schema_meta (key, value) VALUES (?, ?)",
+                ("fts_schema_version", str(self._FTS_SCHEMA_VERSION)),
+            )
+            self.conn.commit()
+            self._rebuild_fts()
+        else:
+            # FTS5 table already exists with correct schema
+            self.conn.execute("""
+                CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
+                    chunk_id,
+                    note_title,
+                    heading_path,
+                    chunk_text,
+                    content='chunks',
+                    content_rowid='rowid'
+                )
+            """)
 
     def add_chunks(self, chunks: list[Chunk]) -> None:
         """Add or update chunks in the store.
@@ -131,14 +194,17 @@ class LexicalStore:
                 c.chunk_index,
                 c.chunk_text,
                 c.checksum,
+                c.note_folder or "",
+                c.note_date,
             )
             for c in chunks
         ]
 
         sql = """
             INSERT OR REPLACE INTO chunks
-            (chunk_id, note_path, note_title, heading_path, chunk_index, chunk_text, checksum)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            (chunk_id, note_path, note_title, heading_path, chunk_index,
+             chunk_text, checksum, note_folder, note_date)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
 
         try:

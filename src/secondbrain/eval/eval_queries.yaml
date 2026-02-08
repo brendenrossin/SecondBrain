@@ -7,14 +7,12 @@ queries:
 
   - query: "who do I still need to reach out or respond to?"
     expected_notes:
-      - "Tasks/All Tasks.md"
       - "00_Daily/2026-02-05.md"
       - "00_Daily/2026-02-06.md"
     tags: [semantic, tasks]
 
   - query: "nothing about emails or resumes?"
     expected_notes:
-      - "Tasks/All Tasks.md"
       - "00_Daily/2026-02-05.md"
       - "00_Daily/2026-02-06.md"
     tags: [semantic, follow-up]
@@ -26,19 +24,16 @@ queries:
 
   - query: "resume update"
     expected_notes:
-      - "Tasks/All Tasks.md"
       - "00_Daily/2026-02-05.md"
     tags: [keyword, tasks]
 
   - query: "Follow up on David's emails"
     expected_notes:
       - "00_Daily/2026-02-06.md"
-      - "Tasks/All Tasks.md"
     tags: [semantic, tasks]
 
   - query: "AT&T MCP client setup"
     expected_notes:
-      - "Tasks/All Tasks.md"
       - "00_Daily/2026-02-04.md"
     tags: [keyword, work]
 
@@ -50,7 +45,6 @@ queries:
 
   - query: "what tasks are due today?"
     expected_notes:
-      - "Tasks/All Tasks.md"
       - "00_Daily/2026-02-06.md"
     tags: [semantic, temporal]
 
@@ -58,26 +52,24 @@ queries:
 
   - query: "what's the status of the AI receptionist project?"
     expected_notes:
-      - "Tasks/All Tasks.md"
       - "00_Daily/2026-02-05.md"
+      - "00_Daily/2026-02-04.md"
     tags: [semantic, work, chain]
 
   - query: "AT&T welcome agent work"
     expected_notes:
-      - "Tasks/All Tasks.md"
       - "00_Daily/2026-02-05.md"
+      - "00_Daily/2026-02-04.md"
     tags: [keyword, work, chain]
 
   - query: "what PwC tasks do I have open?"
     expected_notes:
-      - "Tasks/All Tasks.md"
       - "00_Daily/2026-02-05.md"
     tags: [semantic, work, tasks]
 
   - query: "Dilip snapshot review"
     expected_notes:
       - "00_Daily/2026-02-05.md"
-      - "Tasks/All Tasks.md"
     tags: [keyword, work]
 
   # === PERSONAL TASKS & LIFE ADMIN ===
@@ -85,19 +77,16 @@ queries:
   - query: "dermatologist appointment"
     expected_notes:
       - "00_Daily/2026-02-05.md"
-      - "Tasks/All Tasks.md"
     tags: [keyword, personal]
 
   - query: "what do I need to do for taxes?"
     expected_notes:
-      - "Tasks/All Tasks.md"
       - "00_Daily/2026-02-05.md"
     tags: [semantic, personal, tasks]
 
   - query: "Azure AI certification progress"
     expected_notes:
       - "00_Daily/2026-02-05.md"
-      - "Tasks/All Tasks.md"
     tags: [semantic, personal, chain]
 
   # === PROJECT CONTEXT: Cross-referencing project notes ===
@@ -105,7 +94,6 @@ queries:
   - query: "SecondBrain project open tasks"
     expected_notes:
       - "20_Projects/SecondBrain.md"
-      - "Tasks/All Tasks.md"
     tags: [semantic, project, tasks]
 
   - query: "what was I working on yesterday?"
@@ -123,30 +111,127 @@ queries:
 
   - query: "send something to Griffin at Snowflake"
     expected_notes:
-      - "Tasks/All Tasks.md"
       - "00_Daily/2026-02-05.md"
+      - "10_Notes/Rachels Birthday Gift  Travel Plans.md"
     tags: [semantic, tasks]
 
   - query: "W2 and investment account stuff"
     expected_notes:
       - "00_Daily/2026-02-05.md"
-      - "Tasks/All Tasks.md"
     tags: [semantic, personal]
 
   - query: "vector search and embeddings"
     expected_notes:
-      - "10_Notes/Vector Databases.md"
       - "20_Projects/SecondBrain.md"
     tags: [semantic, project]
-
-  # === CONCEPT NOTES: Technical reference retrieval ===
-
-  - query: "how do vector databases work?"
-    expected_notes:
-      - "10_Notes/Vector Databases.md"
-    tags: [semantic, factual]
 
   - query: "Rachel engagement ring details"
     expected_notes:
       - "10_Notes/Rachel's Engagement Ring.md"
     tags: [keyword, personal, factual]
+
+  - query: "what carat and cut is Rachel's ring?"
+    expected_notes:
+      - "10_Notes/Rachel's Engagement Ring.md"
+    tags: [factual, exact]
+
+  # === NEW DATA: Buffalo chicken dip & Super Bowl ===
+
+  - query: "buffalo chicken dip"
+    expected_notes:
+      - "00_Daily/2026-02-07.md"
+      - "00_Daily/2026-02-06.md"
+    tags: [keyword, personal]
+
+  - query: "buffalo chicken dip ingredients"
+    expected_notes:
+      - "00_Daily/2026-02-07.md"
+    tags: [keyword, personal, factual]
+
+  - query: "what do I need to make for the Super Bowl party?"
+    expected_notes:
+      - "00_Daily/2026-02-06.md"
+      - "00_Daily/2026-02-07.md"
+    tags: [semantic, personal]
+
+  - query: "Ryan Hogan party"
+    expected_notes:
+      - "00_Daily/2026-02-06.md"
+    tags: [keyword, personal]
+
+  - query: "what groceries did I buy recently?"
+    expected_notes:
+      - "00_Daily/2026-02-07.md"
+    tags: [semantic, personal, recency]
+
+  # === NEW DATA: Rachel birthday & travel ===
+
+  - query: "Rachel's birthday gift ideas"
+    expected_notes:
+      - "10_Notes/Rachels Birthday Gift  Travel Plans.md"
+    tags: [semantic, personal]
+
+  - query: "San Diego trip plans"
+    expected_notes:
+      - "10_Notes/Rachels Birthday Gift  Travel Plans.md"
+    tags: [keyword, personal]
+
+  - query: "Noah Kahan concert tickets"
+    expected_notes:
+      - "10_Notes/Rachels Birthday Gift  Travel Plans.md"
+    tags: [keyword, personal]
+
+  # === NEW DATA: 2026-02-07 content ===
+
+  - query: "Trader Joe's miso black cod"
+    expected_notes:
+      - "00_Daily/2026-02-07.md"
+    tags: [keyword, personal]
+
+  - query: "seven layer dip"
+    expected_notes:
+      - "00_Daily/2026-02-07.md"
+    tags: [keyword, personal]
+
+  # === ALTERNATE PHRASINGS: Same topics, different wording ===
+
+  - query: "engagement ring specifications and design"
+    expected_notes:
+      - "10_Notes/Rachel's Engagement Ring.md"
+    tags: [semantic, personal, factual]
+
+  - query: "what kind of metal and setting for the ring?"
+    expected_notes:
+      - "10_Notes/Rachel's Engagement Ring.md"
+    tags: [semantic, personal, factual]
+
+  - query: "Xavier PR review at AT&T"
+    expected_notes:
+      - "00_Daily/2026-02-06.md"
+    tags: [keyword, work]
+
+  - query: "retrieval quality evaluation for second brain"
+    expected_notes:
+      - "20_Projects/Second Brain Retrieval Separation Evaluation.md"
+    tags: [semantic, project]
+
+  - query: "what's coming up with Rachel's parents visiting?"
+    expected_notes:
+      - "10_Notes/Rachels Birthday Gift  Travel Plans.md"
+    tags: [semantic, personal]
+
+  - query: "how do I separate AT&T and PwC tasks in search results?"
+    expected_notes:
+      - "20_Projects/Second Brain Retrieval Separation Evaluation.md"
+    tags: [semantic, project]
+
+  - query: "Udemy AI-102 course"
+    expected_notes:
+      - "00_Daily/2026-02-05.md"
+    tags: [keyword, personal, chain]
+
+  - query: "what gift should I get for Rachel?"
+    expected_notes:
+      - "10_Notes/Rachels Birthday Gift  Travel Plans.md"
+      - "00_Daily/2026-02-04.md"
+    tags: [semantic, personal]

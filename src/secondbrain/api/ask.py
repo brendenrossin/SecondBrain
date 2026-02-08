@@ -1,5 +1,6 @@
 """Ask endpoint for conversational RAG."""
 
+import json
 import time
 from collections.abc import AsyncIterator
 from typing import Annotated
@@ -145,7 +146,7 @@ async def ask_stream(
         # Send citations first
         yield {
             "event": "citations",
-            "data": [c.model_dump() for c in citations],
+            "data": json.dumps([c.model_dump() for c in citations]),
         }
 
         # Stream answer tokens
@@ -177,10 +178,12 @@ async def ask_stream(
         # Send done event
         yield {
             "event": "done",
-            "data": {
-                "conversation_id": conversation_id,
-                "retrieval_label": retrieval_label.value,
-            },
+            "data": json.dumps(
+                {
+                    "conversation_id": conversation_id,
+                    "retrieval_label": retrieval_label.value,
+                }
+            ),
         }
 
     return EventSourceResponse(generate())

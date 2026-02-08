@@ -8,7 +8,21 @@
       "WebFetch(domain:www.gradio.app)",
       "Bash(uv run python:*)",
       "Bash(export PATH=\"$HOME/.local/bin:$PATH\")",
-      "Bash(make test:*)"
+      "Bash(make test:*)",
+      "Bash(uv run ruff check:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm run dev:*)",
+      "Bash(npx next build:*)",
+      "Bash(npx tsc:*)",
+      "Bash(launchctl load:*)",
+      "Bash(python3:*)",
+      "Bash(uv run mypy:*)",
+      "Bash(uv run ruff format:*)",
+      "Bash(uv run python3:*)",
+      "Bash(make check:*)",
+      "Bash(make format:*)",
+      "Bash(make eval:*)",
+      "Bash(uv run pytest:*)"
     ]
   }
 }

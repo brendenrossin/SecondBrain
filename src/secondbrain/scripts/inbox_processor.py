@@ -1,5 +1,7 @@
 """Inbox processor: classifies dictated notes and routes to proper vault folders."""
 
+import hashlib
+import json
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -11,11 +13,33 @@ from secondbrain.scripts.llm_client import LLMClient
 
 logger = logging.getLogger(__name__)
 
+# --- Living document registry (hardcoded, A3a) ---
+# Each entry: name -> (vault path relative to vault root, semantics)
+LIVING_DOCUMENTS: dict[str, tuple[str, str]] = {
+    "Grocery List": ("10_Notes/Grocery List.md", "replace"),
+    "Recipe Ideas": ("10_Notes/Recipe Ideas.md", "append"),
+}
+
+SEGMENTATION_PROMPT = """You are a text segmentation assistant. Given raw dictated text that may cover multiple unrelated topics, split it into logical segments.
+
+Return ONLY valid JSON: an array of segment objects.
+[
+  {"segment_id": 1, "topic": "Short topic label", "content": "verbatim text for this segment"},
+  {"segment_id": 2, "topic": "Another topic", "content": "verbatim text..."}
+]
+
+Rules:
+- Preserve the original text VERBATIM in each segment's "content" field — do not summarize or rewrite.
+- Only split when topics are clearly distinct (e.g. grocery list + work tasks + personal reminder).
+- When in doubt, keep content together in a SINGLE segment.
+- A single segment is perfectly fine for focused notes.
+- Each segment must have all three fields: segment_id, topic, content."""
+
 CLASSIFICATION_PROMPT = """You are an Obsidian vault organizer. Given a raw dictated note, classify it and extract structured data.
 
 Return ONLY valid JSON with these fields:
 {
-  "note_type": "daily_note" | "note" | "project" | "concept",
+  "note_type": "daily_note" | "note" | "project" | "concept" | "living_document",
   "suggested_title": "Short descriptive title",
   "date": "YYYY-MM-DD (the date the note is about, or today if unclear)",
   "category": "AT&T" | "PwC" | "Personal" | null,
@@ -27,7 +51,8 @@ Return ONLY valid JSON with these fields:
     {"text": "task description", "category": "AT&T", "sub_project": "AI Receptionist", "due_date": "YYYY-MM-DD or null"}
   ],
   "content": "cleaned up body text for non-daily notes",
-  "links": ["related topic 1"]
+  "links": ["related topic 1"],
+  "living_doc_name": "matched document name or null"
 }
 
 Classification rules:
@@ -35,6 +60,11 @@ Classification rules:
 - "note": A standalone piece of information, observation, or reference
 - "project": Describes a project with objectives, milestones, or deliverables
 - "concept": An idea, definition, or knowledge topic
+- "living_document": Content that updates a known persistent document.
+  Known living documents:
+    - "Grocery List" (replace semantics) → replaces existing content
+    - "Recipe Ideas" (append semantics) → appends new entries
+  Set "living_doc_name" to the matched document name.
 
 IMPORTANT task vs focus rules:
 - ANY actionable item (something the user needs to DO) MUST go in "tasks", NOT "focus_items".
@@ -79,38 +109,227 @@ def process_inbox(vault_path: Path) -> list[str]:
 
     for md_file in md_files:
         try:
-            action = _process_single_file(md_file, vault_path, llm)
-            actions.append(action)
-            logger.info("Processed: %s -> %s", md_file.name, action)
+            file_actions = _process_single_file(md_file, vault_path, llm)
+            actions.extend(file_actions)
+            for action in file_actions:
+                logger.info("Processed: %s -> %s", md_file.name, action)
+            # Move to _processed/ on success
+            _move_to_subfolder(md_file, "_processed")
         except Exception:
             logger.error("Failed to process %s", md_file.name, exc_info=True)
             actions.append(f"FAILED: {md_file.name}")
+            _move_to_subfolder(md_file, "_failed")
 
     return actions
 
 
-def _process_single_file(md_file: Path, vault_path: Path, llm: LLMClient) -> str:
-    """Process a single inbox file: classify and route."""
+def _move_to_subfolder(md_file: Path, subfolder: str) -> None:
+    """Move an inbox file to a subfolder (e.g. _processed, _failed)."""
+    dest_dir = md_file.parent / subfolder
+    dest_dir.mkdir(exist_ok=True)
+    dest = dest_dir / md_file.name
+    # Avoid overwriting: add timestamp suffix if file exists
+    if dest.exists():
+        ts = datetime.now().strftime("%H%M%S")
+        dest = dest_dir / f"{md_file.stem}_{ts}{md_file.suffix}"
+    md_file.rename(dest)
+
+
+def _is_duplicate(raw_text: str, vault_path: Path) -> bool:
+    """Check if this content was already processed recently."""
+    content_hash = hashlib.sha1(raw_text.strip().encode()).hexdigest()[:16]
+    processed_dir = vault_path / "Inbox" / "_processed"
+    if not processed_dir.exists():
+        return False
+    for f in processed_dir.glob("*.md"):
+        try:
+            existing_hash = hashlib.sha1(
+                f.read_text(encoding="utf-8").strip().encode()
+            ).hexdigest()[:16]
+            if existing_hash == content_hash:
+                return True
+        except OSError:
+            continue
+    return False
+
+
+def _validate_classification(data: Any) -> bool:
+    """Validate that LLM classification output has the required structure."""
+    if not isinstance(data, dict):
+        return False
+    note_type = data.get("note_type")
+    if note_type not in ("daily_note", "note", "project", "concept", "living_document"):
+        return False
+    # Tasks must be a list if present
+    tasks = data.get("tasks")
+    return not (tasks is not None and not isinstance(tasks, list))
+
+
+def _validate_segments(data: Any) -> bool:
+    """Validate that LLM segmentation output is a list of segment objects."""
+    if not isinstance(data, list):
+        return False
+    for item in data:
+        if not isinstance(item, dict):
+            return False
+        if "content" not in item:
+            return False
+    return True
+
+
+def _segment_content(raw_text: str, llm: LLMClient) -> list[dict[str, Any]]:
+    """Split raw text into logical segments using LLM.
+
+    Returns a list of segment dicts. Falls back to a single segment
+    wrapping the original text if segmentation fails.
+    """
+    fallback = [{"segment_id": 1, "topic": "Full note", "content": raw_text}]
+
+    # Short texts don't need segmentation
+    if len(raw_text) < 300:
+        return fallback
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    user_prompt = f"Today's date: {today}\n\nRaw dictated text:\n{raw_text}"
+
+    try:
+        raw = llm.chat(SEGMENTATION_PROMPT, user_prompt)
+        # Strip markdown code fences if present
+        cleaned = raw.strip()
+        if cleaned.startswith("```"):
+            lines = cleaned.split("\n")
+            lines = lines[1:]
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            cleaned = "\n".join(lines)
+        segments = json.loads(cleaned)
+        if not _validate_segments(segments):
+            logger.warning("Segmentation output failed validation, using single segment")
+            return fallback
+        return list(segments)
+    except (json.JSONDecodeError, RuntimeError):
+        logger.warning("Segmentation LLM call failed, using single segment")
+        return fallback
+
+
+def _classify_with_retry(text: str, llm: LLMClient, max_retries: int = 1) -> dict[str, Any] | None:
+    """Classify text with validation and retry on failure."""
+    today = datetime.now().strftime("%Y-%m-%d")
+    user_prompt = f"Today's date: {today}\n\nRaw note:\n{text}"
+
+    for attempt in range(1 + max_retries):
+        try:
+            classification = llm.chat_json(CLASSIFICATION_PROMPT, user_prompt)
+            if _validate_classification(classification):
+                return classification
+            logger.warning(
+                "Classification validation failed (attempt %d): %s",
+                attempt + 1,
+                classification.get("note_type"),
+            )
+        except (json.JSONDecodeError, RuntimeError):
+            logger.warning("Classification LLM call failed (attempt %d)", attempt + 1)
+
+    return None
+
+
+def _process_single_file(md_file: Path, vault_path: Path, llm: LLMClient) -> list[str]:
+    """Process a single inbox file: segment, classify each segment, and route.
+
+    Returns a list of action strings (one per segment routed).
+    """
     raw_text = md_file.read_text(encoding="utf-8")
+
+    # Duplicate detection
+    if _is_duplicate(raw_text, vault_path):
+        logger.info("Skipping duplicate: %s", md_file.name)
+        return [f"SKIPPED (duplicate): {md_file.name}"]
+
+    # Pass 1: Segmentation
+    segments = _segment_content(raw_text, llm)
+
+    # Pass 2: Classify and route each segment
+    actions: list[str] = []
+    for segment in segments:
+        segment_text = segment.get("content", raw_text)
+        classification = _classify_with_retry(segment_text, llm)
+        if classification is None:
+            topic = segment.get("topic", "unknown")
+            raise ValueError(f"Classification failed for segment: {topic}")
+
+        note_type = classification.get("note_type", "note")
+
+        if note_type == "living_document":
+            action = _route_living_document(classification, vault_path)
+        elif note_type == "daily_note":
+            action = _route_daily_note(classification, vault_path)
+        elif note_type == "project":
+            action = _route_to_folder(classification, vault_path, "20_Projects", "project")
+        elif note_type == "concept":
+            action = _route_to_folder(classification, vault_path, "30_Concepts", "concept")
+        else:
+            action = _route_to_folder(classification, vault_path, "10_Notes", "note")
+
+        actions.append(action)
+
+    return actions
+
+
+def _route_living_document(classification: dict[str, Any], vault_path: Path) -> str:
+    """Route content to a living document with replace or append semantics."""
+    doc_name = classification.get("living_doc_name", "")
+    if doc_name not in LIVING_DOCUMENTS:
+        # Fall back to regular note routing
+        return _route_to_folder(classification, vault_path, "10_Notes", "note")
+
+    rel_path, semantics = LIVING_DOCUMENTS[doc_name]
+    target_file = vault_path / rel_path
+    target_file.parent.mkdir(parents=True, exist_ok=True)
+    content_body = classification.get("content", "")
     today = datetime.now().strftime("%Y-%m-%d")
 
-    user_prompt = f"Today's date: {today}\n\nRaw note:\n{raw_text}"
-    classification = llm.chat_json(CLASSIFICATION_PROMPT, user_prompt)
+    if not target_file.exists():
+        # Create new file with frontmatter
+        post = frontmatter.Post(content_body)
+        post.metadata["type"] = "living_document"
+        post.metadata["created"] = today
+        post.metadata["updated"] = today
+        target_file.write_text(frontmatter.dumps(post) + "\n", encoding="utf-8")
+        return f"Created living doc {rel_path}"
 
-    note_type = classification.get("note_type", "note")
+    # File exists — apply semantics
+    existing = target_file.read_text(encoding="utf-8")
 
-    if note_type == "daily_note":
-        action = _route_daily_note(classification, vault_path)
-    elif note_type == "project":
-        action = _route_to_folder(classification, vault_path, "20_Projects", "project")
-    elif note_type == "concept":
-        action = _route_to_folder(classification, vault_path, "30_Concepts", "concept")
-    else:
-        action = _route_to_folder(classification, vault_path, "10_Notes", "note")
+    if semantics == "replace":
+        # Archive current content under ## Archive > ### YYYY-MM-DD
+        post = frontmatter.loads(existing)
+        old_content = post.content.strip()
 
-    # Remove processed inbox file
-    md_file.unlink()
-    return action
+        # Build archive section
+        archive_entry = f"### {today}\n{old_content}"
+        if "## Archive" in post.content:
+            # Insert new archive entry at the top of the Archive section
+            new_content = content_body + "\n\n## Archive\n" + archive_entry
+            # Preserve existing archive entries
+            archive_start = post.content.index("## Archive")
+            archive_rest = post.content[archive_start + len("## Archive") :].strip()
+            if archive_rest:
+                new_content += "\n\n" + archive_rest
+        else:
+            new_content = content_body + "\n\n## Archive\n" + archive_entry
+
+        post.content = new_content
+        post.metadata["updated"] = today
+        target_file.write_text(frontmatter.dumps(post) + "\n", encoding="utf-8")
+        return f"Replaced living doc {rel_path} (archived previous)"
+
+    else:  # append
+        post = frontmatter.loads(existing)
+        date_heading = f"### {today}"
+        post.content = post.content.rstrip() + f"\n\n{date_heading}\n{content_body}"
+        post.metadata["updated"] = today
+        target_file.write_text(frontmatter.dumps(post) + "\n", encoding="utf-8")
+        return f"Appended to living doc {rel_path}"
 
 
 def _route_daily_note(classification: dict[str, Any], vault_path: Path) -> str:
