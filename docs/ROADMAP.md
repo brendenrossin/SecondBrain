@@ -25,6 +25,9 @@ Captured 2026-02-07 after roadmap review session. The original brainstorm (with 
 | **Deprecated Gradio UI** | Next.js frontend is the sole UI going forward. Gradio code can be removed. |
 | **Vault stays authoritative** | No task state, signal state, or other application state outside the vault and its derived indexes. The system is always a read-only view on top of personal notes. |
 | **Voice chat: resolve open questions for v1** | Single voice default (alloy, no UI picker). Fresh sessions (no text history injection). Error on offline (no Whisper STT fallback). Server VAD only (no push-to-talk). Keep reranker enabled but monitor latency. See resolved decisions in `docs/features/voice-chat-realtime-api.md`. |
+| **Reprioritized roadmap based on real-world usage (2026-02-08)** | Tasks/scheduling is the most-used feature. Vault has ~16 notes — RAG infrastructure is solid but the bottleneck is capture volume, not retrieval quality. Reordered phases to maximize daily value: morning briefing → inbox/model upgrade → quick capture → weekly review → voice chat. Moved retrieval transparency and full proactive signals to deferred (morning briefing absorbs the core escalation value). |
+| **Deferred vault health checks** | Premature with ~16 notes. Note matching during inbox processing prevents the duplication that would make health checks necessary. Revisit at 100+ notes. |
+| **Inbox upgrade: resolve open questions** | Note matching restricted to `10_Notes/` and `30_Concepts/` only (not projects). Frontend toggle labeled "Claude" (specific, recognizable). See `docs/features/inbox-upgrade-anthropic-migration.md`. |
 
 ---
 
@@ -124,36 +127,74 @@ Deliverable: query your memory from your phone safely.
 
 ---
 
-## Phase 5 — Retrieval transparency + context-aware recency (~1 week)
-Goal: make retrieval results explainable and let the LLM handle recency contextually.
+## Phase 5 — Morning Briefing Dashboard (~2-3 days)
+Goal: when you open the app, instantly know what your day looks like.
 
-- [ ] Add score breakdown to `/ask` API response:
-  - lexical score, vector score, rerank score per citation
-- [ ] "Why this result" expandable section in Next.js chat UI
-- [ ] Context-aware recency: when multiple similar notes exist (e.g., two grocery lists), the LLM uses note dates during synthesis to prefer the recent one
-  - No decay formula or scoring multiplier
-  - Pass note timestamps to the LLM as context; let it reason about recency
-  - Foundational notes (decisions, specs, architecture) are never penalized
+- [ ] Dashboard card showing today's date and summary:
+  - Overdue tasks (count + list)
+  - Tasks due today
+  - What you worked on yesterday (from yesterday's daily note Focus/Notes sections)
+  - Aging follow-ups (tasks open > 3 days with no due date)
+- [ ] API endpoint: `GET /api/v1/briefing` assembling data from task aggregator + daily notes
+- [ ] Frontend: prominent card at top of Tasks page (or dedicated dashboard home)
+- [ ] No LLM needed — pure data assembly from existing task aggregator and daily notes
 
-Deliverable: transparent ranking + LLM-driven recency awareness.
-
-See `docs/features/retrieval-transparency.md` for full spec.
+Deliverable: a 10-second daily check-in that replaces mentally scanning your todo list.
 
 ---
 
-## Phase 5.5 — Voice chat via OpenAI Realtime API (~2-3 weeks)
+## Phase 5.5 — Inbox Upgrade + Anthropic Migration (~3-5 days)
+Goal: better input quality from dictation and stronger LLM across the system.
+
+- [ ] Rewrite segmentation prompt: retrieval-framed heuristic with few-shot examples for dictated text
+- [ ] Add Anthropic SDK: Claude Sonnet 4.5 for inbox processing (better classification of messy dictation)
+- [ ] Claude Haiku 4.5 for chat (reranker + answerer), replacing GPT-4o-mini as cloud option
+- [ ] Fallback chain: Anthropic → Ollama → OpenAI
+- [ ] Note matching: route new content to existing notes when topic already has a note in `10_Notes/` or `30_Concepts/`
+- [ ] Frontend: rename provider toggle from "OpenAI" to "Claude"
+
+Deliverable: smarter ingestion + better chat quality + less note duplication.
+
+See `docs/features/inbox-upgrade-anthropic-migration.md` for full spec.
+
+---
+
+## Phase 6 — Quick Capture (~1 day)
+Goal: reduce friction for getting thoughts into the system from anywhere.
+
+- [ ] `POST /api/v1/capture` endpoint: accepts text, writes timestamped file to `Inbox/`
+- [ ] Minimal capture page at `/capture` in Next.js frontend: text box + submit button
+- [ ] Accessible via Tailscale from phone — no auth needed (Tailscale handles it)
+- [ ] Captured text processed by inbox processor on next hourly sync
+
+Deliverable: any thought → into the system in under 10 seconds from your phone.
+
+---
+
+## Phase 6.5 — Weekly Review Generation (~1-2 days)
+Goal: automatic logbook that compounds value over time.
+
+- [ ] Post-sync job (runs Sundays, or on-demand via `make weekly-review`)
+- [ ] Reads the week's daily notes, extracts: Focus items, completed tasks, open tasks, recurring topics
+- [ ] Generates a weekly summary note in `00_Weekly/YYYY-WNN.md`
+- [ ] Optional LLM polish pass for summary prose (or pure template assembly)
+- [ ] Indexed and searchable like any other note
+
+Deliverable: in 6 months, look back at any week and see what happened.
+
+---
+
+## Phase 7 — Voice Chat via OpenAI Realtime API (~2-3 weeks)
 Goal: hands-free voice interaction with the knowledge base using speech-to-speech.
 
 - [ ] Backend WebSocket relay (`/api/v1/voice`) proxying audio to OpenAI Realtime API
 - [ ] `gpt-realtime-mini` model (cost-efficient, strong tool calling)
 - [ ] Tool call interception: `search_knowledge_base` calls existing RAG pipeline
 - [ ] Frontend audio capture/playback via AudioWorklet + Web Audio API (Mac + iPhone)
-- [ ] User interrupt / barge-in: flush playback queue on `speech_started`, conditional `response.cancel` + `conversation.item.truncate` with tracked `audio_end_ms`
-- [ ] Response state machine: `idle` → `in_progress` → `done` | `interrupted`
+- [ ] User interrupt / barge-in with response state machine
 - [ ] Microphone button in chat UI (opt-in, text input remains default)
 - [ ] Server VAD for natural turn-taking
-- [ ] JSONL event logging (transcripts, tool calls, interrupts, errors)
-- [ ] Feature flag: `SECONDBRAIN_VOICE_ENABLED` (default off)
+- [ ] JSONL event logging + feature flag (default off)
 
 Deliverable: talk to your vault hands-free from any device.
 
@@ -161,37 +202,17 @@ See `docs/features/voice-chat-realtime-api.md` for full spec.
 
 ---
 
-## Phase 6 — Proactive signals v1 (~1–2 weeks)
-Goal: daily passive insights that recommend, never act. High precision, low volume.
-
-- [ ] Post-sync signal pipeline (runs after daily indexing/extraction)
-- [ ] Escalation signals: approaching/overdue deadlines (data already exists)
-- [ ] Recurrence signals: same topic/entity appearing repeatedly across recent notes
-- [ ] Signal schema: `type, summary, confidence, evidence[], suggested_next_step`
-- [ ] Dashboard integration: 1–3 highest-confidence signals per day
-- [ ] One-click actions: create task in vault / dismiss
-- [ ] Safety: signals are suggestions only; no side effects; high confidence threshold
-
-Deliverable: the system surfaces what matters without being noisy.
-
-See `docs/features/proactive-signals-v1.md` for full spec.
-
----
-
-## Phase 7 — Knowledge graph (V2, 4–8+ weeks)
+## Phase 8 — Knowledge graph (V2, 4–8+ weeks)
 - [ ] Choose graph store (Neo4j or Postgres)
 - [ ] Entity resolution + dedupe
 - [ ] Relationship extraction (LLM-assisted, human-reviewed)
-- [ ] Graph exploration UI:
-  - "show related concepts"
-  - "what changed over time"
-  - "decisions and constraints"
+- [ ] Graph exploration UI
 
 Deliverable: true navigable concept graph, beyond similarity search.
 
 ---
 
-## Phase 8 — Write-back workflow (V2+)
+## Phase 9 — Write-back workflow (V2+)
 - [ ] PR-style changesets
 - [ ] Apply suggested links/tags to Markdown files
 - [ ] Versioning + rollback
@@ -200,12 +221,22 @@ Deliverable: assistant can help maintain your vault structure safely.
 
 ---
 
+## Deferred (revisit when relevant)
+
+Features that were planned but deprioritized based on current usage patterns and vault size.
+
+- **Retrieval transparency** — Score breakdowns and "why this result" UI. Context-aware recency is already partially implemented (note dates passed to reranker/answerer). Full spec in `docs/features/retrieval-transparency.md`. Revisit when users report confusion about search results.
+- **Proactive signals v1 (full version)** — Recurrence signals, signal schema, dismiss/snooze, full pipeline. Morning briefing (Phase 5) absorbs the core escalation value. Full spec in `docs/features/proactive-signals-v1.md`. Revisit after morning briefing ships and we learn what patterns actually surface.
+- **Vault health checks** — Duplicate detection, folder size warnings, consolidation suggestions. Premature with ~16 notes. See deferred item in `docs/features/inbox-upgrade-anthropic-migration.md`.
+
+---
+
 ## Future explorations (not committed)
 These ideas have potential but need separate feasibility assessments before entering the roadmap.
 
 - **Email ingestion (read-only)** — See `docs/features/EXPLORATION-email-ingestion.md`
 - **Calendar integration (read-only)** — See `docs/features/EXPLORATION-calendar-integration.md`
-- **Daily digest** — Depends on proactive signals (Phase 6); trivial if signals ship
+- **Daily digest** — Trivial once morning briefing ships; could be a push notification or email summary
 - **Task lifecycle engine** — See `docs/features/DEFERRED-task-lifecycle.md`
 
 ---
