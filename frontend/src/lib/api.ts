@@ -1,5 +1,6 @@
 import type {
   AskRequest,
+  BriefingResponse,
   Citation,
   ConversationSummary,
   Conversation,
@@ -134,6 +135,12 @@ export async function getUpcomingTasks(days = 7): Promise<TaskResponse[]> {
 
 export async function getTaskCategories(): Promise<TaskCategory[]> {
   return fetchJSON(`${BASE}/tasks/categories`);
+}
+
+// --- Briefing ---
+
+export async function getBriefing(): Promise<BriefingResponse> {
+  return fetchJSON(`${BASE}/briefing`);
 }
 
 // --- Index ---

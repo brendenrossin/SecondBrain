@@ -4,7 +4,7 @@ import logging
 import re
 import string
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -102,6 +102,73 @@ class AggregatedTask:
         if days_until <= 7:
             return _badge(text, "#4dabf7")
         return text
+
+
+@dataclass
+class DailyNoteContext:
+    """Focus and Notes sections extracted from a daily note."""
+
+    date: str  # YYYY-MM-DD
+    focus_items: list[str]
+    notes_items: list[str]
+
+
+def parse_daily_note_sections(daily_dir: Path, date_str: str) -> DailyNoteContext | None:
+    """Parse ## Focus and ## Notes sections from a specific daily note.
+
+    Returns None if the file doesn't exist or has no content in either section.
+    """
+    md_file = daily_dir / f"{date_str}.md"
+    if not md_file.exists():
+        return None
+
+    lines = md_file.read_text(encoding="utf-8").split("\n")
+    focus_items: list[str] = []
+    notes_items: list[str] = []
+    current_section: str | None = None
+
+    for line in lines:
+        stripped = line.strip()
+
+        # Detect section boundaries
+        if stripped == "## Focus":
+            current_section = "focus"
+            continue
+        if stripped == "## Notes":
+            current_section = "notes"
+            continue
+        if stripped.startswith("## "):
+            current_section = None
+            continue
+
+        # Parse bullet items in active section
+        if current_section and stripped.startswith("- "):
+            item = stripped[2:].strip()
+            if item:
+                if current_section == "focus":
+                    focus_items.append(item)
+                else:
+                    notes_items.append(item)
+
+    if not focus_items and not notes_items:
+        return None
+
+    return DailyNoteContext(date=date_str, focus_items=focus_items, notes_items=notes_items)
+
+
+def find_recent_daily_context(daily_dir: Path, lookback_days: int = 3) -> DailyNoteContext | None:
+    """Walk backwards from yesterday, return the first daily note with Focus/Notes content.
+
+    Skips today. Looks back up to `lookback_days` days from yesterday.
+    """
+    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    for i in range(1, lookback_days + 2):  # 1 = yesterday, up to lookback_days+1
+        day = today - timedelta(days=i)
+        date_str = day.strftime("%Y-%m-%d")
+        ctx = parse_daily_note_sections(daily_dir, date_str)
+        if ctx is not None:
+            return ctx
+    return None
 
 
 def sync_tasks(vault_path: Path) -> str:

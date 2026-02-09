@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  LayoutDashboard,
   MessageSquare,
   CheckSquare,
   Calendar,
@@ -22,6 +23,13 @@ const NAV_COLORS: Record<string, {
   borderActive: string;
   glowActive: string;
 }> = {
+  "/": {
+    icon: "text-accent/60",
+    iconActive: "text-accent drop-shadow-[0_0_6px_rgba(79,142,247,0.4)]",
+    bgActive: "bg-accent/12",
+    borderActive: "border-accent/15",
+    glowActive: "shadow-[0_0_16px_rgba(79,142,247,0.1)]",
+  },
   "/chat": {
     icon: "text-accent/60",
     iconActive: "text-accent drop-shadow-[0_0_6px_rgba(79,142,247,0.4)]",
@@ -53,6 +61,7 @@ const NAV_COLORS: Record<string, {
 };
 
 const coreNavItems = [
+  { href: "/", label: "Home", icon: LayoutDashboard },
   { href: "/chat", label: "Chat", icon: MessageSquare },
   { href: "/tasks", label: "Tasks", icon: CheckSquare },
   { href: "/calendar", label: "Calendar", icon: Calendar },
@@ -83,8 +92,9 @@ function NavSection({ label, items, pathname }: NavSectionProps): React.JSX.Elem
       <div className="flex flex-col gap-1.5">
         {items.map((item) => {
           const active =
-            pathname === item.href ||
-            pathname.startsWith(item.href + "/");
+            item.href === "/"
+              ? pathname === "/"
+              : pathname === item.href || pathname.startsWith(item.href + "/");
           const colors = NAV_COLORS[item.href];
           return (
             <Link

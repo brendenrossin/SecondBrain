@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import { MorningBriefing } from "@/components/briefing/MorningBriefing";
 
-export default function DashboardRoot() {
-  redirect("/tasks");
+export default function DashboardRoot(): React.JSX.Element {
+  return <MorningBriefing />;
 }

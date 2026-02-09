@@ -126,3 +126,30 @@ export interface IndexStats {
   vector_count: number;
   lexical_count: number;
 }
+
+// --- Morning Briefing ---
+
+export interface BriefingTask {
+  text: string;
+  category: string;
+  sub_project: string;
+  due_date: string;
+  days_open: number;
+  first_date: string;
+}
+
+export interface DailyContext {
+  date: string;
+  focus_items: string[];
+  notes_items: string[];
+}
+
+export interface BriefingResponse {
+  today: string;
+  today_display: string;
+  overdue_tasks: BriefingTask[];
+  due_today_tasks: BriefingTask[];
+  aging_followups: BriefingTask[];
+  yesterday_context: DailyContext | null;
+  total_open: number;
+}

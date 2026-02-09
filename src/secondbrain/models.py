@@ -106,6 +106,40 @@ class ConversationSummary(BaseModel):
     preview: str
 
 
+# --- Phase 5: Morning Briefing ---
+
+
+class BriefingTask(BaseModel):
+    """A task subset for the morning briefing (omits completed/latest_date/appearance_count)."""
+
+    text: str
+    category: str
+    sub_project: str
+    due_date: str
+    days_open: int
+    first_date: str
+
+
+class DailyContext(BaseModel):
+    """Focus and Notes sections from a recent daily note."""
+
+    date: str
+    focus_items: list[str]
+    notes_items: list[str]
+
+
+class BriefingResponse(BaseModel):
+    """Morning briefing data assembled from tasks and daily notes."""
+
+    today: str
+    today_display: str
+    overdue_tasks: list[BriefingTask]
+    due_today_tasks: list[BriefingTask]
+    aging_followups: list[BriefingTask]
+    yesterday_context: DailyContext | None
+    total_open: int
+
+
 # --- Phase 3: Metadata Extraction + Suggestions ---
 
 
