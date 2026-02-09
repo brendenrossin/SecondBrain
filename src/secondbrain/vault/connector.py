@@ -2,10 +2,13 @@
 
 import fnmatch
 import hashlib
+import logging
 from pathlib import Path
 
 from secondbrain.models import Note
 from secondbrain.vault.parser import parse_markdown
+
+logger = logging.getLogger(__name__)
 
 
 class VaultConnector:
@@ -102,5 +105,5 @@ class VaultConnector:
                 notes.append(self.read_note(path))
             except Exception as e:
                 # Log error but continue with other notes
-                print(f"Error reading {path}: {e}")
+                logger.warning("Error reading %s: %s", path, e)
         return notes

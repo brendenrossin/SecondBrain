@@ -1,6 +1,7 @@
 """LLM-based reranker for improving retrieval precision."""
 
 import json
+import logging
 import re
 from dataclasses import dataclass
 
@@ -8,6 +9,8 @@ from openai import OpenAI
 
 from secondbrain.models import RetrievalLabel
 from secondbrain.retrieval.hybrid import RetrievalCandidate
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -177,6 +180,6 @@ The array MUST have exactly the same number of elements as chunks provided."""
             return [c.similarity_score * 10 for c in candidates]
 
         except Exception as e:
-            print(f"Batch reranking error: {e}")
+            logger.warning("Batch reranking error: %s", e)
             # Fall back to similarity scores
             return [c.similarity_score * 10 for c in candidates]

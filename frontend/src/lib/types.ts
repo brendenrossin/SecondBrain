@@ -123,7 +123,6 @@ export interface NoteSuggestions {
 }
 
 export interface IndexStats {
-  total_notes: number;
-  total_chunks: number;
-  embedding_model: string;
+  vector_count: number;
+  lexical_count: number;
 }

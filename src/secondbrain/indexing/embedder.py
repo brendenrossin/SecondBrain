@@ -2,7 +2,6 @@
 
 import logging
 import re
-from functools import lru_cache
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 import numpy as np
@@ -226,9 +225,3 @@ class Embedder:
     @property
     def embedding_dim(self) -> int:
         return self._provider.dimension
-
-
-@lru_cache(maxsize=1)
-def get_embedder(model_name: str = "all-MiniLM-L6-v2") -> Embedder:
-    """Get a cached embedder instance."""
-    return Embedder(model_name)

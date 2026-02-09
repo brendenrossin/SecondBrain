@@ -169,7 +169,7 @@ This document defines the **reference interaction architecture** that an AI codi
 
 **Architecture**
 - Backend: local RAG service (FastAPI)
-- UI: lightweight web chat (Gradio)
+- UI: Next.js frontend (replaced Gradio, which was used in initial POC)
 - Network access: private device network (Tailscale)
 
 **Key properties**
@@ -186,24 +186,20 @@ This document defines the **reference interaction architecture** that an AI codi
 
 ---
 
-### Web UI requirements (Gradio)
+### Web UI (Next.js)
+
+> Originally implemented with Gradio in the POC. Replaced by Next.js frontend in Phase 3.5.
 
 **Functional scope**
-- Single-page browser UI
-- Text chat interface
-- Multi-turn conversation with local persistence (SQLite or JSON file)
-- Streaming LLM responses for responsive UX
+- Multi-page dashboard ("Mission Control" design)
+- Tasks page with stat cards, filters, category tree
+- Calendar/agenda page with weekly view
+- Chat page with RAG integration (text + planned voice)
+- Multi-turn conversation with local persistence (SQLite)
+- Streaming LLM responses via SSE
 - Explicit citation display for every response
 
-**UI elements**
-- Chat panel (left)
-- Sources panel (right or expandable):
-  - note title / file path
-  - heading path
-  - short snippet
-  - similarity score + rerank score
-
-**Non-goals (POC UI)**
+**Non-goals**
 - User accounts
 - Settings dashboard
 - Note editing or write-back

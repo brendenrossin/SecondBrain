@@ -139,9 +139,8 @@ export async function getTaskCategories(): Promise<TaskCategory[]> {
 // --- Index ---
 
 export async function getIndexStats(): Promise<{
-  total_notes: number;
-  total_chunks: number;
-  embedding_model: string;
+  vector_count: number;
+  lexical_count: number;
 }> {
   return fetchJSON(`${BASE}/index/stats`);
 }
