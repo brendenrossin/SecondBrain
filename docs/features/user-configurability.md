@@ -1,9 +1,9 @@
 # User Configurability — Making SecondBrain Cloneable
 
-> **Status:** Planned (pre-Phase 5 cleanup)
+> **Status:** Planned (Phase 5.7)
 > **Estimated effort:** 0.5–1 day
-> **Depends on:** Nothing — can be done independently
-> **Priority:** Do before Phase 5 so all new code follows the pattern
+> **Depends on:** Phases 5 and 5.5 (morning briefing + inbox upgrade)
+> **Priority:** Do after inbox upgrade, before Quick Capture (Phase 6) so new pages use the config pattern
 
 ## Problem
 
@@ -154,5 +154,5 @@ That's it. Five steps, all in one place.
 
 ## Implementation Notes
 
-- Do this before Phase 5 so the morning briefing endpoint uses `VAULT_FOLDERS` constants from the start instead of hardcoding `"00_Daily"` again
+- Do this after Phase 5.5 (inbox upgrade) and before Phase 6 (Quick Capture) so the new `/capture` page uses the config pattern from the start
 - The `task_aggregator.py` comment on line 30 (`# e.g. "AT&T", "PwC", "Personal"`) is just a docstring example — not a behavioral dependency. Leave it as-is.
