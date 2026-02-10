@@ -272,6 +272,16 @@ class AdminStatsResponse(BaseModel):
 # --- Phase 6.5: Quick Capture ---
 
 
+class EventResponse(BaseModel):
+    """A calendar event from a daily note."""
+
+    title: str
+    date: str  # YYYY-MM-DD
+    time: str  # "HH:MM" or ""
+    end_date: str  # "YYYY-MM-DD" or ""
+    source_file: str
+
+
 class CaptureRequest(BaseModel):
     """Request body for the /capture endpoint."""
 

@@ -121,8 +121,9 @@ Read docs in this order for full context:
 - **Phase 5.5:** Inbox upgrade + Anthropic migration *(done)*
 - **Phase 5.7:** User configurability *(done)*
 - **Phase 6:** LLM cost tracking + admin dashboard *(done)*
-- **Phase 6.5:** Quick capture
-- **Phase 7:** Weekly review generation
+- **Phase 6.5:** Quick capture *(done)*
+- **Phase 7:** Weekly review generation *(done)*
+- **Phase 7.5:** Calendar events *(done)*
 - **Phase 8:** Voice chat via OpenAI Realtime API
 - **Phase 9:** Knowledge graph (V2)
 - **Phase 10:** Write-back workflow (V2+)

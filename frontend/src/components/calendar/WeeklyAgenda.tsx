@@ -2,51 +2,66 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
-import { getTasks } from "@/lib/api";
-import type { TaskResponse } from "@/lib/types";
+import { getTasks, getEvents } from "@/lib/api";
+import type { TaskResponse, CalendarEvent } from "@/lib/types";
 import { startOfWeek, addDays, toDateStr, formatDate } from "@/lib/utils";
 import { WeekNav } from "./WeekNav";
 import { OverdueSection } from "./OverdueSection";
 import { DaySection } from "./DaySection";
 import { AgendaTask } from "./AgendaTask";
+import { MultiDayBanner } from "./MultiDayBanner";
+
+type AgendaSection =
+  | { type: "day"; date: string; tasks: TaskResponse[]; events: CalendarEvent[] }
+  | { type: "empty-range"; startDate: string; endDate: string };
 
 export function WeeklyAgenda() {
   const [tasks, setTasks] = useState<TaskResponse[]>([]);
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [weekOffset, setWeekOffset] = useState(0);
-
-  const load = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const data = await getTasks({ completed: false });
-      setTasks(data);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load tasks");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
 
   const weekStart = useMemo(
     () => addDays(startOfWeek(new Date()), weekOffset * 7),
     [weekOffset]
   );
   const weekEnd = addDays(weekStart, 6);
+  const weekStartStr = toDateStr(weekStart);
+  const weekEndStr = toDateStr(weekEnd);
   const todayStr = toDateStr(new Date());
 
-  const { overdue, daySections, noDueDate } = useMemo(() => {
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const [taskData, eventData] = await Promise.all([
+        getTasks({ completed: false }),
+        getEvents(weekStartStr, weekEndStr),
+      ]);
+      setTasks(taskData);
+      setEvents(eventData);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load");
+    } finally {
+      setLoading(false);
+    }
+  }, [weekStartStr, weekEndStr]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const { overdue, daySections, noDueDate, multiDayEvents } = useMemo(() => {
     const overdue: TaskResponse[] = [];
     const noDueDate: TaskResponse[] = [];
     const byDay = new Map<string, TaskResponse[]>();
+    const eventsByDay = new Map<string, CalendarEvent[]>();
 
     for (let i = 0; i < 7; i++) {
-      byDay.set(toDateStr(addDays(weekStart, i)), []);
+      const ds = toDateStr(addDays(weekStart, i));
+      byDay.set(ds, []);
+      eventsByDay.set(ds, []);
     }
 
     for (const task of tasks) {
@@ -63,18 +78,31 @@ export function WeeklyAgenda() {
       }
     }
 
-    // Build sections, combining consecutive empty days
-    type Section =
-      | { type: "day"; date: string; tasks: TaskResponse[] }
-      | { type: "empty-range"; startDate: string; endDate: string };
+    // Separate multi-day and single-day events
+    const multiDayEvents: CalendarEvent[] = [];
+    for (const event of events) {
+      if (event.end_date) {
+        multiDayEvents.push(event);
+      } else {
+        const dayEvents = eventsByDay.get(event.date);
+        if (dayEvents) {
+          dayEvents.push(event);
+        }
+      }
+    }
 
-    const sections: Section[] = [];
-    const entries = Array.from(byDay.entries());
+    // Build sections, combining consecutive empty days
+    const sections: AgendaSection[] = [];
+    const dayKeys = Array.from(byDay.keys());
     let emptyStart: string | null = null;
     let emptyEnd: string | null = null;
 
-    for (const [dateStr, dayTasks] of entries) {
-      if (dayTasks.length === 0) {
+    for (const dateStr of dayKeys) {
+      const dayTasks = byDay.get(dateStr) || [];
+      const dayEvents = eventsByDay.get(dateStr) || [];
+      const hasContent = dayTasks.length > 0 || dayEvents.length > 0;
+
+      if (!hasContent) {
         if (!emptyStart) emptyStart = dateStr;
         emptyEnd = dateStr;
       } else {
@@ -83,15 +111,15 @@ export function WeeklyAgenda() {
           emptyStart = null;
           emptyEnd = null;
         }
-        sections.push({ type: "day", date: dateStr, tasks: dayTasks });
+        sections.push({ type: "day", date: dateStr, tasks: dayTasks, events: dayEvents });
       }
     }
     if (emptyStart && emptyEnd) {
       sections.push({ type: "empty-range", startDate: emptyStart, endDate: emptyEnd });
     }
 
-    return { overdue, daySections: sections, noDueDate };
-  }, [tasks, weekStart, todayStr]);
+    return { overdue, daySections: sections, noDueDate, multiDayEvents };
+  }, [tasks, events, weekStart, todayStr]);
 
   if (loading) {
     return (
@@ -123,6 +151,10 @@ export function WeeklyAgenda() {
       />
 
       <div className="flex flex-col gap-4">
+        {multiDayEvents.map((event, i) => (
+          <MultiDayBanner key={`multi-${i}`} event={event} />
+        ))}
+
         {weekOffset === 0 && <OverdueSection tasks={overdue} />}
 
         {daySections.map((section) => {
@@ -147,6 +179,7 @@ export function WeeklyAgenda() {
               key={section.date}
               date={new Date(section.date + "T00:00:00")}
               tasks={section.tasks}
+              events={section.events}
             />
           );
         })}

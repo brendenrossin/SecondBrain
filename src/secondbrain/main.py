@@ -8,6 +8,7 @@ from secondbrain.api.ask import router as ask_router
 from secondbrain.api.briefing import router as briefing_router
 from secondbrain.api.capture import router as capture_router
 from secondbrain.api.conversations import router as conversations_router
+from secondbrain.api.events import router as events_router
 from secondbrain.api.index import router as index_router
 from secondbrain.api.metadata import router as metadata_router
 from secondbrain.api.tasks import router as tasks_router
@@ -28,6 +29,7 @@ app.include_router(ask_router)
 app.include_router(capture_router)
 app.include_router(briefing_router)
 app.include_router(conversations_router)
+app.include_router(events_router)
 app.include_router(index_router)
 app.include_router(metadata_router)
 app.include_router(tasks_router)

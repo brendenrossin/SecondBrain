@@ -192,6 +192,16 @@ export interface AdminStatsResponse {
   total_llm_cost: number;
 }
 
+// --- Calendar Events ---
+
+export interface CalendarEvent {
+  title: string;
+  date: string; // YYYY-MM-DD
+  time: string; // "10:30" or ""
+  end_date: string; // "2026-02-24" or ""
+  source_file: string;
+}
+
 // --- Quick Capture ---
 
 export interface CaptureResponse {

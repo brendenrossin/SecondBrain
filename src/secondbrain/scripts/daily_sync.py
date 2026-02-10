@@ -96,7 +96,7 @@ def main() -> None:
         "command",
         nargs="?",
         default="all",
-        choices=["inbox", "tasks", "projects", "index", "extract", "all"],
+        choices=["inbox", "tasks", "projects", "index", "extract", "weekly", "all"],
         help="Which sync to run (default: all)",
     )
     parser.add_argument(
@@ -162,6 +162,13 @@ def main() -> None:
     if args.command in ("extract", "all"):
         logger.info("--- Extracting metadata ---")
         summary = extract_metadata(vault_path)
+        logger.info("  %s", summary)
+
+    if args.command == "weekly":
+        logger.info("--- Generating weekly review ---")
+        from secondbrain.scripts.weekly_review import generate_weekly_review
+
+        summary = generate_weekly_review(vault_path)
         logger.info("  %s", summary)
 
     logger.info("Done!")

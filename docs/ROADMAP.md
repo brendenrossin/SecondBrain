@@ -200,27 +200,27 @@ Deliverable: any thought → into the system in under 10 seconds from your phone
 
 ---
 
-## Phase 7 — Weekly Review Generation (~1-2 days)
+## Phase 7 — Weekly Review Generation ✅
 Goal: automatic logbook that compounds value over time.
 
-- [ ] Post-sync job (runs Sundays, or on-demand via `make weekly-review`)
-- [ ] Reads the week's daily notes, extracts: Focus items, completed tasks, open tasks, recurring topics
-- [ ] Generates a weekly summary note in `00_Weekly/YYYY-WNN.md`
-- [ ] Optional LLM polish pass for summary prose (or pure template assembly)
-- [ ] Indexed and searchable like any other note
+- [x] Post-sync job (runs Sundays, or on-demand via `make weekly-review`)
+- [x] Reads the week's daily notes, extracts: Focus items, completed tasks, open tasks, recurring topics
+- [x] Generates a weekly summary note in `00_Weekly/YYYY-WNN.md`
+- [x] Pure template assembly (no LLM needed)
+- [x] Indexed and searchable like any other note
 
 Deliverable: in 6 months, look back at any week and see what happened.
 
 ---
 
-## Phase 7.5 — Calendar Events (~3-5 days)
+## Phase 7.5 — Calendar Events ✅
 Goal: the calendar shows your actual life, not just tasks.
 
-- [ ] Inbox classification: add `"event"` type with `event_date`, `event_time`, `event_end_date` fields
-- [ ] Event routing: store events in daily notes under `## Events` section
-- [ ] Event parser: read `## Events` from daily notes (same pattern as task aggregator)
-- [ ] API endpoint: `GET /api/v1/events?start=...&end=...`
-- [ ] Frontend: timed event cards in day sections (above tasks), multi-day banners spanning the week view
+- [x] Inbox classification: add `"event"` type with `event_date`, `event_time`, `event_end_date` fields
+- [x] Event routing: store events in daily notes under `## Events` section
+- [x] Event parser: read `## Events` from daily notes (same pattern as task aggregator)
+- [x] API endpoint: `GET /api/v1/events?start=...&end=...`
+- [x] Frontend: timed event cards in day sections (above tasks), multi-day banners spanning the week view
 
 Deliverable: dictate "mom visiting at 10:30 tomorrow" and see it on your calendar.
 

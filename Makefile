@@ -1,4 +1,4 @@
-.PHONY: install dev ui test lint format format-check typecheck check clean index reindex extract process-inbox sync-tasks daily-sync install-cron uninstall-cron install-ui-service uninstall-ui-service eval frontend-install frontend-dev frontend-build dev-all setup-hooks
+.PHONY: install dev ui test lint format format-check typecheck check clean index reindex extract process-inbox sync-tasks weekly-review daily-sync install-cron uninstall-cron install-ui-service uninstall-ui-service eval frontend-install frontend-dev frontend-build dev-all setup-hooks
 
 # Install dependencies
 install:
@@ -54,6 +54,10 @@ process-inbox:
 # Sync tasks from daily notes
 sync-tasks:
 	uv run python -m secondbrain.scripts.daily_sync tasks
+
+# Generate weekly review note
+weekly-review:
+	uv run python -m secondbrain.scripts.daily_sync weekly
 
 # Run full daily sync (inbox + tasks + reindex)
 daily-sync:

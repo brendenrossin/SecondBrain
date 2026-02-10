@@ -1,21 +1,30 @@
 "use client";
 
-import type { TaskResponse } from "@/lib/types";
+import type { TaskResponse, CalendarEvent } from "@/lib/types";
 import { cn, toDateStr } from "@/lib/utils";
 import { AgendaTask } from "./AgendaTask";
+import { AgendaEvent } from "./AgendaEvent";
 
 interface DaySectionProps {
   date: Date;
   tasks: TaskResponse[];
+  events?: CalendarEvent[];
 }
 
-export function DaySection({ date, tasks }: DaySectionProps) {
+export function DaySection({ date, tasks, events = [] }: DaySectionProps) {
   const isToday = toDateStr(date) === toDateStr(new Date());
   const dayName = date.toLocaleDateString("en-US", { weekday: "long" });
   const dateStr = date.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
   });
+
+  const countParts: string[] = [];
+  if (events.length > 0) {
+    countParts.push(`${events.length} event${events.length !== 1 ? "s" : ""}`);
+  }
+  countParts.push(`${tasks.length} task${tasks.length !== 1 ? "s" : ""}`);
+  const countLabel = countParts.join(", ");
 
   return (
     <div
@@ -44,11 +53,14 @@ export function DaySection({ date, tasks }: DaySectionProps) {
           </span>
         )}
         <span className="ml-auto text-[10px] text-text-dim font-medium">
-          {tasks.length} task{tasks.length !== 1 ? "s" : ""}
+          {countLabel}
         </span>
       </div>
+      {events.map((event, i) => (
+        <AgendaEvent key={`event-${i}`} event={event} />
+      ))}
       {tasks.map((task, i) => (
-        <AgendaTask key={i} task={task} />
+        <AgendaTask key={`task-${i}`} task={task} />
       ))}
     </div>
   );

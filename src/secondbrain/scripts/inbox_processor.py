@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -85,7 +86,7 @@ CLASSIFICATION_PROMPT = f"""You are an Obsidian vault organizer. Given a raw dic
 
 Return ONLY valid JSON with these fields:
 {{
-  "note_type": "daily_note" | "note" | "project" | "concept" | "living_document",
+  "note_type": "daily_note" | "note" | "project" | "concept" | "living_document" | "event",
   "suggested_title": "Short descriptive title",
   "existing_note": "exact title of an existing note to append to, or null",
   "date": "YYYY-MM-DD (the date the note is about, or today if unclear)",
@@ -97,6 +98,10 @@ Return ONLY valid JSON with these fields:
   "tasks": [
     {{"text": "task description", "category": "{_FIRST_CATEGORY}", "sub_project": "AI Receptionist", "due_date": "YYYY-MM-DD or null"}}
   ],
+  "event_title": "short event title or null",
+  "event_date": "YYYY-MM-DD or null",
+  "event_time": "HH:MM or null",
+  "event_end_date": "YYYY-MM-DD or null",
   "content": "cleaned up body text for non-daily notes",
   "links": ["related topic 1"],
   "living_doc_name": "matched document name or null"
@@ -113,6 +118,10 @@ Classification rules:
 - "note": A standalone piece of information, observation, or reference
 - "project": Describes a project with objectives, milestones, or deliverables
 - "concept": An idea, definition, or knowledge topic
+- "event": A specific occurrence at a date/time — appointments, visits, trips, meetings. NOT actionable tasks.
+  Examples: "Mom visiting at 10:30" → event, "Dentist appointment Thursday 2pm" → event
+  Counter-examples: "Follow up with recruiter" → task (actionable), "Prepare for demo" → task
+  When classified as event, populate event_title, event_date, event_time (if known), event_end_date (if multi-day).
 - "living_document": Content that updates a known persistent document.
   Known living documents:
 {_LIVING_DOCS_PROMPT}
@@ -259,7 +268,7 @@ def _validate_classification(data: Any) -> bool:
     if not isinstance(data, dict):
         return False
     note_type = data.get("note_type")
-    if note_type not in ("daily_note", "note", "project", "concept", "living_document"):
+    if note_type not in ("daily_note", "note", "project", "concept", "living_document", "event"):
         return False
     # Tasks must be a list if present
     tasks = data.get("tasks")
@@ -387,6 +396,8 @@ def _process_single_file(md_file: Path, vault_path: Path, llm: LLMClient) -> lis
         if not existing_note or not isinstance(existing_note, str):
             if note_type == "living_document":
                 action = _route_living_document(classification, vault_path)
+            elif note_type == "event":
+                action = _route_event(classification, vault_path)
             elif note_type == "daily_note":
                 action = _route_daily_note(classification, vault_path)
             elif note_type == "project":
@@ -462,6 +473,116 @@ def _route_living_document(classification: dict[str, Any], vault_path: Path) -> 
         post.metadata["updated"] = today
         target_file.write_text(frontmatter.dumps(post) + "\n", encoding="utf-8")
         return f"Appended to living doc {rel_path}"
+
+
+def _route_event(classification: dict[str, Any], vault_path: Path) -> str:
+    """Route an event classification to the appropriate daily note's ## Events section."""
+    event_date = classification.get("event_date") or classification.get(
+        "date", datetime.now().strftime("%Y-%m-%d")
+    )
+    event_title = classification.get("event_title") or classification.get("suggested_title", "Event")
+    event_time = classification.get("event_time")
+    event_end_date = classification.get("event_end_date")
+
+    daily_dir = vault_path / VAULT_FOLDERS["daily"]
+    daily_dir.mkdir(parents=True, exist_ok=True)
+    daily_file = daily_dir / f"{event_date}.md"
+
+    # Build the event bullet
+    bullet = f"- {event_time} — {event_title}" if event_time else f"- {event_title}"
+    if event_end_date:
+        bullet += f" (through {event_end_date})"
+
+    if daily_file.exists():
+        content = daily_file.read_text(encoding="utf-8")
+        # Duplicate detection: check against parsed event bullets only
+        if _event_already_exists(content, event_title):
+            return f"Event already in 00_Daily/{event_date}.md: {event_title}"
+        content = _ensure_events_section(content, bullet)
+        daily_file.write_text(content, encoding="utf-8")
+        return f"Added event to 00_Daily/{event_date}.md: {event_title}"
+    else:
+        # Create new daily note with the event
+        _create_daily_note(daily_file, {"focus_items": [], "notes_items": [], "tasks": [], "tags": []}, event_date)
+        content = daily_file.read_text(encoding="utf-8")
+        content = _ensure_events_section(content, bullet)
+        daily_file.write_text(content, encoding="utf-8")
+        return f"Created 00_Daily/{event_date}.md with event: {event_title}"
+
+
+def _event_already_exists(content: str, event_title: str) -> bool:
+    """Check if an event with this title already exists in the ## Events section."""
+    in_events = False
+    for line in content.split("\n"):
+        stripped = line.strip()
+        if stripped == "## Events":
+            in_events = True
+            continue
+        if in_events and stripped.startswith("## "):
+            break
+        if in_events and stripped.startswith("- "):
+            # Extract title from bullet: "- HH:MM — title" or "- title"
+            bullet_text = stripped[2:].strip()
+            # Strip time prefix if present
+            time_match = re.match(r"\d{1,2}:\d{2}\s*[—–-]\s*", bullet_text)
+            if time_match:
+                bullet_text = bullet_text[time_match.end() :]
+            # Strip "(through ...)" suffix
+            bullet_text = re.sub(r"\s*\(through\s+\d{4}-\d{2}-\d{2}\)\s*$", "", bullet_text)
+            if bullet_text.strip() == event_title.strip():
+                return True
+    return False
+
+
+def _ensure_events_section(content: str, bullet: str) -> str:
+    """Ensure ## Events section exists in daily note and append bullet to it.
+
+    The Events section is placed after frontmatter, before ## Focus.
+    """
+    lines = content.split("\n")
+
+    # Find existing ## Events section
+    events_idx = None
+    for i, ln in enumerate(lines):
+        if ln.strip() == "## Events":
+            events_idx = i
+            break
+
+    if events_idx is not None:
+        # Find the last bullet line in the Events section
+        insert_idx = events_idx + 1
+        for j in range(events_idx + 1, len(lines)):
+            if lines[j].strip().startswith("## "):
+                break
+            if lines[j].strip().startswith("- "):
+                insert_idx = j + 1
+        lines.insert(insert_idx, bullet)
+    else:
+        # Insert ## Events section before ## Focus (or at end of frontmatter)
+        focus_idx = None
+        frontmatter_end = 0
+        in_frontmatter = False
+        for i, ln in enumerate(lines):
+            if ln.strip() == "---":
+                if not in_frontmatter:
+                    in_frontmatter = True
+                else:
+                    frontmatter_end = i + 1
+                    in_frontmatter = False
+            if ln.strip() == "## Focus":
+                focus_idx = i
+                break
+
+        insert_at = focus_idx if focus_idx is not None else frontmatter_end
+        # Build the Events block to insert
+        block: list[str] = []
+        if insert_at > 0 and lines[insert_at - 1].strip() != "":
+            block.append("")
+        block.extend(["## Events", bullet, ""])
+        for j, item in enumerate(block):
+            lines.insert(insert_at + j, item)
+
+    return "\n".join(lines)
 
 
 def _route_daily_note(classification: dict[str, Any], vault_path: Path) -> str:

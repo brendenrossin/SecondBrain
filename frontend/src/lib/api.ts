@@ -1,6 +1,7 @@
 import type {
   AskRequest,
   BriefingResponse,
+  CalendarEvent,
   CaptureResponse,
   Citation,
   ConversationSummary,
@@ -186,6 +187,15 @@ export async function getDailyCosts(days = 30): Promise<DailyCostsResponse> {
 
 export async function getAdminStats(): Promise<AdminStatsResponse> {
   return fetchJSON(`${BASE}/admin/stats`);
+}
+
+// --- Events ---
+
+export async function getEvents(
+  start: string,
+  end: string
+): Promise<CalendarEvent[]> {
+  return fetchJSON(`${BASE}/events?start=${start}&end=${end}`);
 }
 
 // --- Capture ---
