@@ -13,11 +13,30 @@ import { cn } from "@/lib/utils";
 import { getCostSummary, getDailyCosts, getAdminStats } from "@/lib/api";
 import type {
   CostSummaryResponse,
+  DailyCost,
   DailyCostsResponse,
   AdminStatsResponse,
 } from "@/lib/types";
 
 type Period = "week" | "month" | "all";
+
+const PERIOD_LABELS: Record<Period, string> = {
+  week: "Week",
+  month: "Month",
+  all: "All Time",
+};
+
+const CHART_DAYS: Record<Period, number> = {
+  week: 7,
+  month: 30,
+  all: 365,
+};
+
+const CHART_TITLES: Record<Period, string> = {
+  week: "Daily Cost (This Week)",
+  month: "Daily Cost (Last 30 Days)",
+  all: "Weekly Cost (All Time)",
+};
 
 function formatCost(cents: number): string {
   if (cents < 0.01) return "$0.00";
@@ -129,16 +148,126 @@ function UsageTypeRow({
   );
 }
 
-/* ── Daily cost bar chart (CSS-only) ── */
+/* ── Cost bar chart (CSS-only) ── */
 const PROVIDER_COLORS: Record<string, string> = {
   anthropic: "bg-accent",
   openai: "bg-success",
   ollama: "bg-text-dim",
 };
 
-function DailyCostChart({ data }: { data: DailyCostsResponse }) {
-  const { daily } = data;
-  if (daily.length === 0) {
+type ChartBar = {
+  key: string;
+  label: string;
+  sublabel: string;
+  cost_usd: number;
+  calls: number;
+  by_provider: Record<string, number>;
+};
+
+const SHORT_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function formatShortDate(dateStr: string): string {
+  const d = new Date(dateStr + "T00:00:00");
+  return `${SHORT_MONTHS[d.getMonth()]} ${d.getDate()}`;
+}
+
+function toDateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function buildDailyBars(
+  byDate: Map<string, DailyCost>,
+  numDays: number,
+  labelFn: (date: Date, daysAgo: number, dateKey: string) => string
+): ChartBar[] {
+  const today = new Date();
+  const bars: ChartBar[] = [];
+  for (let i = numDays - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const key = toDateKey(d);
+    const day = byDate.get(key);
+    bars.push({
+      key,
+      label: labelFn(d, i, key),
+      sublabel: formatShortDate(key),
+      cost_usd: day?.cost_usd ?? 0,
+      calls: day?.calls ?? 0,
+      by_provider: day?.by_provider ?? {},
+    });
+  }
+  return bars;
+}
+
+function buildWeeklyBuckets(daily: DailyCost[]): ChartBar[] {
+  if (daily.length === 0) return [];
+
+  const weekMap = new Map<string, ChartBar>();
+  for (const day of daily) {
+    const d = new Date(day.date + "T00:00:00");
+    const dayOfWeek = d.getDay();
+    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const monday = new Date(d);
+    monday.setDate(d.getDate() + mondayOffset);
+    const weekKey = toDateKey(monday);
+
+    const existing = weekMap.get(weekKey);
+    if (existing) {
+      existing.cost_usd += day.cost_usd;
+      existing.calls += day.calls;
+      for (const [prov, cost] of Object.entries(day.by_provider)) {
+        existing.by_provider[prov] = (existing.by_provider[prov] || 0) + cost;
+      }
+    } else {
+      weekMap.set(weekKey, {
+        key: weekKey,
+        label: formatShortDate(weekKey),
+        sublabel: `Week of ${formatShortDate(weekKey)}`,
+        cost_usd: day.cost_usd,
+        calls: day.calls,
+        by_provider: { ...day.by_provider },
+      });
+    }
+  }
+  return Array.from(weekMap.values());
+}
+
+function buildChartBars(data: DailyCostsResponse, period: Period): ChartBar[] {
+  const byDate = new Map(data.daily.map((d) => [d.date, d]));
+
+  if (period === "week") {
+    return buildDailyBars(byDate, 7, (d) => SHORT_DAYS[d.getDay()]);
+  }
+  if (period === "month") {
+    return buildDailyBars(
+      byDate,
+      30,
+      (_d, daysAgo, key) => (daysAgo % 7 === 0 ? formatShortDate(key) : "")
+    );
+  }
+  return buildWeeklyBuckets(data.daily);
+}
+
+/** Round up to a nice ceiling for the Y-axis (e.g., 0.07 → 0.10, 0.23 → 0.25, 1.7 → 2.00). */
+function niceMax(value: number): number {
+  if (value <= 0) return 0.10;
+  const steps = [0.05, 0.10, 0.25, 0.50, 1.00, 2.50, 5.00, 10.00, 25.00, 50.00, 100.00];
+  for (const step of steps) {
+    const ceil = Math.ceil(value / step) * step;
+    if (ceil >= value) return ceil;
+  }
+  return Math.ceil(value / 100) * 100;
+}
+
+function formatYLabel(value: number): string {
+  if (value >= 10) return `$${value.toFixed(0)}`;
+  if (value >= 1) return `$${value.toFixed(1)}`;
+  return `$${value.toFixed(2)}`;
+}
+
+function CostChart({ bars }: { bars: ChartBar[] }) {
+  if (bars.length === 0) {
     return (
       <p className="text-sm text-text-dim py-6 text-center">
         No usage data yet
@@ -146,48 +275,89 @@ function DailyCostChart({ data }: { data: DailyCostsResponse }) {
     );
   }
 
-  const maxCost = Math.max(...daily.map((d) => d.cost_usd), 0.001);
+  const rawMax = Math.max(...bars.map((b) => b.cost_usd));
+  const ceiling = niceMax(rawMax);
+  const hasLabels = bars.some((b) => b.label);
 
   return (
-    <div className="flex items-end gap-1 h-40">
-      {daily.map((day) => {
-        const pct = (day.cost_usd / maxCost) * 100;
-        const providers = Object.entries(day.by_provider);
-        return (
-          <div
-            key={day.date}
-            className="flex-1 flex flex-col items-center gap-1 min-w-0 group relative"
-          >
-            {/* Tooltip */}
-            <div className="absolute bottom-full mb-2 hidden group-hover:block z-10 bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-lg whitespace-nowrap">
-              <p className="font-medium text-text">{day.date}</p>
-              <p className="text-text-muted">
-                {formatCost(day.cost_usd)} / {day.calls} calls
-              </p>
-            </div>
-            {/* Bar */}
-            <div
-              className="w-full rounded-t-sm overflow-hidden flex flex-col-reverse"
-              style={{ height: `${Math.max(pct, 2)}%` }}
-            >
-              {providers.map(([provider, providerCost]) => {
-                const segPct =
-                  day.cost_usd > 0 ? (providerCost / day.cost_usd) * 100 : 0;
-                return (
-                  <div
-                    key={provider}
-                    className={cn(
-                      "w-full transition-all",
-                      PROVIDER_COLORS[provider] || "bg-text-dim"
-                    )}
-                    style={{ height: `${segPct}%`, minHeight: segPct > 0 ? "2px" : "0" }}
-                  />
-                );
-              })}
-            </div>
+    <div>
+      <div className="flex h-48">
+        {/* Y-axis */}
+        <div className="flex flex-col justify-between pr-2 py-0 shrink-0 w-10">
+          <span className="text-[10px] text-text-dim tabular-nums text-right leading-none">
+            {formatYLabel(ceiling)}
+          </span>
+          <span className="text-[10px] text-text-dim tabular-nums text-right leading-none">
+            {formatYLabel(ceiling / 2)}
+          </span>
+          <span className="text-[10px] text-text-dim tabular-nums text-right leading-none">
+            $0
+          </span>
+        </div>
+        {/* Bars area */}
+        <div className="flex-1 flex gap-1 relative">
+          {/* Grid lines */}
+          <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
+            <div className="border-b border-border/40" />
+            <div className="border-b border-border/40" />
+            <div className="border-b border-border/40" />
           </div>
-        );
-      })}
+          {bars.map((bar) => {
+            const pct = ceiling > 0 ? (bar.cost_usd / ceiling) * 100 : 0;
+            const providers = Object.entries(bar.by_provider);
+            return (
+              <div
+                key={bar.key}
+                className="flex-1 flex flex-col justify-end min-w-0 group relative z-10"
+              >
+                {/* Tooltip */}
+                <div className="absolute bottom-full mb-2 hidden group-hover:block z-20 bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-lg whitespace-nowrap pointer-events-none">
+                  <p className="font-medium text-text">{bar.sublabel}</p>
+                  <p className="text-text-muted">
+                    {formatCost(bar.cost_usd)} / {bar.calls} calls
+                  </p>
+                </div>
+                {/* Bar */}
+                <div
+                  className="w-full rounded-t-sm overflow-hidden flex flex-col-reverse"
+                  style={{ height: `${Math.max(pct, bar.cost_usd > 0 ? 3 : 0)}%` }}
+                >
+                  {providers.map(([provider, providerCost]) => {
+                    const segPct =
+                      bar.cost_usd > 0 ? (providerCost / bar.cost_usd) * 100 : 0;
+                    return (
+                      <div
+                        key={provider}
+                        className={cn(
+                          "w-full transition-all",
+                          PROVIDER_COLORS[provider] || "bg-text-dim"
+                        )}
+                        style={{ height: `${segPct}%`, minHeight: segPct > 0 ? "2px" : "0" }}
+                      />
+                    );
+                  })}
+                </div>
+                {/* Zero-data indicator */}
+                {bar.cost_usd === 0 && (
+                  <div className="w-full h-[1px] bg-border/50 rounded" />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      {/* X-axis labels */}
+      {hasLabels && (
+        <div className="flex gap-1 mt-2 ml-10">
+          {bars.map((bar) => (
+            <div key={bar.key} className="flex-1 min-w-0 text-center">
+              <span className="text-[10px] text-text-dim truncate block">
+                {bar.label}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -203,9 +373,10 @@ export function AdminDashboard() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
+      const chartDays = CHART_DAYS[period];
       const [c, d, s] = await Promise.all([
         getCostSummary(period),
-        getDailyCosts(30),
+        getDailyCosts(chartDays),
         getAdminStats(),
       ]);
       setCosts(c);
@@ -238,7 +409,7 @@ export function AdminDashboard() {
                   : "text-text-muted hover:text-text hover:bg-white/5"
               )}
             >
-              {p === "week" ? "Week" : p === "month" ? "Month" : "All Time"}
+              {PERIOD_LABELS[p]}
             </button>
           ))}
         </div>
@@ -255,7 +426,7 @@ export function AdminDashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           icon={DollarSign}
-          label={`Cost (${period === "all" ? "All Time" : period})`}
+          label={`Cost (${PERIOD_LABELS[period]})`}
           value={costs ? formatCost(costs.total_cost) : "--"}
           subValue={costs ? `${costs.total_calls} API calls` : undefined}
           color="bg-accent/15 text-accent"
@@ -319,13 +490,13 @@ export function AdminDashboard() {
         </div>
       )}
 
-      {/* Row 4: Daily cost chart */}
+      {/* Row 4: Cost chart */}
       {dailyCosts && (
         <div className="glass-card p-5">
           <h3 className="text-sm font-bold text-text mb-4">
-            Daily Cost (Last 30 Days)
+            {CHART_TITLES[period]}
           </h3>
-          <DailyCostChart data={dailyCosts} />
+          <CostChart bars={buildChartBars(dailyCosts, period)} />
           {/* Legend */}
           <div className="flex gap-4 mt-3 text-xs text-text-dim">
             {Object.entries(PROVIDER_COLORS).map(([name, color]) => (
