@@ -33,8 +33,10 @@ class Settings(BaseSettings):
     openai_embedding_dimensions: int | None = None  # None = use model default
 
     # LLM settings
-    rerank_model: str = "gpt-4o-mini"
-    answer_model: str = "gpt-4o-mini"
+    rerank_model: str = "claude-haiku-4-5"
+    answer_model: str = "claude-haiku-4-5"
+    inbox_model: str = "claude-sonnet-4-5"
+    inbox_provider: str = "anthropic"
 
     # Ollama settings (local LLM)
     ollama_base_url: str = "http://127.0.0.1:11434/v1"
@@ -42,6 +44,7 @@ class Settings(BaseSettings):
 
     # API keys (loaded from env or .env file)
     openai_api_key: str | None = None
+    anthropic_api_key: str | None = None
 
     # Gradio UI settings
     gradio_port: int = 7860

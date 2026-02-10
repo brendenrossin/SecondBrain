@@ -13,6 +13,8 @@ from secondbrain.api.dependencies import (
     get_conversation_store,
     get_local_answerer,
     get_local_reranker,
+    get_openai_answerer,
+    get_openai_reranker,
     get_query_logger,
     get_reranker,
     get_retriever,
@@ -54,10 +56,13 @@ async def ask(
     """Ask a question and get an answer with citations."""
     start_time = time.time()
 
-    # Select provider
+    # Select provider (3-way dispatch)
     if request.provider == "local":
         reranker = get_local_reranker()
         answerer = get_local_answerer()
+    elif request.provider == "openai":
+        reranker = get_openai_reranker()
+        answerer = get_openai_answerer()
     else:
         reranker = get_reranker()
         answerer = get_answerer()
@@ -119,10 +124,13 @@ async def ask_stream(
     """Stream an answer with Server-Sent Events."""
     start_time = time.time()
 
-    # Select provider
+    # Select provider (3-way dispatch)
     if request.provider == "local":
         reranker = get_local_reranker()
         answerer = get_local_answerer()
+    elif request.provider == "openai":
+        reranker = get_openai_reranker()
+        answerer = get_openai_answerer()
     else:
         reranker = get_reranker()
         answerer = get_answerer()

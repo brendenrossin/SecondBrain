@@ -10,7 +10,7 @@ import {
 import type { Citation, ConversationMessage } from "@/lib/types";
 import { askStream } from "@/lib/api";
 
-type Provider = "openai" | "local";
+type Provider = "anthropic" | "openai" | "local";
 
 interface ChatContextValue {
   messages: ConversationMessage[];
@@ -39,9 +39,15 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [provider, setProviderState] = useState<Provider>(() => {
     if (typeof window !== "undefined") {
-      return (localStorage.getItem(PROVIDER_KEY) as Provider) || "openai";
+      const stored = localStorage.getItem(PROVIDER_KEY);
+      // Migrate: old default "openai" → new default "anthropic"
+      if (!stored || stored === "openai") {
+        localStorage.setItem(PROVIDER_KEY, "anthropic");
+        return "anthropic";
+      }
+      return stored as Provider;
     }
-    return "openai";
+    return "anthropic";
   });
   const abortRef = useRef<AbortController | null>(null);
 

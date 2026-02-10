@@ -22,7 +22,12 @@
       "Bash(make check:*)",
       "Bash(make format:*)",
       "Bash(make eval:*)",
-      "Bash(uv run pytest:*)"
+      "Bash(uv run pytest:*)",
+      "Bash(export PATH=\"$HOME/.local/bin:$PATH:/usr/bin\")",
+      "Bash(uv sync:*)",
+      "Bash(make lint:*)",
+      "Bash(make typecheck:*)",
+      "WebFetch(domain:docs.anthropic.com)"
     ]
   }
 }

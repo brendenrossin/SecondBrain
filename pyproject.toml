@@ -14,6 +14,7 @@ dependencies = [
     "torch<2.10.0",
     "python-frontmatter>=1.1.0",
     "openai>=1.50.0",
+    "anthropic>=0.40.0",
     "sse-starlette>=2.0.0",
     # UI
     "gradio>=5.0.0",
@@ -81,6 +82,8 @@ module = [
     "sentence_transformers",
     "gradio",
     "gradio.*",
+    "anthropic",
+    "anthropic.*",
 ]
 ignore_missing_imports = true
 

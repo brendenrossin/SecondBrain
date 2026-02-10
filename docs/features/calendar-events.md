@@ -1,6 +1,6 @@
 # Calendar Events — Appointments, Visits & Multi-Day Events
 
-> **Status:** Planned (Phase 6.7)
+> **Status:** Planned (Phase 7.5)
 > **Estimated effort:** 3-5 days
 > **Depends on:** Phase 5.5 (inbox upgrade — better segmentation + Anthropic models help event classification)
 
