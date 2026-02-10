@@ -1,6 +1,7 @@
 import type {
   AskRequest,
   BriefingResponse,
+  CaptureResponse,
   Citation,
   ConversationSummary,
   Conversation,
@@ -185,4 +186,14 @@ export async function getDailyCosts(days = 30): Promise<DailyCostsResponse> {
 
 export async function getAdminStats(): Promise<AdminStatsResponse> {
   return fetchJSON(`${BASE}/admin/stats`);
+}
+
+// --- Capture ---
+
+export async function captureText(text: string): Promise<CaptureResponse> {
+  return fetchJSON(`${BASE}/capture`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
 }

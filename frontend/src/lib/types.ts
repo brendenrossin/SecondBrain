@@ -191,3 +191,10 @@ export interface AdminStatsResponse {
   total_llm_calls: number;
   total_llm_cost: number;
 }
+
+// --- Quick Capture ---
+
+export interface CaptureResponse {
+  filename: string;
+  message: string;
+}

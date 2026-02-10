@@ -6,6 +6,7 @@ from secondbrain import __version__
 from secondbrain.api.admin import router as admin_router
 from secondbrain.api.ask import router as ask_router
 from secondbrain.api.briefing import router as briefing_router
+from secondbrain.api.capture import router as capture_router
 from secondbrain.api.conversations import router as conversations_router
 from secondbrain.api.index import router as index_router
 from secondbrain.api.metadata import router as metadata_router
@@ -24,6 +25,7 @@ app = FastAPI(
 # Include API routers
 app.include_router(admin_router)
 app.include_router(ask_router)
+app.include_router(capture_router)
 app.include_router(briefing_router)
 app.include_router(conversations_router)
 app.include_router(index_router)

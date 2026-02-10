@@ -8,6 +8,7 @@ import {
   MessageSquare,
   CheckSquare,
   Calendar,
+  Feather,
   Lightbulb,
   Shield,
   ChevronRight,
@@ -60,6 +61,13 @@ const NAV_COLORS: Record<string, {
     borderActive: "border-purple/15",
     glowActive: "shadow-[0_0_16px_rgba(167,139,250,0.1)]",
   },
+  "/capture": {
+    icon: "text-accent/60",
+    iconActive: "text-accent drop-shadow-[0_0_6px_rgba(79,142,247,0.4)]",
+    bgActive: "bg-accent/12",
+    borderActive: "border-accent/15",
+    glowActive: "shadow-[0_0_16px_rgba(79,142,247,0.1)]",
+  },
   "/admin": {
     icon: "text-text-muted/60",
     iconActive: "text-text-muted drop-shadow-[0_0_6px_rgba(148,163,184,0.4)]",
@@ -72,6 +80,7 @@ const NAV_COLORS: Record<string, {
 const coreNavItems = [
   { href: "/", label: "Home", icon: LayoutDashboard },
   { href: "/chat", label: "Chat", icon: MessageSquare },
+  { href: "/capture", label: "Capture", icon: Feather },
   { href: "/tasks", label: "Tasks", icon: CheckSquare },
   { href: "/calendar", label: "Calendar", icon: Calendar },
 ];

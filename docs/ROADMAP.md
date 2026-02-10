@@ -188,13 +188,13 @@ Deliverable: know exactly what LLM usage is costing you, broken down by provider
 
 ---
 
-## Phase 6.5 — Quick Capture (~1 day)
+## Phase 6.5 — Quick Capture ✅
 Goal: reduce friction for getting thoughts into the system from anywhere.
 
-- [ ] `POST /api/v1/capture` endpoint: accepts text, writes timestamped file to `Inbox/`
-- [ ] Minimal capture page at `/capture` in Next.js frontend: text box + submit button
-- [ ] Accessible via Tailscale from phone — no auth needed (Tailscale handles it)
-- [ ] Captured text processed by inbox processor on next hourly sync
+- [x] `POST /api/v1/capture` endpoint: accepts text, writes timestamped file to `Inbox/`
+- [x] Minimal capture page at `/capture` in Next.js frontend: text box + submit button
+- [x] Accessible via Tailscale from phone — no auth needed (Tailscale handles it)
+- [x] Captured text processed by inbox processor on next hourly sync
 
 Deliverable: any thought → into the system in under 10 seconds from your phone.
 

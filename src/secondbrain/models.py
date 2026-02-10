@@ -267,3 +267,19 @@ class AdminStatsResponse(BaseModel):
     index_file_count: int
     total_llm_calls: int
     total_llm_cost: float
+
+
+# --- Phase 6.5: Quick Capture ---
+
+
+class CaptureRequest(BaseModel):
+    """Request body for the /capture endpoint."""
+
+    text: str = Field(min_length=1, max_length=10000)
+
+
+class CaptureResponse(BaseModel):
+    """Response body for the /capture endpoint."""
+
+    filename: str
+    message: str
