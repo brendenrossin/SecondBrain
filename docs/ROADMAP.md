@@ -127,6 +127,19 @@ Deliverable: query your memory from your phone safely.
 
 ---
 
+## Phase 4.5 — User Configurability (~0.5-1 day)
+Goal: make the repo cloneable — a new user can customize branding, task categories, and vault layout without hunting through 10 files.
+
+- [ ] Frontend branding config: create `frontend/src/lib/config.ts` with `APP_NAME`, `USER_NAME`, `USER_INITIAL`; import in layout, sidebar, chat provider
+- [ ] Inbox processor constants: consolidate `TASK_CATEGORIES`, `LIVING_DOCUMENTS`, `VAULT_FOLDERS` at top of file with clear comments; interpolate into classification prompt
+- [ ] README setup section: 5-step guide for new users (env, vault folders, branding, categories, manifest)
+
+Deliverable: clone → edit 2 files → working personal instance.
+
+See `docs/features/user-configurability.md` for full spec.
+
+---
+
 ## Phase 5 — Morning Briefing Dashboard (~2-3 days)
 Goal: when you open the app, instantly know what your day looks like.
 
