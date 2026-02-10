@@ -172,7 +172,24 @@ See `docs/features/user-configurability.md` for full spec.
 
 ---
 
-## Phase 6 — Quick Capture (~1 day)
+## Phase 6 — LLM Cost Tracking + Admin Dashboard ✅
+Goal: track input/output tokens and cost for every LLM API call; surface metrics in a new Admin dashboard page.
+
+- [x] `UsageStore` (SQLite WAL): logs every LLM call with provider, model, tokens, cost
+- [x] `calculate_cost()` pricing helper (Anthropic, OpenAI, Ollama)
+- [x] Inline instrumentation at all 3 call sites: `LLMClient`, `LLMReranker`, `Answerer`
+- [x] Streaming token extraction: Anthropic `stream.get_final_message()`, OpenAI `stream_options`
+- [x] Admin API: `GET /admin/costs`, `GET /admin/costs/daily`, `GET /admin/stats`
+- [x] Frontend Admin page: stat cards, provider breakdown, usage type breakdown, daily cost chart
+- [x] Sidebar nav item under Tools
+- [x] 20 tests (13 store + 7 API)
+
+Deliverable: know exactly what LLM usage is costing you, broken down by provider, usage type, and day.
+
+---
+
+## Phase 6.5 — Quick Capture (~1 day)
+
 Goal: reduce friction for getting thoughts into the system from anywhere.
 
 - [ ] `POST /api/v1/capture` endpoint: accepts text, writes timestamped file to `Inbox/`
@@ -194,6 +211,21 @@ Goal: automatic logbook that compounds value over time.
 - [ ] Indexed and searchable like any other note
 
 Deliverable: in 6 months, look back at any week and see what happened.
+
+---
+
+## Phase 6.7 — Calendar Events (~3-5 days)
+Goal: the calendar shows your actual life, not just tasks.
+
+- [ ] Inbox classification: add `"event"` type with `event_date`, `event_time`, `event_end_date` fields
+- [ ] Event routing: store events in daily notes under `## Events` section
+- [ ] Event parser: read `## Events` from daily notes (same pattern as task aggregator)
+- [ ] API endpoint: `GET /api/v1/events?start=...&end=...`
+- [ ] Frontend: timed event cards in day sections (above tasks), multi-day banners spanning the week view
+
+Deliverable: dictate "mom visiting at 10:30 tomorrow" and see it on your calendar.
+
+See `docs/features/calendar-events.md` for full spec.
 
 ---
 
