@@ -17,9 +17,27 @@ def client():
 def _mock_events(_daily_dir, _start, _end):
     """Return mock events for testing."""
     return [
-        Event(title="Standup", date="2026-02-10", time="9:00", end_date="", source_file="00_Daily/2026-02-10.md"),
-        Event(title="Dentist", date="2026-02-11", time="14:00", end_date="", source_file="00_Daily/2026-02-11.md"),
-        Event(title="Vacation", date="2026-02-12", time="", end_date="2026-02-14", source_file="00_Daily/2026-02-12.md"),
+        Event(
+            title="Standup",
+            date="2026-02-10",
+            time="9:00",
+            end_date="",
+            source_file="00_Daily/2026-02-10.md",
+        ),
+        Event(
+            title="Dentist",
+            date="2026-02-11",
+            time="14:00",
+            end_date="",
+            source_file="00_Daily/2026-02-11.md",
+        ),
+        Event(
+            title="Vacation",
+            date="2026-02-12",
+            time="",
+            end_date="2026-02-14",
+            source_file="00_Daily/2026-02-12.md",
+        ),
     ]
 
 

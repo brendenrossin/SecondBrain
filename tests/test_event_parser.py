@@ -77,9 +77,7 @@ class TestParseEvents:
         _make_daily_note(
             daily_dir,
             "2026-02-20",
-            DAILY_WITH_EVENTS.format(
-                date="2026-02-20", events="- Vacation (through 2026-02-24)"
-            ),
+            DAILY_WITH_EVENTS.format(date="2026-02-20", events="- Vacation (through 2026-02-24)"),
         )
         events = _parse_events_from_file(daily_dir / "2026-02-20.md", "2026-02-20")
         assert len(events) == 1
@@ -173,9 +171,7 @@ class TestGetEventsInRange:
         _make_daily_note(
             daily_dir,
             "2026-02-08",
-            DAILY_WITH_EVENTS.format(
-                date="2026-02-08", events="- Vacation (through 2026-02-14)"
-            ),
+            DAILY_WITH_EVENTS.format(date="2026-02-08", events="- Vacation (through 2026-02-14)"),
         )
 
         # Query range starts during the vacation
@@ -189,9 +185,7 @@ class TestGetEventsInRange:
         _make_daily_note(
             daily_dir,
             "2026-02-08",
-            DAILY_WITH_EVENTS.format(
-                date="2026-02-08", events="- Conference (through 2026-02-10)"
-            ),
+            DAILY_WITH_EVENTS.format(date="2026-02-08", events="- Conference (through 2026-02-10)"),
         )
 
         events = get_events_in_range(daily_dir, date(2026, 2, 10), date(2026, 2, 16))
@@ -204,9 +198,7 @@ class TestGetEventsInRange:
         _make_daily_note(
             daily_dir,
             "2026-02-16",
-            DAILY_WITH_EVENTS.format(
-                date="2026-02-16", events="- Workshop (through 2026-02-18)"
-            ),
+            DAILY_WITH_EVENTS.format(date="2026-02-16", events="- Workshop (through 2026-02-18)"),
         )
 
         events = get_events_in_range(daily_dir, date(2026, 2, 10), date(2026, 2, 16))
@@ -218,9 +210,7 @@ class TestGetEventsInRange:
         _make_daily_note(
             daily_dir,
             "2026-02-01",
-            DAILY_WITH_EVENTS.format(
-                date="2026-02-01", events="- Trip (through 2026-02-05)"
-            ),
+            DAILY_WITH_EVENTS.format(date="2026-02-01", events="- Trip (through 2026-02-05)"),
         )
 
         events = get_events_in_range(daily_dir, date(2026, 2, 10), date(2026, 2, 16))

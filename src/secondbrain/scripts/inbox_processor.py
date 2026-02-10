@@ -480,7 +480,9 @@ def _route_event(classification: dict[str, Any], vault_path: Path) -> str:
     event_date = classification.get("event_date") or classification.get(
         "date", datetime.now().strftime("%Y-%m-%d")
     )
-    event_title = classification.get("event_title") or classification.get("suggested_title", "Event")
+    event_title = classification.get("event_title") or classification.get(
+        "suggested_title", "Event"
+    )
     event_time = classification.get("event_time")
     event_end_date = classification.get("event_end_date")
 
@@ -503,7 +505,9 @@ def _route_event(classification: dict[str, Any], vault_path: Path) -> str:
         return f"Added event to 00_Daily/{event_date}.md: {event_title}"
     else:
         # Create new daily note with the event
-        _create_daily_note(daily_file, {"focus_items": [], "notes_items": [], "tasks": [], "tags": []}, event_date)
+        _create_daily_note(
+            daily_file, {"focus_items": [], "notes_items": [], "tasks": [], "tags": []}, event_date
+        )
         content = daily_file.read_text(encoding="utf-8")
         content = _ensure_events_section(content, bullet)
         daily_file.write_text(content, encoding="utf-8")
