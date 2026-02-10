@@ -32,7 +32,7 @@ class AskRequest(BaseModel):
     query: str
     conversation_id: str | None = None
     top_n: int = Field(default=5, ge=1, le=20)
-    provider: str = "openai"  # "openai" or "local"
+    provider: str = "anthropic"  # "anthropic", "openai", or "local"
 
 
 class AskResponse(BaseModel):
@@ -218,3 +218,52 @@ class NoteSuggestions(BaseModel):
     suggested_links: list[LinkSuggestion]
     suggested_tags: list[TagSuggestion]
     generated_at: str
+
+
+# --- Phase 6: LLM Cost Tracking + Admin ---
+
+
+class UsageCostBreakdown(BaseModel):
+    """Cost breakdown for a provider or usage type."""
+
+    cost: float
+    calls: int
+    input_tokens: int
+    output_tokens: int
+
+
+class CostSummaryResponse(BaseModel):
+    """Aggregated cost summary response."""
+
+    total_cost: float
+    total_calls: int
+    by_provider: dict[str, UsageCostBreakdown]
+    by_usage_type: dict[str, UsageCostBreakdown]
+    period: str
+
+
+class DailyCost(BaseModel):
+    """Cost data for a single day."""
+
+    date: str
+    cost_usd: float
+    calls: int
+    by_provider: dict[str, float]
+
+
+class DailyCostsResponse(BaseModel):
+    """Daily cost time series response."""
+
+    days: int
+    daily: list[DailyCost]
+
+
+class AdminStatsResponse(BaseModel):
+    """System-wide admin statistics."""
+
+    total_queries: int
+    avg_latency_ms: float
+    total_conversations: int
+    index_file_count: int
+    total_llm_calls: int
+    total_llm_cost: float

@@ -6,6 +6,9 @@ import type {
   Conversation,
   TaskResponse,
   TaskCategory,
+  CostSummaryResponse,
+  DailyCostsResponse,
+  AdminStatsResponse,
 } from "./types";
 
 const BASE = "/api/v1";
@@ -166,4 +169,20 @@ export async function getSuggestions(
   path: string
 ): Promise<Record<string, unknown>> {
   return fetchJSON(`${BASE}/suggestions/${encodeURIComponent(path)}`);
+}
+
+// --- Admin ---
+
+export async function getCostSummary(
+  period: "week" | "month" | "all" = "week"
+): Promise<CostSummaryResponse> {
+  return fetchJSON(`${BASE}/admin/costs?period=${period}`);
+}
+
+export async function getDailyCosts(days = 30): Promise<DailyCostsResponse> {
+  return fetchJSON(`${BASE}/admin/costs/daily?days=${days}`);
+}
+
+export async function getAdminStats(): Promise<AdminStatsResponse> {
+  return fetchJSON(`${BASE}/admin/stats`);
 }

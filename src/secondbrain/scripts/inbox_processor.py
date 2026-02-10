@@ -1,5 +1,7 @@
 """Inbox processor: classifies dictated notes and routes to proper vault folders."""
 
+from __future__ import annotations
+
 import hashlib
 import json
 import logging
@@ -165,7 +167,14 @@ def process_inbox(vault_path: Path) -> list[str]:
         logger.info("Inbox is empty")
         return []
 
-    llm = LLMClient()
+    # Create a UsageStore for standalone inbox runs
+    from secondbrain.config import get_settings
+    from secondbrain.stores.usage import UsageStore
+
+    settings = get_settings()
+    data_path = Path(settings.data_path) if settings.data_path else Path("data")
+    usage_store = UsageStore(data_path / "usage.db")
+    llm = LLMClient(usage_store=usage_store)
     actions = []
 
     for md_file in md_files:

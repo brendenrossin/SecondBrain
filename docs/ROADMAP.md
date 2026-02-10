@@ -189,7 +189,6 @@ Deliverable: know exactly what LLM usage is costing you, broken down by provider
 ---
 
 ## Phase 6.5 — Quick Capture (~1 day)
-
 Goal: reduce friction for getting thoughts into the system from anywhere.
 
 - [ ] `POST /api/v1/capture` endpoint: accepts text, writes timestamped file to `Inbox/`
@@ -201,7 +200,7 @@ Deliverable: any thought → into the system in under 10 seconds from your phone
 
 ---
 
-## Phase 6.5 — Weekly Review Generation (~1-2 days)
+## Phase 7 — Weekly Review Generation (~1-2 days)
 Goal: automatic logbook that compounds value over time.
 
 - [ ] Post-sync job (runs Sundays, or on-demand via `make weekly-review`)
@@ -214,7 +213,7 @@ Deliverable: in 6 months, look back at any week and see what happened.
 
 ---
 
-## Phase 6.7 — Calendar Events (~3-5 days)
+## Phase 7.5 — Calendar Events (~3-5 days)
 Goal: the calendar shows your actual life, not just tasks.
 
 - [ ] Inbox classification: add `"event"` type with `event_date`, `event_time`, `event_end_date` fields
@@ -229,7 +228,7 @@ See `docs/features/calendar-events.md` for full spec.
 
 ---
 
-## Phase 7 — Voice Chat via OpenAI Realtime API (~2-3 weeks)
+## Phase 8 — Voice Chat via OpenAI Realtime API (~2-3 weeks)
 Goal: hands-free voice interaction with the knowledge base using speech-to-speech.
 
 - [ ] Backend WebSocket relay (`/api/v1/voice`) proxying audio to OpenAI Realtime API
@@ -247,7 +246,7 @@ See `docs/features/voice-chat-realtime-api.md` for full spec.
 
 ---
 
-## Phase 8 — Knowledge graph (V2, 4–8+ weeks)
+## Phase 9 — Knowledge graph (V2, 4–8+ weeks)
 - [ ] Choose graph store (Neo4j or Postgres)
 - [ ] Entity resolution + dedupe
 - [ ] Relationship extraction (LLM-assisted, human-reviewed)
@@ -257,7 +256,7 @@ Deliverable: true navigable concept graph, beyond similarity search.
 
 ---
 
-## Phase 9 — Write-back workflow (V2+)
+## Phase 10 — Write-back workflow (V2+)
 - [ ] PR-style changesets
 - [ ] Apply suggested links/tags to Markdown files
 - [ ] Versioning + rollback

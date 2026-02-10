@@ -117,11 +117,14 @@ Read docs in this order for full context:
 - **Phase 3:** Metadata extraction + suggestions *(done)*
 - **Phase 3.5:** Next.js frontend + UI redesign *(done)*
 - **Phase 4:** Secure remote access (Tailscale) *(done)*
-- **Phase 5:** Retrieval transparency + context-aware recency
-- **Phase 5.5:** Voice chat via OpenAI Realtime API
-- **Phase 6:** Proactive signals v1 (escalation + recurrence)
-- **Phase 7:** Knowledge graph (V2)
-- **Phase 8:** Write-back workflow (V2+)
+- **Phase 5:** Morning briefing dashboard
+- **Phase 5.5:** Inbox upgrade + Anthropic migration
+- **Phase 6:** LLM cost tracking + admin dashboard *(done)*
+- **Phase 6.5:** Quick capture
+- **Phase 7:** Weekly review generation
+- **Phase 8:** Voice chat via OpenAI Realtime API
+- **Phase 9:** Knowledge graph (V2)
+- **Phase 10:** Write-back workflow (V2+)
 
 ## Security Requirements
 

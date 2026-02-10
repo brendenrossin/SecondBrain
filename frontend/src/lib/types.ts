@@ -14,7 +14,7 @@ export interface AskRequest {
   query: string;
   conversation_id?: string | null;
   top_n?: number;
-  provider?: "openai" | "local";
+  provider?: "anthropic" | "openai" | "local";
 }
 
 export interface AskResponse {
@@ -152,4 +152,42 @@ export interface BriefingResponse {
   aging_followups: BriefingTask[];
   yesterday_context: DailyContext | null;
   total_open: number;
+}
+
+// --- Admin / Cost Tracking ---
+
+export interface UsageCostBreakdown {
+  cost: number;
+  calls: number;
+  input_tokens: number;
+  output_tokens: number;
+}
+
+export interface CostSummaryResponse {
+  total_cost: number;
+  total_calls: number;
+  by_provider: Record<string, UsageCostBreakdown>;
+  by_usage_type: Record<string, UsageCostBreakdown>;
+  period: string;
+}
+
+export interface DailyCost {
+  date: string;
+  cost_usd: number;
+  calls: number;
+  by_provider: Record<string, number>;
+}
+
+export interface DailyCostsResponse {
+  days: number;
+  daily: DailyCost[];
+}
+
+export interface AdminStatsResponse {
+  total_queries: number;
+  avg_latency_ms: number;
+  total_conversations: number;
+  index_file_count: number;
+  total_llm_calls: number;
+  total_llm_cost: number;
 }

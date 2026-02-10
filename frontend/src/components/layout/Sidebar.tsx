@@ -9,6 +9,7 @@ import {
   CheckSquare,
   Calendar,
   Lightbulb,
+  Shield,
   ChevronRight,
   Brain,
 } from "lucide-react";
@@ -58,6 +59,13 @@ const NAV_COLORS: Record<string, {
     borderActive: "border-purple/15",
     glowActive: "shadow-[0_0_16px_rgba(167,139,250,0.1)]",
   },
+  "/admin": {
+    icon: "text-text-muted/60",
+    iconActive: "text-text-muted drop-shadow-[0_0_6px_rgba(148,163,184,0.4)]",
+    bgActive: "bg-text-muted/12",
+    borderActive: "border-text-muted/15",
+    glowActive: "shadow-[0_0_16px_rgba(148,163,184,0.1)]",
+  },
 };
 
 const coreNavItems = [
@@ -69,6 +77,7 @@ const coreNavItems = [
 
 const toolsNavItems = [
   { href: "/insights", label: "Insights", icon: Lightbulb },
+  { href: "/admin", label: "Admin", icon: Shield },
 ];
 
 interface NavItem {

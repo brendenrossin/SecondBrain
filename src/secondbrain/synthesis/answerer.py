@@ -1,13 +1,21 @@
 """LLM-based answer generation with citations."""
 
+from __future__ import annotations
+
+import logging
 from collections.abc import Iterator
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from anthropic import Anthropic
 from openai import OpenAI
 
 from secondbrain.models import ConversationMessage, RetrievalLabel
 from secondbrain.retrieval.reranker import RankedCandidate
+
+if TYPE_CHECKING:
+    from secondbrain.stores.usage import UsageStore
+
+logger = logging.getLogger(__name__)
 
 
 class Answerer:
@@ -35,10 +43,11 @@ You might want to:
 
     def __init__(
         self,
-        model: str = "claude-haiku-4-5-20250929",
+        model: str = "claude-haiku-4-5",
         api_key: str | None = None,
         base_url: str | None = None,
         provider: str = "anthropic",
+        usage_store: UsageStore | None = None,
     ) -> None:
         """Initialize the answerer.
 
@@ -47,11 +56,13 @@ You might want to:
             api_key: API key.
             base_url: Custom API base URL (e.g. Ollama's OpenAI-compatible endpoint).
             provider: "anthropic" or "openai" (Ollama uses "openai" with base_url).
+            usage_store: Optional usage store for cost tracking.
         """
         self.model = model
         self.api_key = api_key
         self.base_url = base_url
         self.provider = provider
+        self._usage_store = usage_store
         self._openai_client: OpenAI | None = None
         self._anthropic_client: Anthropic | None = None
 
@@ -115,6 +126,12 @@ You might want to:
                 system=system_text,
                 messages=messages,  # type: ignore[arg-type]
             )
+            self._log_usage(
+                "anthropic",
+                self.model,
+                response.usage.input_tokens,
+                response.usage.output_tokens,
+            )
             return response.content[0].text  # type: ignore[union-attr]
         else:
             # OpenAI / Ollama path
@@ -133,6 +150,14 @@ You might want to:
                 temperature=0.3,
                 max_tokens=1000,
             )
+            if oai_response.usage:
+                provider_name = "ollama" if self.base_url else "openai"
+                self._log_usage(
+                    provider_name,
+                    self.model,
+                    oai_response.usage.prompt_tokens,
+                    oai_response.usage.completion_tokens,
+                )
             return oai_response.choices[0].message.content or ""
 
     def answer_stream(
@@ -176,6 +201,14 @@ You might want to:
                 messages=messages,  # type: ignore[arg-type]
             ) as stream:
                 yield from stream.text_stream
+                # After stream completes, log usage from the final message
+                final = stream.get_final_message()
+                self._log_usage(
+                    "anthropic",
+                    self.model,
+                    final.usage.input_tokens,
+                    final.usage.output_tokens,
+                )
         else:
             # OpenAI / Ollama path
             oai_messages: list[dict[str, Any]] = [
@@ -187,19 +220,47 @@ You might want to:
                     oai_messages.append({"role": msg.role, "content": msg.content})
             oai_messages.append({"role": "user", "content": query})
 
-            oai_stream = self.openai_client.chat.completions.create(
-                model=self.model,
-                messages=oai_messages,  # type: ignore[arg-type]
-                temperature=0.3,
-                max_tokens=1000,
-                stream=True,
-            )
+            # Request usage stats in the final stream chunk (OpenAI supports this;
+            # Ollama may ignore it, which is fine)
+            stream_kwargs: dict[str, Any] = {
+                "model": self.model,
+                "messages": oai_messages,
+                "temperature": 0.3,
+                "max_tokens": 1000,
+                "stream": True,
+            }
+            if not self.base_url:
+                stream_kwargs["stream_options"] = {"include_usage": True}
 
+            oai_stream = self.openai_client.chat.completions.create(**stream_kwargs)
+
+            stream_usage = None
             for chunk in oai_stream:
-                if hasattr(chunk, "choices") and chunk.choices:  # type: ignore[union-attr]
-                    delta_content = chunk.choices[0].delta.content  # type: ignore[union-attr]
+                if hasattr(chunk, "choices") and chunk.choices:
+                    delta_content = chunk.choices[0].delta.content
                     if delta_content:
                         yield delta_content
+                # Capture usage from the final chunk (OpenAI includes it there)
+                if hasattr(chunk, "usage") and chunk.usage:
+                    stream_usage = chunk.usage
+
+            if stream_usage:
+                provider_name = "ollama" if self.base_url else "openai"
+                self._log_usage(
+                    provider_name,
+                    self.model,
+                    stream_usage.prompt_tokens,
+                    stream_usage.completion_tokens,
+                )
+
+    def _log_usage(self, provider: str, model: str, input_tokens: int, output_tokens: int) -> None:
+        if self._usage_store:
+            from secondbrain.stores.usage import calculate_cost
+
+            cost = calculate_cost(provider, model, input_tokens, output_tokens)
+            self._usage_store.log_usage(
+                provider, model, "chat_answer", input_tokens, output_tokens, cost
+            )
 
     def _build_context(self, ranked_candidates: list[RankedCandidate]) -> str:
         """Build context string from ranked candidates."""

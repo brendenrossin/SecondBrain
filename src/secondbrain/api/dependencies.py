@@ -22,6 +22,7 @@ from secondbrain.stores.conversation import ConversationStore
 from secondbrain.stores.index_tracker import IndexTracker
 from secondbrain.stores.lexical import LexicalStore
 from secondbrain.stores.metadata import MetadataStore
+from secondbrain.stores.usage import UsageStore
 from secondbrain.stores.vector import VectorStore
 from secondbrain.suggestions.engine import SuggestionEngine
 from secondbrain.synthesis.answerer import Answerer
@@ -97,9 +98,16 @@ def get_metadata_store() -> MetadataStore:
 
 
 @lru_cache
+def get_usage_store() -> UsageStore:
+    """Get cached usage store instance."""
+    data_path = get_data_path()
+    return UsageStore(data_path / "usage.db")
+
+
+@lru_cache
 def get_llm_client() -> LLMClient:
     """Get cached LLM client instance."""
-    return LLMClient()
+    return LLMClient(usage_store=get_usage_store())
 
 
 @lru_cache
@@ -137,9 +145,26 @@ def get_retriever() -> HybridRetriever:
 
 @lru_cache
 def get_reranker() -> LLMReranker:
+    """Get cached reranker instance (Anthropic)."""
+    settings = get_settings()
+    return LLMReranker(
+        model=settings.rerank_model,
+        api_key=settings.anthropic_api_key,
+        provider="anthropic",
+        usage_store=get_usage_store(),
+    )
+
+
+@lru_cache
+def get_openai_reranker() -> LLMReranker:
     """Get cached reranker instance (OpenAI)."""
     settings = get_settings()
-    return LLMReranker(model=settings.rerank_model, api_key=settings.openai_api_key)
+    return LLMReranker(
+        model="gpt-4o-mini",
+        api_key=settings.openai_api_key,
+        provider="openai",
+        usage_store=get_usage_store(),
+    )
 
 
 @lru_cache
@@ -149,14 +174,33 @@ def get_local_reranker() -> LLMReranker:
     return LLMReranker(
         model=settings.ollama_model,
         base_url=settings.ollama_base_url,
+        provider="openai",
+        usage_store=get_usage_store(),
     )
 
 
 @lru_cache
 def get_answerer() -> Answerer:
+    """Get cached answerer instance (Anthropic)."""
+    settings = get_settings()
+    return Answerer(
+        model=settings.answer_model,
+        api_key=settings.anthropic_api_key,
+        provider="anthropic",
+        usage_store=get_usage_store(),
+    )
+
+
+@lru_cache
+def get_openai_answerer() -> Answerer:
     """Get cached answerer instance (OpenAI)."""
     settings = get_settings()
-    return Answerer(model=settings.answer_model, api_key=settings.openai_api_key)
+    return Answerer(
+        model="gpt-4o-mini",
+        api_key=settings.openai_api_key,
+        provider="openai",
+        usage_store=get_usage_store(),
+    )
 
 
 @lru_cache
@@ -166,6 +210,8 @@ def get_local_answerer() -> Answerer:
     return Answerer(
         model=settings.ollama_model,
         base_url=settings.ollama_base_url,
+        provider="openai",
+        usage_store=get_usage_store(),
     )
 
 

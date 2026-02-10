@@ -1,14 +1,21 @@
 """LLM-based reranker for improving retrieval precision."""
 
+from __future__ import annotations
+
 import json
 import logging
 import re
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
+from anthropic import Anthropic
 from openai import OpenAI
 
 from secondbrain.models import RetrievalLabel
 from secondbrain.retrieval.hybrid import RetrievalCandidate
+
+if TYPE_CHECKING:
+    from secondbrain.stores.usage import UsageStore
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +29,7 @@ class RankedCandidate:
 
 
 class LLMReranker:
-    """LLM-based reranker using OpenAI API."""
+    """LLM-based reranker using Anthropic or OpenAI API."""
 
     SYSTEM_PROMPT = """You are a relevance scorer. Given a query and multiple text chunks from a personal knowledge base, rate how relevant each chunk is to answering the query.
 
@@ -40,41 +47,55 @@ The array MUST have exactly the same number of elements as chunks provided."""
 
     def __init__(
         self,
-        model: str = "gpt-4o-mini",
+        model: str = "claude-haiku-4-5",
         api_key: str | None = None,
         base_url: str | None = None,
+        provider: str = "anthropic",
         rerank_threshold: float = 5.0,
         hallucination_threshold: float = 3.0,
+        usage_store: UsageStore | None = None,
     ) -> None:
         """Initialize the reranker.
 
         Args:
-            model: OpenAI model to use for reranking.
-            api_key: OpenAI API key.
+            model: Model to use for reranking.
+            api_key: API key.
             base_url: Custom API base URL (e.g. Ollama's OpenAI-compatible endpoint).
+            provider: "anthropic" or "openai" (Ollama uses "openai" with base_url).
             rerank_threshold: Minimum rerank score to consider relevant.
             hallucination_threshold: If similarity is high but rerank is below this,
                 flag as potential hallucination.
+            usage_store: Optional usage store for cost tracking.
         """
         self.model = model
         self.api_key = api_key
         self.base_url = base_url
+        self.provider = provider
         self.rerank_threshold = rerank_threshold
         self.hallucination_threshold = hallucination_threshold
-        self._client: OpenAI | None = None
+        self._usage_store = usage_store
+        self._openai_client: OpenAI | None = None
+        self._anthropic_client: Anthropic | None = None
 
     @property
-    def client(self) -> OpenAI:
+    def openai_client(self) -> OpenAI:
         """Lazy-load the OpenAI client."""
-        if self._client is None:
+        if self._openai_client is None:
             api_key = self.api_key
             if self.base_url and not api_key:
                 api_key = "ollama"
-            self._client = OpenAI(
+            self._openai_client = OpenAI(
                 api_key=api_key,
                 base_url=self.base_url,
             )
-        return self._client
+        return self._openai_client
+
+    @property
+    def anthropic_client(self) -> Anthropic:
+        """Lazy-load the Anthropic client."""
+        if self._anthropic_client is None:
+            self._anthropic_client = Anthropic(api_key=self.api_key)
+        return self._anthropic_client
 
     def rerank(
         self,
@@ -146,22 +167,42 @@ The array MUST have exactly the same number of elements as chunks provided."""
             chunks_text.append(context)
 
         all_chunks = "\n\n---\n\n".join(chunks_text)
+        user_content = f"Query: {query}\n\nChunks:\n\n{all_chunks}"
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": self.SYSTEM_PROMPT},
-                    {
-                        "role": "user",
-                        "content": f"Query: {query}\n\nChunks:\n\n{all_chunks}",
-                    },
-                ],
-                temperature=0,
-                max_tokens=200,
-            )
-
-            content = response.choices[0].message.content or "[]"
+            if self.provider == "anthropic":
+                response = self.anthropic_client.messages.create(
+                    model=self.model,
+                    max_tokens=200,
+                    system=self.SYSTEM_PROMPT,
+                    messages=[{"role": "user", "content": user_content}],
+                )
+                content = response.content[0].text  # type: ignore[union-attr]
+                self._log_usage(
+                    "anthropic",
+                    self.model,
+                    response.usage.input_tokens,
+                    response.usage.output_tokens,
+                )
+            else:
+                oai_response = self.openai_client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": self.SYSTEM_PROMPT},
+                        {"role": "user", "content": user_content},
+                    ],
+                    temperature=0,
+                    max_tokens=200,
+                )
+                content = oai_response.choices[0].message.content or "[]"
+                if oai_response.usage:
+                    provider_name = "ollama" if self.base_url else "openai"
+                    self._log_usage(
+                        provider_name,
+                        self.model,
+                        oai_response.usage.prompt_tokens,
+                        oai_response.usage.completion_tokens,
+                    )
 
             # Parse scores from JSON array
             try:
@@ -183,3 +224,12 @@ The array MUST have exactly the same number of elements as chunks provided."""
             logger.warning("Batch reranking error: %s", e)
             # Fall back to similarity scores
             return [c.similarity_score * 10 for c in candidates]
+
+    def _log_usage(self, provider: str, model: str, input_tokens: int, output_tokens: int) -> None:
+        if self._usage_store:
+            from secondbrain.stores.usage import calculate_cost
+
+            cost = calculate_cost(provider, model, input_tokens, output_tokens)
+            self._usage_store.log_usage(
+                provider, model, "chat_rerank", input_tokens, output_tokens, cost
+            )
