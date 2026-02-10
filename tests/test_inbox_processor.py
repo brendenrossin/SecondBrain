@@ -4,9 +4,11 @@ from unittest.mock import MagicMock, patch
 
 from secondbrain.scripts.inbox_processor import (
     _append_to_daily,
+    _append_to_existing_note,
     _create_daily_note,
     _ensure_task_category,
     _ensure_task_hierarchy,
+    _get_existing_titles,
     _is_duplicate,
     _move_to_subfolder,
     _route_daily_note,
@@ -351,3 +353,102 @@ class TestRouteLivingDocument:
         }
         result = _route_living_document(classification, tmp_path)
         assert "Created 10_Notes/" in result
+
+
+class TestGetExistingTitles:
+    def test_collects_titles_from_notes_and_concepts(self, tmp_path):
+        notes = tmp_path / "10_Notes"
+        notes.mkdir()
+        (notes / "Alpha.md").write_text("content")
+        (notes / "Beta.md").write_text("content")
+        concepts = tmp_path / "30_Concepts"
+        concepts.mkdir()
+        (concepts / "Gamma.md").write_text("content")
+        result = _get_existing_titles(tmp_path)
+        assert "Alpha" in result
+        assert "Beta" in result
+        assert "Gamma" in result
+        assert "10_Notes/" in result
+        assert "30_Concepts/" in result
+
+    def test_caps_at_max_per_folder(self, tmp_path):
+        notes = tmp_path / "10_Notes"
+        notes.mkdir()
+        for i in range(10):
+            (notes / f"Note {i}.md").write_text("content")
+        result = _get_existing_titles(tmp_path, max_per_folder=3)
+        # Should only have 3 titles
+        assert result.count("  - ") == 3
+
+    def test_handles_missing_folders(self, tmp_path):
+        result = _get_existing_titles(tmp_path)
+        assert result == ""
+
+    def test_excludes_projects(self, tmp_path):
+        projects = tmp_path / "20_Projects"
+        projects.mkdir()
+        (projects / "Secret Project.md").write_text("content")
+        result = _get_existing_titles(tmp_path)
+        assert "Secret Project" not in result
+
+
+class TestAppendToExistingNote:
+    def test_appends_with_date_heading(self, tmp_path):
+        notes = tmp_path / "10_Notes"
+        notes.mkdir()
+        (notes / "My Note.md").write_text(
+            "---\ntype: note\ncreated: 2026-01-01\nupdated: 2026-01-01\n---\nOriginal content"
+        )
+        classification = {
+            "existing_note": "My Note",
+            "content": "New content to append",
+        }
+        result = _append_to_existing_note(classification, tmp_path, "10_Notes")
+        assert "Appended to 10_Notes/My Note.md" in result
+        content = (notes / "My Note.md").read_text()
+        assert "Original content" in content
+        assert "New content to append" in content
+        assert "###" in content  # date heading
+
+    def test_fallback_when_file_missing(self, tmp_path):
+        classification = {
+            "existing_note": "Nonexistent Note",
+            "content": "Some content",
+            "suggested_title": "Nonexistent Note",
+            "tags": [],
+        }
+        result = _append_to_existing_note(classification, tmp_path, "10_Notes")
+        assert "Created 10_Notes/" in result
+
+
+class TestValidateClassificationWithExistingNote:
+    def test_valid_string(self):
+        assert _validate_classification(
+            {
+                "note_type": "note",
+                "existing_note": "My Note",
+            }
+        )
+
+    def test_valid_null(self):
+        assert _validate_classification(
+            {
+                "note_type": "note",
+                "existing_note": None,
+            }
+        )
+
+    def test_valid_absent(self):
+        assert _validate_classification(
+            {
+                "note_type": "note",
+            }
+        )
+
+    def test_invalid_type(self):
+        assert not _validate_classification(
+            {
+                "note_type": "note",
+                "existing_note": 123,
+            }
+        )

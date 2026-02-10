@@ -3,6 +3,7 @@
 from collections.abc import Iterator
 from typing import Any
 
+from anthropic import Anthropic
 from openai import OpenAI
 
 from secondbrain.models import ConversationMessage, RetrievalLabel
@@ -34,34 +35,45 @@ You might want to:
 
     def __init__(
         self,
-        model: str = "gpt-4o-mini",
+        model: str = "claude-haiku-4-5-20250929",
         api_key: str | None = None,
         base_url: str | None = None,
+        provider: str = "anthropic",
     ) -> None:
         """Initialize the answerer.
 
         Args:
-            model: OpenAI model to use for generation.
-            api_key: OpenAI API key.
+            model: Model to use for generation.
+            api_key: API key.
             base_url: Custom API base URL (e.g. Ollama's OpenAI-compatible endpoint).
+            provider: "anthropic" or "openai" (Ollama uses "openai" with base_url).
         """
         self.model = model
         self.api_key = api_key
         self.base_url = base_url
-        self._client: OpenAI | None = None
+        self.provider = provider
+        self._openai_client: OpenAI | None = None
+        self._anthropic_client: Anthropic | None = None
 
     @property
-    def client(self) -> OpenAI:
+    def openai_client(self) -> OpenAI:
         """Lazy-load the OpenAI client."""
-        if self._client is None:
+        if self._openai_client is None:
             api_key = self.api_key
             if self.base_url and not api_key:
                 api_key = "ollama"
-            self._client = OpenAI(
+            self._openai_client = OpenAI(
                 api_key=api_key,
                 base_url=self.base_url,
             )
-        return self._client
+        return self._openai_client
+
+    @property
+    def anthropic_client(self) -> Anthropic:
+        """Lazy-load the Anthropic client."""
+        if self._anthropic_client is None:
+            self._anthropic_client = Anthropic(api_key=self.api_key)
+        return self._anthropic_client
 
     def answer(
         self,
@@ -88,34 +100,40 @@ You might want to:
         # Build context from candidates
         context = self._build_context(ranked_candidates)
 
-        # Build messages
-        messages: list[dict[str, Any]] = [{"role": "system", "content": self.SYSTEM_PROMPT}]
+        if self.provider == "anthropic":
+            # Anthropic: system is a separate param, not a message
+            system_text = self.SYSTEM_PROMPT + f"\n\nSOURCES FROM USER'S NOTES:\n\n{context}"
+            messages: list[dict[str, Any]] = []
+            if conversation_history:
+                for msg in conversation_history[-10:]:
+                    messages.append({"role": msg.role, "content": msg.content})
+            messages.append({"role": "user", "content": query})
 
-        # Add sources as system context
-        messages.append(
-            {
-                "role": "system",
-                "content": f"SOURCES FROM USER'S NOTES:\n\n{context}",
-            }
-        )
+            response = self.anthropic_client.messages.create(
+                model=self.model,
+                max_tokens=1000,
+                system=system_text,
+                messages=messages,  # type: ignore[arg-type]
+            )
+            return response.content[0].text  # type: ignore[union-attr]
+        else:
+            # OpenAI / Ollama path
+            oai_messages: list[dict[str, Any]] = [
+                {"role": "system", "content": self.SYSTEM_PROMPT},
+                {"role": "system", "content": f"SOURCES FROM USER'S NOTES:\n\n{context}"},
+            ]
+            if conversation_history:
+                for msg in conversation_history[-10:]:
+                    oai_messages.append({"role": msg.role, "content": msg.content})
+            oai_messages.append({"role": "user", "content": query})
 
-        # Add conversation history
-        if conversation_history:
-            for msg in conversation_history[-10:]:  # Last 10 messages
-                messages.append({"role": msg.role, "content": msg.content})
-
-        # Add current query
-        messages.append({"role": "user", "content": query})
-
-        # Generate answer
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=messages,  # type: ignore[arg-type]
-            temperature=0.3,
-            max_tokens=1000,
-        )
-
-        return response.choices[0].message.content or ""
+            oai_response = self.openai_client.chat.completions.create(
+                model=self.model,
+                messages=oai_messages,  # type: ignore[arg-type]
+                temperature=0.3,
+                max_tokens=1000,
+            )
+            return oai_response.choices[0].message.content or ""
 
     def answer_stream(
         self,
@@ -143,36 +161,45 @@ You might want to:
         # Build context from candidates
         context = self._build_context(ranked_candidates)
 
-        # Build messages
-        messages: list[dict[str, Any]] = [{"role": "system", "content": self.SYSTEM_PROMPT}]
+        if self.provider == "anthropic":
+            system_text = self.SYSTEM_PROMPT + f"\n\nSOURCES FROM USER'S NOTES:\n\n{context}"
+            messages: list[dict[str, Any]] = []
+            if conversation_history:
+                for msg in conversation_history[-10:]:
+                    messages.append({"role": msg.role, "content": msg.content})
+            messages.append({"role": "user", "content": query})
 
-        messages.append(
-            {
-                "role": "system",
-                "content": f"SOURCES FROM USER'S NOTES:\n\n{context}",
-            }
-        )
+            with self.anthropic_client.messages.stream(
+                model=self.model,
+                max_tokens=1000,
+                system=system_text,
+                messages=messages,  # type: ignore[arg-type]
+            ) as stream:
+                yield from stream.text_stream
+        else:
+            # OpenAI / Ollama path
+            oai_messages: list[dict[str, Any]] = [
+                {"role": "system", "content": self.SYSTEM_PROMPT},
+                {"role": "system", "content": f"SOURCES FROM USER'S NOTES:\n\n{context}"},
+            ]
+            if conversation_history:
+                for msg in conversation_history[-10:]:
+                    oai_messages.append({"role": msg.role, "content": msg.content})
+            oai_messages.append({"role": "user", "content": query})
 
-        if conversation_history:
-            for msg in conversation_history[-10:]:
-                messages.append({"role": msg.role, "content": msg.content})
+            oai_stream = self.openai_client.chat.completions.create(
+                model=self.model,
+                messages=oai_messages,  # type: ignore[arg-type]
+                temperature=0.3,
+                max_tokens=1000,
+                stream=True,
+            )
 
-        messages.append({"role": "user", "content": query})
-
-        # Generate streaming answer
-        stream = self.client.chat.completions.create(
-            model=self.model,
-            messages=messages,  # type: ignore[arg-type]
-            temperature=0.3,
-            max_tokens=1000,
-            stream=True,
-        )
-
-        for chunk in stream:
-            if hasattr(chunk, "choices") and chunk.choices:  # type: ignore[union-attr]
-                delta_content = chunk.choices[0].delta.content  # type: ignore[union-attr]
-                if delta_content:
-                    yield delta_content
+            for chunk in oai_stream:
+                if hasattr(chunk, "choices") and chunk.choices:  # type: ignore[union-attr]
+                    delta_content = chunk.choices[0].delta.content  # type: ignore[union-attr]
+                    if delta_content:
+                        yield delta_content
 
     def _build_context(self, ranked_candidates: list[RankedCandidate]) -> str:
         """Build context string from ranked candidates."""

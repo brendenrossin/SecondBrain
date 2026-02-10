@@ -20,7 +20,9 @@ LIVING_DOCUMENTS: dict[str, tuple[str, str]] = {
     "Recipe Ideas": ("10_Notes/Recipe Ideas.md", "append"),
 }
 
-SEGMENTATION_PROMPT = """You are a text segmentation assistant. Given raw dictated text that may cover multiple unrelated topics, split it into logical segments.
+SEGMENTATION_PROMPT = """You are a text segmentation assistant for a personal knowledge base. Given raw dictated text, decide whether to split it into separate segments.
+
+The key question: "Would someone search for these topics separately?" If yes, split. If the topics provide useful context for a single search, keep them together.
 
 Return ONLY valid JSON: an array of segment objects.
 [
@@ -30,10 +32,20 @@ Return ONLY valid JSON: an array of segment objects.
 
 Rules:
 - Preserve the original text VERBATIM in each segment's "content" field — do not summarize or rewrite.
-- Only split when topics are clearly distinct (e.g. grocery list + work tasks + personal reminder).
-- When in doubt, keep content together in a SINGLE segment.
-- A single segment is perfectly fine for focused notes.
-- Each segment must have all three fields: segment_id, topic, content."""
+- A single segment is the DEFAULT. Only split when topics are clearly unrelated.
+- Dictated text often rambles — context switches mid-sentence are NOT reasons to split.
+- Each segment must have all three fields: segment_id, topic, content.
+
+Examples:
+
+Input: "Had a call with Sarah about the Azure migration timeline. She's worried about the Q3 deadline. Also I need to pick up groceries — milk, eggs, and bread."
+Output: 2 segments — Azure migration call (work topic) and grocery list (personal errand). These would never be searched together.
+
+Input: "Thinking about career development. Talked to my manager about the promotion path. He suggested getting the AWS cert. I should also update my resume to reflect the recent project work."
+Output: 1 segment — all of this is career planning context that supports one search.
+
+Input: "The AI Receptionist demo went well today. Client loved the voice quality. Separately, I had an idea for a personal budgeting app — track spending by category with weekly summaries."
+Output: 2 segments — work demo feedback and personal app idea are completely different domains."""
 
 CLASSIFICATION_PROMPT = """You are an Obsidian vault organizer. Given a raw dictated note, classify it and extract structured data.
 
@@ -41,6 +53,7 @@ Return ONLY valid JSON with these fields:
 {
   "note_type": "daily_note" | "note" | "project" | "concept" | "living_document",
   "suggested_title": "Short descriptive title",
+  "existing_note": "exact title of an existing note to append to, or null",
   "date": "YYYY-MM-DD (the date the note is about, or today if unclear)",
   "category": "AT&T" | "PwC" | "Personal" | null,
   "sub_project": "sub-project name or null",
@@ -54,6 +67,12 @@ Return ONLY valid JSON with these fields:
   "links": ["related topic 1"],
   "living_doc_name": "matched document name or null"
 }
+
+Note matching rules:
+- If the user's message contains an existing note title from the list provided, set "existing_note" to that EXACT title.
+- Only match when the new content is clearly about the same topic as the existing note.
+- When "existing_note" is set, keep "note_type" as "note" or "concept" (whichever folder the note lives in).
+- When in doubt, set "existing_note" to null and create a new note.
 
 Classification rules:
 - "daily_note": Contains a mix of tasks, notes, and focus items for a specific day
@@ -87,6 +106,48 @@ For daily_note: extract focus_items, notes_items, and tasks with categories.
 For other types: put the main content in "content" field.
 Always provide a date (use today if not mentioned).
 Categories are typically: AT&T, PwC, or Personal."""
+
+
+def _get_existing_titles(vault_path: Path, max_per_folder: int = 75) -> str:
+    """Collect note titles from 10_Notes/ and 30_Concepts/ for matching.
+
+    Returns a formatted string of titles grouped by folder.
+    Projects (20_Projects/) are excluded to avoid corruption risk.
+    """
+    folders = ["10_Notes", "30_Concepts"]
+    sections = []
+    for folder in folders:
+        folder_path = vault_path / folder
+        if not folder_path.exists():
+            continue
+        titles = sorted(
+            [f.stem for f in folder_path.glob("*.md")],
+            key=str.lower,
+        )[:max_per_folder]
+        if titles:
+            section = f"{folder}/:\n" + "\n".join(f"  - {t}" for t in titles)
+            sections.append(section)
+    return "\n\n".join(sections)
+
+
+def _append_to_existing_note(classification: dict[str, Any], vault_path: Path, folder: str) -> str:
+    """Append content to an existing note under a date heading."""
+    existing_note = classification.get("existing_note", "")
+    content_body = classification.get("content", "")
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    target_file = vault_path / folder / f"{existing_note}.md"
+    if not target_file.exists():
+        # Fallback: create a new note instead
+        return _route_to_folder(classification, vault_path, folder, "note")
+
+    existing = target_file.read_text(encoding="utf-8")
+    post = frontmatter.loads(existing)
+    date_heading = f"### {today}"
+    post.content = post.content.rstrip() + f"\n\n{date_heading}\n{content_body}"
+    post.metadata["updated"] = today
+    target_file.write_text(frontmatter.dumps(post) + "\n", encoding="utf-8")
+    return f"Appended to {folder}/{existing_note}.md"
 
 
 def process_inbox(vault_path: Path) -> list[str]:
@@ -162,7 +223,11 @@ def _validate_classification(data: Any) -> bool:
         return False
     # Tasks must be a list if present
     tasks = data.get("tasks")
-    return not (tasks is not None and not isinstance(tasks, list))
+    if tasks is not None and not isinstance(tasks, list):
+        return False
+    # existing_note must be a string or null/absent
+    existing_note = data.get("existing_note")
+    return existing_note is None or isinstance(existing_note, str)
 
 
 def _validate_segments(data: Any) -> bool:
@@ -212,10 +277,18 @@ def _segment_content(raw_text: str, llm: LLMClient) -> list[dict[str, Any]]:
         return fallback
 
 
-def _classify_with_retry(text: str, llm: LLMClient, max_retries: int = 1) -> dict[str, Any] | None:
+def _classify_with_retry(
+    text: str, llm: LLMClient, vault_path: Path | None = None, max_retries: int = 1
+) -> dict[str, Any] | None:
     """Classify text with validation and retry on failure."""
     today = datetime.now().strftime("%Y-%m-%d")
     user_prompt = f"Today's date: {today}\n\nRaw note:\n{text}"
+
+    # Inject existing note titles for matching
+    if vault_path:
+        titles = _get_existing_titles(vault_path)
+        if titles:
+            user_prompt += f"\n\nExisting notes in vault:\n{titles}"
 
     for attempt in range(1 + max_retries):
         try:
@@ -252,23 +325,36 @@ def _process_single_file(md_file: Path, vault_path: Path, llm: LLMClient) -> lis
     actions: list[str] = []
     for segment in segments:
         segment_text = segment.get("content", raw_text)
-        classification = _classify_with_retry(segment_text, llm)
+        classification = _classify_with_retry(segment_text, llm, vault_path=vault_path)
         if classification is None:
             topic = segment.get("topic", "unknown")
             raise ValueError(f"Classification failed for segment: {topic}")
 
         note_type = classification.get("note_type", "note")
+        existing_note = classification.get("existing_note")
 
-        if note_type == "living_document":
-            action = _route_living_document(classification, vault_path)
-        elif note_type == "daily_note":
-            action = _route_daily_note(classification, vault_path)
-        elif note_type == "project":
-            action = _route_to_folder(classification, vault_path, "20_Projects", "project")
-        elif note_type == "concept":
-            action = _route_to_folder(classification, vault_path, "30_Concepts", "concept")
-        else:
-            action = _route_to_folder(classification, vault_path, "10_Notes", "note")
+        # Check for existing note match before normal routing
+        if existing_note and isinstance(existing_note, str):
+            # Determine which folder the note lives in
+            for folder in ["10_Notes", "30_Concepts"]:
+                if (vault_path / folder / f"{existing_note}.md").exists():
+                    action = _append_to_existing_note(classification, vault_path, folder)
+                    break
+            else:
+                # File not found in expected folders, fall through to normal routing
+                existing_note = None
+
+        if not existing_note or not isinstance(existing_note, str):
+            if note_type == "living_document":
+                action = _route_living_document(classification, vault_path)
+            elif note_type == "daily_note":
+                action = _route_daily_note(classification, vault_path)
+            elif note_type == "project":
+                action = _route_to_folder(classification, vault_path, "20_Projects", "project")
+            elif note_type == "concept":
+                action = _route_to_folder(classification, vault_path, "30_Concepts", "concept")
+            else:
+                action = _route_to_folder(classification, vault_path, "10_Notes", "note")
 
         actions.append(action)
 
