@@ -127,31 +127,31 @@ Deliverable: query your memory from your phone safely.
 
 ---
 
-## Phase 5 — Morning Briefing Dashboard (~2-3 days)
+## Phase 5 — Morning Briefing Dashboard ✅
 Goal: when you open the app, instantly know what your day looks like.
 
-- [ ] Dashboard card showing today's date and summary:
+- [x] Dashboard card showing today's date and summary:
   - Overdue tasks (count + list)
   - Tasks due today
   - What you worked on yesterday (from yesterday's daily note Focus/Notes sections)
   - Aging follow-ups (tasks open > 3 days with no due date)
-- [ ] API endpoint: `GET /api/v1/briefing` assembling data from task aggregator + daily notes
-- [ ] Frontend: prominent card at top of Tasks page (or dedicated dashboard home)
-- [ ] No LLM needed — pure data assembly from existing task aggregator and daily notes
+- [x] API endpoint: `GET /api/v1/briefing` assembling data from task aggregator + daily notes
+- [x] Frontend: prominent card at top of Tasks page (or dedicated dashboard home)
+- [x] No LLM needed — pure data assembly from existing task aggregator and daily notes
 
 Deliverable: a 10-second daily check-in that replaces mentally scanning your todo list.
 
 ---
 
-## Phase 5.5 — Inbox Upgrade + Anthropic Migration (~3-5 days)
+## Phase 5.5 — Inbox Upgrade + Anthropic Migration ✅
 Goal: better input quality from dictation and stronger LLM across the system.
 
-- [ ] Rewrite segmentation prompt: retrieval-framed heuristic with few-shot examples for dictated text
-- [ ] Add Anthropic SDK: Claude Sonnet 4.5 for inbox processing (better classification of messy dictation)
-- [ ] Claude Haiku 4.5 for chat (reranker + answerer), replacing GPT-4o-mini as cloud option
-- [ ] Fallback chain: Anthropic → Ollama → OpenAI
-- [ ] Note matching: route new content to existing notes when topic already has a note in `10_Notes/` or `30_Concepts/`
-- [ ] Frontend: rename provider toggle from "OpenAI" to "Claude"
+- [x] Rewrite segmentation prompt: retrieval-framed heuristic with few-shot examples for dictated text
+- [x] Add Anthropic SDK: Claude Sonnet 4.5 for inbox processing (better classification of messy dictation)
+- [x] Claude Haiku 4.5 for chat (reranker + answerer), replacing GPT-4o-mini as cloud option
+- [x] Fallback chain: Anthropic → Ollama → OpenAI
+- [x] Note matching: route new content to existing notes when topic already has a note in `10_Notes/` or `30_Concepts/`
+- [x] Frontend: rename provider toggle from "OpenAI" to "Claude"
 
 Deliverable: smarter ingestion + better chat quality + less note duplication.
 
@@ -159,12 +159,12 @@ See `docs/features/inbox-upgrade-anthropic-migration.md` for full spec.
 
 ---
 
-## Phase 5.7 — User Configurability (~0.5-1 day)
+## Phase 5.7 — User Configurability ✅
 Goal: make the repo cloneable — a new user can customize branding, task categories, and vault layout without hunting through 10 files.
 
-- [ ] Frontend branding config: create `frontend/src/lib/config.ts` with `APP_NAME`, `USER_NAME`, `USER_INITIAL`; import in layout, sidebar, chat provider
-- [ ] Inbox processor constants: consolidate `TASK_CATEGORIES`, `LIVING_DOCUMENTS`, `VAULT_FOLDERS` at top of file with clear comments; interpolate into classification prompt
-- [ ] README setup section: 5-step guide for new users (env, vault folders, branding, categories, manifest)
+- [x] Frontend branding config: create `frontend/src/lib/config.ts` with `APP_NAME`, `USER_NAME`, `USER_INITIAL`; import in layout, sidebar, chat provider
+- [x] Inbox processor constants: consolidate `TASK_CATEGORIES`, `LIVING_DOCUMENTS`, `VAULT_FOLDERS` at top of file with clear comments; interpolate into classification prompt
+- [x] README setup section: 5-step guide for new users (env, vault folders, branding, categories, manifest)
 
 Deliverable: clone → edit 2 files → working personal instance.
 

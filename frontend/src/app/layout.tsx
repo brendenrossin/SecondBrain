@@ -1,8 +1,9 @@
 import type { Metadata, Viewport } from "next";
+import { APP_NAME } from "@/lib/config";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Brent OS",
+  title: APP_NAME,
   description: "SecondBrain Dashboard",
   manifest: "/manifest.json",
 };

@@ -91,6 +91,16 @@ make index
 make reindex
 ```
 
+## Customize for Your Vault
+
+After cloning, edit these files to make it yours:
+
+1. **Environment** — Copy `.env.example` to `.env` and set `SECONDBRAIN_VAULT_PATH` to your Obsidian vault
+2. **Vault folders** — Create these folders in your vault: `00_Daily/`, `10_Notes/`, `20_Projects/`, `30_Concepts/`, `Inbox/`, `Tasks/`, `90_Meta/Templates/`
+3. **Frontend branding** — Edit `frontend/src/lib/config.ts` to set your display name, app name, and user initial
+4. **Inbox categories** — Edit task categories and living documents at the top of `src/secondbrain/scripts/inbox_processor.py`
+5. **PWA manifest** — Update `frontend/public/manifest.json` and `frontend/package.json` with your app name
+
 ## Environment Variables
 
 ```bash
@@ -219,10 +229,15 @@ Detailed docs are in the `docs/` directory:
 | 3 | Metadata extraction, suggestions engine | Done |
 | 3.5 | Next.js frontend, task aggregation, calendar, chat UI | Done |
 | 4 | Secure remote access via Tailscale | Done |
-| 5 | Retrieval transparency + context-aware recency | Planned |
-| 6 | Proactive signals (escalation + recurrence) | Planned |
-| 7 | Knowledge graph | Future |
-| 8 | Write-back workflow (PR-style changesets) | Future |
+| 5 | Morning briefing dashboard | Done |
+| 5.5 | Inbox upgrade + Anthropic migration | Done |
+| 5.7 | User configurability (branding, constants) | Done |
+| 6 | LLM cost tracking + admin dashboard | Done |
+| 6.5 | Quick capture | Planned |
+| 7 | Weekly review generation | Planned |
+| 8 | Voice chat via OpenAI Realtime API | Future |
+| 9 | Knowledge graph | Future |
+| 10 | Write-back workflow (PR-style changesets) | Future |
 
 ## Security
 

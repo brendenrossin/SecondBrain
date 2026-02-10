@@ -14,6 +14,7 @@ import {
   Brain,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { APP_NAME, USER_NAME, USER_INITIAL } from "@/lib/config";
 import { ConversationList } from "../chat/ConversationList";
 
 /* ── Per-route color map (static strings for Tailwind purge) ── */
@@ -145,7 +146,7 @@ export function Sidebar(): React.JSX.Element {
           <Brain className="w-5 h-5 text-accent" />
         </div>
         <div>
-          <div className="font-bold text-sm text-text tracking-tight">Brent OS</div>
+          <div className="font-bold text-sm text-text tracking-tight">{APP_NAME}</div>
           <div className="text-[10px] text-text-dim font-medium">SecondBrain</div>
         </div>
       </div>
@@ -178,10 +179,10 @@ export function Sidebar(): React.JSX.Element {
       {/* User area */}
       <div className="flex items-center gap-3 px-5 py-4 mt-auto border-t border-border">
         <div className="w-8 h-8 rounded-lg bg-accent/15 flex items-center justify-center">
-          <span className="text-xs font-bold text-accent">B</span>
+          <span className="text-xs font-bold text-accent">{USER_INITIAL}</span>
         </div>
         <div>
-          <div className="text-xs font-semibold text-text">Brent</div>
+          <div className="text-xs font-semibold text-text">{USER_NAME}</div>
           <div className="text-[10px] text-text-dim">Local</div>
         </div>
       </div>

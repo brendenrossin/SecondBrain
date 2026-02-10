@@ -25,15 +25,15 @@ interface ChatContextValue {
 
 const ChatContext = createContext<ChatContextValue | null>(null);
 
-export function useChatContext() {
+export function useChatContext(): ChatContextValue {
   const ctx = useContext(ChatContext);
   if (!ctx) throw new Error("useChatContext must be used within ChatProvider");
   return ctx;
 }
 
-const PROVIDER_KEY = "brentos-provider";
+const PROVIDER_KEY = "secondbrain-provider";
 
-export function ChatProvider({ children }: { children: React.ReactNode }) {
+export function ChatProvider({ children }: { children: React.ReactNode }): React.JSX.Element {
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);

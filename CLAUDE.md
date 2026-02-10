@@ -117,8 +117,9 @@ Read docs in this order for full context:
 - **Phase 3:** Metadata extraction + suggestions *(done)*
 - **Phase 3.5:** Next.js frontend + UI redesign *(done)*
 - **Phase 4:** Secure remote access (Tailscale) *(done)*
-- **Phase 5:** Morning briefing dashboard
-- **Phase 5.5:** Inbox upgrade + Anthropic migration
+- **Phase 5:** Morning briefing dashboard *(done)*
+- **Phase 5.5:** Inbox upgrade + Anthropic migration *(done)*
+- **Phase 5.7:** User configurability *(done)*
 - **Phase 6:** LLM cost tracking + admin dashboard *(done)*
 - **Phase 6.5:** Quick capture
 - **Phase 7:** Weekly review generation

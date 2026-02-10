@@ -15,12 +15,36 @@ from secondbrain.scripts.llm_client import LLMClient
 
 logger = logging.getLogger(__name__)
 
-# --- Living document registry (hardcoded, A3a) ---
-# Each entry: name -> (vault path relative to vault root, semantics)
+# ============================================================
+# USER CONFIGURATION — Customize these for your vault
+# ============================================================
+
+# Task categories the LLM classifies dictated notes into.
+# These appear in the classification prompt and determine
+# how tasks are organized on the Tasks page.
+TASK_CATEGORIES = ["AT&T", "PwC", "Personal"]
+
+# Living documents: notes that get updated in-place instead
+# of creating new files. Each entry maps a document name to
+# (vault_path, semantics). "replace" overwrites content;
+# "append" adds to the end.
 LIVING_DOCUMENTS: dict[str, tuple[str, str]] = {
     "Grocery List": ("10_Notes/Grocery List.md", "replace"),
     "Recipe Ideas": ("10_Notes/Recipe Ideas.md", "append"),
 }
+
+# Vault folder structure. Change these if your Obsidian vault
+# uses different folder names.
+VAULT_FOLDERS = {
+    "daily": "00_Daily",
+    "notes": "10_Notes",
+    "projects": "20_Projects",
+    "concepts": "30_Concepts",
+}
+
+# ============================================================
+# END USER CONFIGURATION
+# ============================================================
 
 SEGMENTATION_PROMPT = """You are a text segmentation assistant for a personal knowledge base. Given raw dictated text, decide whether to split it into separate segments.
 
@@ -49,26 +73,34 @@ Output: 1 segment — all of this is career planning context that supports one s
 Input: "The AI Receptionist demo went well today. Client loved the voice quality. Separately, I had an idea for a personal budgeting app — track spending by category with weekly summaries."
 Output: 2 segments — work demo feedback and personal app idea are completely different domains."""
 
-CLASSIFICATION_PROMPT = """You are an Obsidian vault organizer. Given a raw dictated note, classify it and extract structured data.
+_CATEGORY_OPTIONS = " | ".join(f'"{c}"' for c in TASK_CATEGORIES)
+_CATEGORY_LIST = ", ".join(TASK_CATEGORIES)
+_FIRST_CATEGORY = TASK_CATEGORIES[0] if TASK_CATEGORIES else "Work"
+_LIVING_DOCS_PROMPT = "\n".join(
+    f'    - "{name}" ({sem} semantics) → {"replaces existing content" if sem == "replace" else "appends new entries"}'
+    for name, (_, sem) in LIVING_DOCUMENTS.items()
+)
+
+CLASSIFICATION_PROMPT = f"""You are an Obsidian vault organizer. Given a raw dictated note, classify it and extract structured data.
 
 Return ONLY valid JSON with these fields:
-{
+{{
   "note_type": "daily_note" | "note" | "project" | "concept" | "living_document",
   "suggested_title": "Short descriptive title",
   "existing_note": "exact title of an existing note to append to, or null",
   "date": "YYYY-MM-DD (the date the note is about, or today if unclear)",
-  "category": "AT&T" | "PwC" | "Personal" | null,
+  "category": {_CATEGORY_OPTIONS} | null,
   "sub_project": "sub-project name or null",
   "tags": ["tag1", "tag2"],
   "focus_items": ["focus item 1"],
   "notes_items": ["note 1", "note 2"],
   "tasks": [
-    {"text": "task description", "category": "AT&T", "sub_project": "AI Receptionist", "due_date": "YYYY-MM-DD or null"}
+    {{"text": "task description", "category": "{_FIRST_CATEGORY}", "sub_project": "AI Receptionist", "due_date": "YYYY-MM-DD or null"}}
   ],
   "content": "cleaned up body text for non-daily notes",
   "links": ["related topic 1"],
   "living_doc_name": "matched document name or null"
-}
+}}
 
 Note matching rules:
 - If the user's message contains an existing note title from the list provided, set "existing_note" to that EXACT title.
@@ -83,8 +115,7 @@ Classification rules:
 - "concept": An idea, definition, or knowledge topic
 - "living_document": Content that updates a known persistent document.
   Known living documents:
-    - "Grocery List" (replace semantics) → replaces existing content
-    - "Recipe Ideas" (append semantics) → appends new entries
+{_LIVING_DOCS_PROMPT}
   Set "living_doc_name" to the matched document name.
 
 IMPORTANT task vs focus rules:
@@ -107,16 +138,16 @@ IMPORTANT due_date rules:
 For daily_note: extract focus_items, notes_items, and tasks with categories.
 For other types: put the main content in "content" field.
 Always provide a date (use today if not mentioned).
-Categories are typically: AT&T, PwC, or Personal."""
+Categories are typically: {_CATEGORY_LIST}."""
 
 
 def _get_existing_titles(vault_path: Path, max_per_folder: int = 75) -> str:
-    """Collect note titles from 10_Notes/ and 30_Concepts/ for matching.
+    """Collect note titles from notes and concepts folders for matching.
 
     Returns a formatted string of titles grouped by folder.
-    Projects (20_Projects/) are excluded to avoid corruption risk.
+    Projects are excluded to avoid corruption risk.
     """
-    folders = ["10_Notes", "30_Concepts"]
+    folders = [VAULT_FOLDERS["notes"], VAULT_FOLDERS["concepts"]]
     sections = []
     for folder in folders:
         folder_path = vault_path / folder
@@ -345,7 +376,7 @@ def _process_single_file(md_file: Path, vault_path: Path, llm: LLMClient) -> lis
         # Check for existing note match before normal routing
         if existing_note and isinstance(existing_note, str):
             # Determine which folder the note lives in
-            for folder in ["10_Notes", "30_Concepts"]:
+            for folder in [VAULT_FOLDERS["notes"], VAULT_FOLDERS["concepts"]]:
                 if (vault_path / folder / f"{existing_note}.md").exists():
                     action = _append_to_existing_note(classification, vault_path, folder)
                     break
@@ -359,11 +390,17 @@ def _process_single_file(md_file: Path, vault_path: Path, llm: LLMClient) -> lis
             elif note_type == "daily_note":
                 action = _route_daily_note(classification, vault_path)
             elif note_type == "project":
-                action = _route_to_folder(classification, vault_path, "20_Projects", "project")
+                action = _route_to_folder(
+                    classification, vault_path, VAULT_FOLDERS["projects"], "project"
+                )
             elif note_type == "concept":
-                action = _route_to_folder(classification, vault_path, "30_Concepts", "concept")
+                action = _route_to_folder(
+                    classification, vault_path, VAULT_FOLDERS["concepts"], "concept"
+                )
             else:
-                action = _route_to_folder(classification, vault_path, "10_Notes", "note")
+                action = _route_to_folder(
+                    classification, vault_path, VAULT_FOLDERS["notes"], "note"
+                )
 
         actions.append(action)
 
@@ -375,7 +412,7 @@ def _route_living_document(classification: dict[str, Any], vault_path: Path) -> 
     doc_name = classification.get("living_doc_name", "")
     if doc_name not in LIVING_DOCUMENTS:
         # Fall back to regular note routing
-        return _route_to_folder(classification, vault_path, "10_Notes", "note")
+        return _route_to_folder(classification, vault_path, VAULT_FOLDERS["notes"], "note")
 
     rel_path, semantics = LIVING_DOCUMENTS[doc_name]
     target_file = vault_path / rel_path
@@ -430,7 +467,7 @@ def _route_living_document(classification: dict[str, Any], vault_path: Path) -> 
 def _route_daily_note(classification: dict[str, Any], vault_path: Path) -> str:
     """Route a daily_note classification to the daily notes folder."""
     date_str = classification.get("date", datetime.now().strftime("%Y-%m-%d"))
-    daily_dir = vault_path / "00_Daily"
+    daily_dir = vault_path / VAULT_FOLDERS["daily"]
     daily_dir.mkdir(parents=True, exist_ok=True)
     daily_file = daily_dir / f"{date_str}.md"
 
