@@ -37,7 +37,7 @@ export function WeeklyAgenda() {
       setError(null);
       const [taskData, eventData] = await Promise.all([
         getTasks({ completed: false }),
-        getEvents(weekStartStr, weekEndStr),
+        getEvents(weekStartStr, weekEndStr).catch(() => [] as CalendarEvent[]),
       ]);
       setTasks(taskData);
       setEvents(eventData);
