@@ -228,7 +228,22 @@ See `docs/features/calendar-events.md` for full spec.
 
 ---
 
-## Phase 8 — Voice Chat via OpenAI Realtime API (~2-3 weeks)
+## Phase 8 — Task Management UI ✅
+Goal: manage tasks from the browser without opening Obsidian.
+
+- [x] Task update API: `PATCH /api/v1/tasks/update` writes status + due date changes directly to daily notes
+- [x] Three-value status model: open (`- [ ]`), in-progress (`- [/]`), done (`- [x]`) throughout aggregator + API + frontend
+- [x] Task detail panel: click task to see details, change status, change due date via date picker
+- [x] Quick checkbox toggle on task rows (Tasks page + Calendar page)
+- [x] Cache invalidation on write
+
+Deliverable: check off tasks, change due dates, and track in-progress work from your phone.
+
+See `docs/features/task-management-ui.md` for full spec.
+
+---
+
+## Phase 9 — Voice Chat via OpenAI Realtime API (~2-3 weeks)
 Goal: hands-free voice interaction with the knowledge base using speech-to-speech.
 
 - [ ] Backend WebSocket relay (`/api/v1/voice`) proxying audio to OpenAI Realtime API
@@ -246,7 +261,7 @@ See `docs/features/voice-chat-realtime-api.md` for full spec.
 
 ---
 
-## Phase 9 — Knowledge graph (V2, 4–8+ weeks)
+## Phase 10 — Knowledge graph (V2, 4–8+ weeks)
 - [ ] Choose graph store (Neo4j or Postgres)
 - [ ] Entity resolution + dedupe
 - [ ] Relationship extraction (LLM-assisted, human-reviewed)
@@ -256,7 +271,7 @@ Deliverable: true navigable concept graph, beyond similarity search.
 
 ---
 
-## Phase 10 — Write-back workflow (V2+)
+## Phase 11 — Write-back workflow (V2+)
 - [ ] PR-style changesets
 - [ ] Apply suggested links/tags to Markdown files
 - [ ] Versioning + rollback

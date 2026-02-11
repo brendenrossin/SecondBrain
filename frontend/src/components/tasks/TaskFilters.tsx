@@ -8,6 +8,7 @@ const FILTER_LABELS: Record<StatFilter, string> = {
   active: "Active",
   overdue: "Overdue",
   dueToday: "Due Today",
+  inProgress: "In Progress",
   completed: "Completed",
 };
 

@@ -9,9 +9,11 @@ interface DaySectionProps {
   date: Date;
   tasks: TaskResponse[];
   events?: CalendarEvent[];
+  onTaskUpdate?: () => void;
+  onTaskSelect?: (task: TaskResponse) => void;
 }
 
-export function DaySection({ date, tasks, events = [] }: DaySectionProps) {
+export function DaySection({ date, tasks, events = [], onTaskUpdate, onTaskSelect }: DaySectionProps): React.JSX.Element {
   const isToday = toDateStr(date) === toDateStr(new Date());
   const dayName = date.toLocaleDateString("en-US", { weekday: "long" });
   const dateStr = date.toLocaleDateString("en-US", {
@@ -60,7 +62,7 @@ export function DaySection({ date, tasks, events = [] }: DaySectionProps) {
         <AgendaEvent key={`event-${i}`} event={event} />
       ))}
       {tasks.map((task, i) => (
-        <AgendaTask key={`task-${i}`} task={task} />
+        <AgendaTask key={`task-${i}`} task={task} onUpdate={onTaskUpdate} onSelect={onTaskSelect} />
       ))}
     </div>
   );

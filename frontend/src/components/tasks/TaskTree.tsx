@@ -1,15 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CircleDot, AlertTriangle, Clock, CheckCircle2 } from "lucide-react";
+import { CircleDot, AlertTriangle, Clock, CheckCircle2, Loader } from "lucide-react";
 import { getTasks } from "@/lib/api";
 import type { TaskResponse } from "@/lib/types";
 import { cn, toDateStr } from "@/lib/utils";
 import { TaskCategory } from "./TaskCategory";
 import { TaskFilters } from "./TaskFilters";
+import { TaskDetailPanel } from "./TaskDetailPanel";
 
-type StatColor = "accent" | "danger" | "warning" | "success";
-export type StatFilter = "active" | "overdue" | "dueToday" | "completed";
+type StatColor = "accent" | "danger" | "warning" | "success" | "info";
+export type StatFilter = "active" | "overdue" | "dueToday" | "inProgress" | "completed";
 
 interface StatCardProps {
   icon: React.ComponentType<{ className?: string }>;
@@ -45,6 +46,12 @@ const STAT_COLORS: Record<StatColor, { icon: string; iconBg: string; value: stri
     value: "text-success",
     glow: "shadow-[0_0_20px_rgba(52,211,153,0.06)]",
   },
+  info: {
+    icon: "text-accent",
+    iconBg: "bg-accent/12",
+    value: "text-accent",
+    glow: "shadow-[0_0_20px_rgba(79,142,247,0.06)]",
+  },
 };
 
 function StatCard({ icon: Icon, label, value, color, isActive, onClick }: StatCardProps): React.JSX.Element {
@@ -79,6 +86,7 @@ export function TaskTree(): React.JSX.Element {
   const [showCompleted, setShowCompleted] = useState(false);
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<StatFilter | null>(null);
+  const [selectedTask, setSelectedTask] = useState<TaskResponse | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -97,14 +105,20 @@ export function TaskTree(): React.JSX.Element {
     load();
   }, [load]);
 
+  const handleTaskUpdate = useCallback(() => {
+    setSelectedTask(null);
+    load();
+  }, [load]);
+
   const todayStr = toDateStr(new Date());
 
   const stats = useMemo(() => {
     const open = tasks.filter((t) => !t.completed);
     const overdue = open.filter((t) => t.due_date && t.due_date < todayStr);
     const dueToday = open.filter((t) => t.due_date === todayStr);
+    const inProgress = tasks.filter((t) => t.status === "in_progress");
     const completed = tasks.filter((t) => t.completed);
-    return { open: open.length, overdue: overdue.length, dueToday: dueToday.length, completed: completed.length };
+    return { open: open.length, overdue: overdue.length, dueToday: dueToday.length, inProgress: inProgress.length, completed: completed.length };
   }, [tasks, todayStr]);
 
   const toggleFilter = useCallback((filter: StatFilter) => {
@@ -129,6 +143,9 @@ export function TaskTree(): React.JSX.Element {
         break;
       case "dueToday":
         result = result.filter((t) => !t.completed && t.due_date === todayStr);
+        break;
+      case "inProgress":
+        result = result.filter((t) => t.status === "in_progress");
         break;
       case "completed":
         result = result.filter((t) => t.completed);
@@ -166,8 +183,8 @@ export function TaskTree(): React.JSX.Element {
     return (
       <div>
         {/* Stat cards skeleton */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-5 mb-10">
-          {[...Array(4)].map((_, i) => (
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-5 mb-10">
+          {[...Array(5)].map((_, i) => (
             <div key={i} className="stat-card-v2 h-[100px]">
               <div className="flex items-center justify-between mb-3">
                 <div className="w-9 h-9 rounded-xl skeleton-shimmer" />
@@ -221,10 +238,11 @@ export function TaskTree(): React.JSX.Element {
   return (
     <div>
       {/* Stat cards row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-5 mb-10">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-5 mb-10">
         <StatCard icon={CircleDot} label="Active" value={stats.open} color="accent" isActive={activeFilter === "active"} onClick={() => toggleFilter("active")} />
         <StatCard icon={AlertTriangle} label="Overdue" value={stats.overdue} color="danger" isActive={activeFilter === "overdue"} onClick={() => toggleFilter("overdue")} />
         <StatCard icon={Clock} label="Due Today" value={stats.dueToday} color="warning" isActive={activeFilter === "dueToday"} onClick={() => toggleFilter("dueToday")} />
+        <StatCard icon={Loader} label="In Progress" value={stats.inProgress} color="info" isActive={activeFilter === "inProgress"} onClick={() => toggleFilter("inProgress")} />
         <StatCard icon={CheckCircle2} label="Completed" value={stats.completed} color="success" isActive={activeFilter === "completed"} onClick={() => toggleFilter("completed")} />
       </div>
 
@@ -247,9 +265,17 @@ export function TaskTree(): React.JSX.Element {
       ) : (
         <div className="flex flex-col gap-6">
           {categories.map(([cat, catTasks]) => (
-            <TaskCategory key={cat} category={cat} tasks={catTasks} />
+            <TaskCategory key={cat} category={cat} tasks={catTasks} onUpdate={handleTaskUpdate} onSelect={setSelectedTask} />
           ))}
         </div>
+      )}
+
+      {selectedTask && (
+        <TaskDetailPanel
+          task={selectedTask}
+          onClose={() => setSelectedTask(null)}
+          onUpdate={handleTaskUpdate}
+        />
       )}
     </div>
   );

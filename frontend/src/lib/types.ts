@@ -49,10 +49,19 @@ export interface TaskResponse {
   sub_project: string;
   due_date: string;
   completed: boolean;
+  status: "open" | "in_progress" | "done";
   days_open: number;
   first_date: string;
   latest_date: string;
   appearance_count: number;
+}
+
+export interface TaskUpdateRequest {
+  text: string;
+  category: string;
+  sub_project: string;
+  status?: "open" | "in_progress" | "done" | null;
+  due_date?: string | null;
 }
 
 export interface TaskCategory {

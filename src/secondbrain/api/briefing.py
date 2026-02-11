@@ -79,7 +79,7 @@ def _build_briefing(settings: Settings) -> BriefingResponse:
             overdue.append(bt)
         elif t.due_date and t.due_date == today_str:
             due_today.append(bt)
-        elif not t.due_date and t.days_open > 3:
+        elif not t.due_date and t.days_open > 3 and t.status == "open":
             aging.append(bt)
 
     # Sort: overdue by due_date asc, aging by days_open desc

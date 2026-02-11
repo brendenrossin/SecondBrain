@@ -4,7 +4,13 @@ import { AlertTriangle } from "lucide-react";
 import type { TaskResponse } from "@/lib/types";
 import { AgendaTask } from "./AgendaTask";
 
-export function OverdueSection({ tasks }: { tasks: TaskResponse[] }) {
+interface OverdueSectionProps {
+  tasks: TaskResponse[];
+  onTaskUpdate?: () => void;
+  onTaskSelect?: (task: TaskResponse) => void;
+}
+
+export function OverdueSection({ tasks, onTaskUpdate, onTaskSelect }: OverdueSectionProps): React.JSX.Element | null {
   if (tasks.length === 0) return null;
 
   return (
@@ -19,7 +25,7 @@ export function OverdueSection({ tasks }: { tasks: TaskResponse[] }) {
         </span>
       </div>
       {tasks.map((task, i) => (
-        <AgendaTask key={i} task={task} />
+        <AgendaTask key={i} task={task} onUpdate={onTaskUpdate} onSelect={onTaskSelect} />
       ))}
     </div>
   );

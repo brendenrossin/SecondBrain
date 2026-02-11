@@ -9,9 +9,11 @@ import { TaskItem } from "./TaskItem";
 interface TaskSubProjectProps {
   name: string;
   tasks: TaskResponse[];
+  onUpdate?: () => void;
+  onSelect?: (task: TaskResponse) => void;
 }
 
-export function TaskSubProject({ name, tasks }: TaskSubProjectProps): React.JSX.Element {
+export function TaskSubProject({ name, tasks, onUpdate, onSelect }: TaskSubProjectProps): React.JSX.Element {
   const [expanded, setExpanded] = useState(true);
   const openCount = tasks.filter((t) => !t.completed).length;
 
@@ -19,7 +21,7 @@ export function TaskSubProject({ name, tasks }: TaskSubProjectProps): React.JSX.
     return (
       <div className="flex flex-col">
         {tasks.map((task, i) => (
-          <TaskItem key={i} task={task} />
+          <TaskItem key={i} task={task} onUpdate={onUpdate} onSelect={onSelect} />
         ))}
       </div>
     );
@@ -44,7 +46,7 @@ export function TaskSubProject({ name, tasks }: TaskSubProjectProps): React.JSX.
         <div>
           <div className="flex flex-col">
             {tasks.map((task, i) => (
-              <TaskItem key={i} task={task} />
+              <TaskItem key={i} task={task} onUpdate={onUpdate} onSelect={onSelect} />
             ))}
           </div>
         </div>

@@ -7,12 +7,13 @@ from secondbrain.scripts.task_aggregator import (
     Task,
     _normalize,
     _parse_tasks_from_file,
-    _read_aggregate_completions,
     _read_aggregate_due_dates,
+    _read_aggregate_statuses,
     _write_aggregate_file,
     _write_completed_file,
     aggregate_tasks,
     sync_tasks,
+    update_task_in_daily,
 )
 
 # --- Normalize ---
@@ -53,12 +54,24 @@ class TestParseTasksFromFile:
         tasks = _parse_tasks_from_file(md, "2026-02-05")
         assert len(tasks) == 3
         assert tasks[0].text == "Build thing"
-        assert tasks[0].completed is False
+        assert tasks[0].status == "open"
         assert tasks[0].category == "AT&T"
         assert tasks[0].sub_project == "AI Receptionist"
-        assert tasks[1].completed is True
+        assert tasks[1].status == "done"
         assert tasks[2].category == "Personal"
         assert tasks[2].sub_project == ""
+
+    def test_in_progress_checkbox(self, tmp_path):
+        md = tmp_path / "2026-02-05.md"
+        md.write_text(
+            "## Tasks\n### Personal\n- [/] Working on it\n- [ ] Not started\n- [x] All done\n"
+        )
+        tasks = _parse_tasks_from_file(md, "2026-02-05")
+        assert len(tasks) == 3
+        assert tasks[0].status == "in_progress"
+        assert tasks[0].text == "Working on it"
+        assert tasks[1].status == "open"
+        assert tasks[2].status == "done"
 
     def test_due_date_extraction(self, tmp_path):
         md = tmp_path / "2026-02-05.md"
@@ -103,32 +116,46 @@ class TestParseTasksFromFile:
 
 class TestAggregateTasks:
     def test_groups_same_task(self):
-        t1 = Task("Do thing", False, "2026-02-04", "Personal", "", 5)
-        t2 = Task("Do thing", False, "2026-02-05", "Personal", "", 5)
+        t1 = Task("Do thing", "open", "2026-02-04", "Personal", "", 5)
+        t2 = Task("Do thing", "open", "2026-02-05", "Personal", "", 5)
         agg = aggregate_tasks([t1, t2])
         assert len(agg) == 1
         assert len(agg[0].appearances) == 2
 
     def test_different_categories_separate(self):
-        t1 = Task("Do thing", False, "2026-02-04", "AT&T", "", 5)
-        t2 = Task("Do thing", False, "2026-02-05", "Personal", "", 5)
+        t1 = Task("Do thing", "open", "2026-02-04", "AT&T", "", 5)
+        t2 = Task("Do thing", "open", "2026-02-05", "Personal", "", 5)
         agg = aggregate_tasks([t1, t2])
         assert len(agg) == 2
 
     def test_due_date_from_latest(self):
-        t1 = Task("Do thing", False, "2026-02-04", "Personal", "", 5, due_date="")
-        t2 = Task("Do thing", False, "2026-02-05", "Personal", "", 5, due_date="2026-03-01")
+        t1 = Task("Do thing", "open", "2026-02-04", "Personal", "", 5, due_date="")
+        t2 = Task("Do thing", "open", "2026-02-05", "Personal", "", 5, due_date="2026-03-01")
         agg = aggregate_tasks([t1, t2])
         assert agg[0].due_date == "2026-03-01"
+
+    def test_status_from_latest_appearance(self):
+        t1 = Task("Do thing", "open", "2026-02-04", "Personal", "", 5)
+        t2 = Task("Do thing", "in_progress", "2026-02-05", "Personal", "", 5)
+        agg = aggregate_tasks([t1, t2])
+        assert agg[0].status == "in_progress"
+        assert agg[0].completed is False
+
+    def test_completed_from_status(self):
+        t1 = Task("Do thing", "open", "2026-02-04", "Personal", "", 5)
+        t2 = Task("Do thing", "done", "2026-02-05", "Personal", "", 5)
+        agg = aggregate_tasks([t1, t2])
+        assert agg[0].status == "done"
+        assert agg[0].completed is True
 
 
 # --- Due label ---
 
 
 class TestDueLabel:
-    def _make_task(self, due_date="", completed=False):
+    def _make_task(self, due_date="", status="open"):
         t = AggregatedTask("Test", "test", "Personal", "", due_date=due_date)
-        t.appearances = [Task("Test", completed, "2026-02-05", "Personal", "", 5)]
+        t.appearances = [Task("Test", status, "2026-02-05", "Personal", "", 5)]
         return t
 
     def test_no_due_date(self):
@@ -184,13 +211,13 @@ class TestDueLabel:
 
     def test_completed_no_label(self):
         yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
-        assert self._make_task(due_date=yesterday, completed=True).due_label() == ""
+        assert self._make_task(due_date=yesterday, status="done").due_label() == ""
 
 
-# --- Read aggregate completions ---
+# --- Read aggregate statuses ---
 
 
-class TestReadAggregateCompletions:
+class TestReadAggregateStatuses:
     def test_table_format_open(self, tmp_path):
         f = tmp_path / "All Tasks.md"
         f.write_text(
@@ -198,8 +225,8 @@ class TestReadAggregateCompletions:
             "|:---:|------|:---:|:---:|:---:|\n"
             "| Open | Open task | [[2026-02-05]] |  |  |\n"
         )
-        completions = _read_aggregate_completions(f)
-        assert completions[_normalize("Open task")] is False
+        statuses = _read_aggregate_statuses(f)
+        assert statuses[_normalize("Open task")] == "open"
 
     def test_table_format_done(self, tmp_path):
         f = tmp_path / "All Tasks.md"
@@ -208,8 +235,8 @@ class TestReadAggregateCompletions:
             "|:---:|------|:---:|:---:|:---:|\n"
             "| Done | Finished task | [[2026-02-05]] |  |  |\n"
         )
-        completions = _read_aggregate_completions(f)
-        assert completions[_normalize("Finished task")] is True
+        statuses = _read_aggregate_statuses(f)
+        assert statuses[_normalize("Finished task")] == "done"
 
     def test_table_format_in_progress(self, tmp_path):
         f = tmp_path / "All Tasks.md"
@@ -218,18 +245,24 @@ class TestReadAggregateCompletions:
             "|:---:|------|:---:|:---:|:---:|\n"
             "| In Progress | Working task | [[2026-02-05]] |  |  |\n"
         )
-        completions = _read_aggregate_completions(f)
-        assert completions[_normalize("Working task")] is False
+        statuses = _read_aggregate_statuses(f)
+        assert statuses[_normalize("Working task")] == "in_progress"
 
     def test_list_format(self, tmp_path):
         f = tmp_path / "Completed.md"
         f.write_text("## 2026-02-05\n- [x] Finished task [[2026-02-05]] *(Personal)*\n")
-        completions = _read_aggregate_completions(f)
-        assert completions[_normalize("Finished task")] is True
+        statuses = _read_aggregate_statuses(f)
+        assert statuses[_normalize("Finished task")] == "done"
+
+    def test_list_format_in_progress(self, tmp_path):
+        f = tmp_path / "Tasks.md"
+        f.write_text("- [/] Working on it\n")
+        statuses = _read_aggregate_statuses(f)
+        assert statuses[_normalize("Working on it")] == "in_progress"
 
     def test_nonexistent_file(self, tmp_path):
         f = tmp_path / "nope.md"
-        assert _read_aggregate_completions(f) == {}
+        assert _read_aggregate_statuses(f) == {}
 
 
 # --- Write aggregate file ---
@@ -239,7 +272,7 @@ class TestWriteAggregateFile:
     def test_table_output(self, tmp_path):
         f = tmp_path / "All Tasks.md"
         t = AggregatedTask("Do thing", "do thing", "Personal", "", due_date="2026-03-01")
-        t.appearances = [Task("Do thing", False, "2026-02-05", "Personal", "", 5, "2026-03-01")]
+        t.appearances = [Task("Do thing", "open", "2026-02-05", "Personal", "", 5, "2026-03-01")]
         _write_aggregate_file(f, [t])
         content = f.read_text()
         assert "| Open | Do thing |" in content
@@ -247,18 +280,26 @@ class TestWriteAggregateFile:
         assert "2026-03-01" in content
         assert "## Personal" in content
 
-    def test_skips_completed(self, tmp_path):
+    def test_skips_done(self, tmp_path):
         f = tmp_path / "All Tasks.md"
         t = AggregatedTask("Done thing", "done thing", "Personal", "")
-        t.appearances = [Task("Done thing", True, "2026-02-05", "Personal", "", 5)]
+        t.appearances = [Task("Done thing", "done", "2026-02-05", "Personal", "", 5)]
         _write_aggregate_file(f, [t])
         content = f.read_text()
         assert "Done thing" not in content
 
+    def test_in_progress_status_column(self, tmp_path):
+        f = tmp_path / "All Tasks.md"
+        t = AggregatedTask("WIP thing", "wip thing", "Personal", "")
+        t.appearances = [Task("WIP thing", "in_progress", "2026-02-05", "Personal", "", 5)]
+        _write_aggregate_file(f, [t])
+        content = f.read_text()
+        assert "| In Progress | WIP thing |" in content
+
     def test_no_due_date_empty_column(self, tmp_path):
         f = tmp_path / "All Tasks.md"
         t = AggregatedTask("No deadline", "no deadline", "Personal", "")
-        t.appearances = [Task("No deadline", False, "2026-02-05", "Personal", "", 5)]
+        t.appearances = [Task("No deadline", "open", "2026-02-05", "Personal", "", 5)]
         _write_aggregate_file(f, [t])
         content = f.read_text()
         # Due column should be empty, last column should be empty
@@ -272,7 +313,7 @@ class TestWriteCompletedFile:
     def test_completed_output(self, tmp_path):
         f = tmp_path / "Completed Tasks.md"
         t = AggregatedTask("Done thing", "done thing", "AT&T", "AI Receptionist")
-        t.appearances = [Task("Done thing", True, "2026-02-05", "AT&T", "AI Receptionist", 5)]
+        t.appearances = [Task("Done thing", "done", "2026-02-05", "AT&T", "AI Receptionist", 5)]
         _write_completed_file(f, [t])
         content = f.read_text()
         assert "- [x] Done thing" in content
@@ -281,7 +322,7 @@ class TestWriteCompletedFile:
     def test_no_completed(self, tmp_path):
         f = tmp_path / "Completed Tasks.md"
         t = AggregatedTask("Open thing", "open thing", "Personal", "")
-        t.appearances = [Task("Open thing", False, "2026-02-05", "Personal", "", 5)]
+        t.appearances = [Task("Open thing", "open", "2026-02-05", "Personal", "", 5)]
         _write_completed_file(f, [t])
         content = f.read_text()
         assert "No completed tasks yet" in content
@@ -350,6 +391,26 @@ class TestSyncTasks:
         # Verify daily note was updated
         daily = (vault / "00_Daily" / "2026-02-05.md").read_text()
         assert "- [x] New task" in daily
+
+    def test_bidir_sync_with_in_progress_status(self, tmp_path):
+        vault = self._setup_vault(tmp_path)
+        sync_tasks(vault)
+
+        # Mark "New task" as In Progress in the Status column
+        agg_file = vault / "Tasks" / "All Tasks.md"
+        content = agg_file.read_text()
+        content = content.replace(
+            "| Open | New task |",
+            "| In Progress | New task |",
+        )
+        agg_file.write_text(content)
+
+        # Re-sync
+        sync_tasks(vault)
+
+        # Verify daily note was updated with [/]
+        daily = (vault / "00_Daily" / "2026-02-05.md").read_text()
+        assert "- [/] New task" in daily
 
     def test_due_dates_in_table(self, tmp_path):
         vault = self._setup_vault(tmp_path)
@@ -492,3 +553,66 @@ class TestDueDateSyncToDaily:
         daily = (vault / "00_Daily" / "2026-02-05.md").read_text()
         assert "(due: 2026-03-15)" in daily
         assert "(due: 2026-03-01)" not in daily
+
+
+# --- Update task in daily ---
+
+
+class TestUpdateTaskInDaily:
+    def _setup_vault(self, tmp_path):
+        daily_dir = tmp_path / "00_Daily"
+        daily_dir.mkdir()
+        (daily_dir / "2026-02-05.md").write_text(
+            "## Tasks\n### Personal\n- [ ] Send resume\n- [/] Working on report\n- [x] Done thing\n"
+        )
+        return tmp_path
+
+    def test_mark_open_as_done(self, tmp_path):
+        vault = self._setup_vault(tmp_path)
+        result = update_task_in_daily(vault, "Send resume", "Personal", "", status="done")
+        assert result is not None
+        assert result.status == "done"
+        assert result.completed is True
+        daily = (vault / "00_Daily" / "2026-02-05.md").read_text()
+        assert "- [x] Send resume" in daily
+
+    def test_mark_done_as_open(self, tmp_path):
+        vault = self._setup_vault(tmp_path)
+        result = update_task_in_daily(vault, "Done thing", "Personal", "", status="open")
+        assert result is not None
+        assert result.status == "open"
+        daily = (vault / "00_Daily" / "2026-02-05.md").read_text()
+        assert "- [ ] Done thing" in daily
+
+    def test_mark_open_as_in_progress(self, tmp_path):
+        vault = self._setup_vault(tmp_path)
+        result = update_task_in_daily(vault, "Send resume", "Personal", "", status="in_progress")
+        assert result is not None
+        assert result.status == "in_progress"
+        daily = (vault / "00_Daily" / "2026-02-05.md").read_text()
+        assert "- [/] Send resume" in daily
+
+    def test_add_due_date(self, tmp_path):
+        vault = self._setup_vault(tmp_path)
+        result = update_task_in_daily(vault, "Send resume", "Personal", "", due_date="2026-03-01")
+        assert result is not None
+        assert result.due_date == "2026-03-01"
+        daily = (vault / "00_Daily" / "2026-02-05.md").read_text()
+        assert "Send resume (due: 2026-03-01)" in daily
+
+    def test_remove_due_date(self, tmp_path):
+        daily_dir = tmp_path / "00_Daily"
+        daily_dir.mkdir()
+        (daily_dir / "2026-02-05.md").write_text(
+            "## Tasks\n### Personal\n- [ ] Send resume (due: 2026-03-01)\n"
+        )
+        result = update_task_in_daily(tmp_path, "Send resume", "Personal", "", due_date="")
+        assert result is not None
+        assert result.due_date == ""
+        daily = (daily_dir / "2026-02-05.md").read_text()
+        assert "(due:" not in daily
+
+    def test_task_not_found(self, tmp_path):
+        vault = self._setup_vault(tmp_path)
+        result = update_task_in_daily(vault, "Nonexistent task", "Personal", "", status="done")
+        assert result is None

@@ -8,6 +8,7 @@ import type {
   Conversation,
   TaskResponse,
   TaskCategory,
+  TaskUpdateRequest,
   CostSummaryResponse,
   DailyCostsResponse,
   AdminStatsResponse,
@@ -140,6 +141,16 @@ export async function getUpcomingTasks(days = 7): Promise<TaskResponse[]> {
 
 export async function getTaskCategories(): Promise<TaskCategory[]> {
   return fetchJSON(`${BASE}/tasks/categories`);
+}
+
+export async function updateTask(
+  req: TaskUpdateRequest
+): Promise<TaskResponse> {
+  return fetchJSON(`${BASE}/tasks/update`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(req),
+  });
 }
 
 // --- Briefing ---

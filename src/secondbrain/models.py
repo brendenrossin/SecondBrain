@@ -1,6 +1,7 @@
 """Pydantic models for the SecondBrain API."""
 
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -90,10 +91,21 @@ class TaskResponse(BaseModel):
     sub_project: str
     due_date: str
     completed: bool
+    status: str = "open"  # "open", "in_progress", "done"
     days_open: int
     first_date: str
     latest_date: str
     appearance_count: int
+
+
+class TaskUpdateRequest(BaseModel):
+    """Request body for updating a task."""
+
+    text: str
+    category: str
+    sub_project: str
+    status: Literal["open", "in_progress", "done"] | None = None
+    due_date: str | None = None  # YYYY-MM-DD, "" to remove, None = no change
 
 
 class ConversationSummary(BaseModel):

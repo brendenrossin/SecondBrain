@@ -1,11 +1,17 @@
 """Task aggregator: scans daily notes for tasks, builds aggregated view with bi-dir sync."""
 
+from __future__ import annotations
+
 import logging
 import re
 import string
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from secondbrain.models import TaskResponse
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +31,7 @@ class Task:
     """A single task extracted from a daily note."""
 
     text: str
-    completed: bool
+    status: str  # "open", "in_progress", "done"
     source_date: str  # YYYY-MM-DD
     category: str  # e.g. "AT&T", "PwC", "Personal"
     sub_project: str  # e.g. "AI Receptionist", "" for none
@@ -49,11 +55,14 @@ class AggregatedTask:
     appearances: list[Task] = field(default_factory=list)
 
     @property
+    def status(self) -> str:
+        """Task status from its most recent appearance."""
+        return self.appearances[-1].status if self.appearances else "open"
+
+    @property
     def completed(self) -> bool:
-        """Task is completed if its most recent appearance is completed."""
-        if not self.appearances:
-            return False
-        return self.appearances[-1].completed
+        """Task is completed if its most recent status is done."""
+        return self.status == "done"
 
     @property
     def first_date(self) -> str:
@@ -183,15 +192,15 @@ def sync_tasks(vault_path: Path) -> str:
     completed_file = tasks_dir / "Completed Tasks.md"
 
     # Step 1: Read existing states from both files (for bi-dir sync)
-    existing_completions = _read_aggregate_completions(aggregate_file)
-    existing_completions.update(_read_aggregate_completions(completed_file))
+    existing_statuses = _read_aggregate_statuses(aggregate_file)
+    existing_statuses.update(_read_aggregate_statuses(completed_file))
     existing_due_dates = _read_aggregate_due_dates(aggregate_file)
 
     # Step 2: Scan daily notes for all tasks
     all_tasks = scan_daily_notes(daily_dir)
 
-    # Step 3: Bi-directional sync — push completions + due dates from aggregate back to daily notes
-    updates = _sync_changes_to_daily(daily_dir, all_tasks, existing_completions, existing_due_dates)
+    # Step 3: Bi-directional sync — push statuses + due dates from aggregate back to daily notes
+    updates = _sync_changes_to_daily(daily_dir, all_tasks, existing_statuses, existing_due_dates)
 
     # Step 4: Re-scan daily notes after sync (picks up any changes)
     if updates > 0:
@@ -266,10 +275,16 @@ def _parse_tasks_from_file(md_file: Path, date_str: str) -> list[Task]:
             current_sub_project = stripped[5:].strip()
             continue
 
-        # Parse checkbox tasks
-        checkbox_match = re.match(r"^-\s*\[([ xX])\]\s*(.+)$", stripped)
+        # Parse checkbox tasks: [ ] open, [/] in_progress, [x]/[X] done
+        checkbox_match = re.match(r"^-\s*\[([ xX/])\]\s*(.+)$", stripped)
         if checkbox_match:
-            completed = checkbox_match.group(1).lower() == "x"
+            marker = checkbox_match.group(1)
+            if marker == "/":
+                status = "in_progress"
+            elif marker.lower() == "x":
+                status = "done"
+            else:
+                status = "open"
             raw_text = checkbox_match.group(2).strip()
 
             # Extract due date if present
@@ -283,7 +298,7 @@ def _parse_tasks_from_file(md_file: Path, date_str: str) -> list[Task]:
                 tasks.append(
                     Task(
                         text=raw_text,
-                        completed=completed,
+                        status=status,
                         source_date=date_str,
                         category=current_category,
                         sub_project=current_sub_project,
@@ -317,17 +332,19 @@ def aggregate_tasks(all_tasks: list[Task]) -> list[AggregatedTask]:
     return list(seen.values())
 
 
-def _read_aggregate_completions(aggregate_file: Path) -> dict[str, bool]:
-    """Read completion states from existing task files.
+def _read_aggregate_statuses(aggregate_file: Path) -> dict[str, str]:
+    """Read task statuses from existing task files.
 
     Handles both table format (All Tasks) and list format (Completed Tasks).
-    Returns dict of normalized_task_text -> completed.
+    Returns dict of normalized_task_text -> status ("open", "in_progress", "done").
     """
     if not aggregate_file.exists():
         return {}
 
-    completions: dict[str, bool] = {}
+    statuses: dict[str, str] = {}
     content = aggregate_file.read_text(encoding="utf-8")
+
+    status_map = {"open": "open", "in progress": "in_progress", "done": "done"}
 
     for line in content.split("\n"):
         stripped = line.strip()
@@ -344,28 +361,34 @@ def _read_aggregate_completions(aggregate_file: Path) -> dict[str, bool]:
             # Skip header/separator rows
             if task_cell.startswith("--") or task_cell == "Task" or status_cell == "Status":
                 continue
-            is_completed = status_cell.lower() == "done"
+            status = status_map.get(status_cell.lower(), "open")
             # Clean task text: remove wiki-links and due date
             text = re.sub(r"\[\[\d{4}-\d{2}-\d{2}\]\]", "", task_cell).strip()
             text = DUE_DATE_RE.sub("", text).strip()
             normalized = _normalize(text)
             if normalized:
-                completions[normalized] = is_completed
+                statuses[normalized] = status
             continue
 
         # List format (Completed Tasks.md): - [x] task text [[date]] *(category)*
-        checkbox_match = re.match(r"^-\s*\[([ xX])\]\s*(.+)$", stripped)
+        checkbox_match = re.match(r"^-\s*\[([ xX/])\]\s*(.+)$", stripped)
         if checkbox_match:
-            completed = checkbox_match.group(1).lower() == "x"
+            marker = checkbox_match.group(1)
+            if marker == "/":
+                status = "in_progress"
+            elif marker.lower() == "x":
+                status = "done"
+            else:
+                status = "open"
             text = checkbox_match.group(2)
             # Remove trailing [[YYYY-MM-DD]], (day N), *(category)* markers
             text = re.sub(r"\s*\[\[\d{4}-\d{2}-\d{2}\]\].*$", "", text).strip()
             text = DUE_DATE_RE.sub("", text).strip()
             normalized = _normalize(text)
             if normalized:
-                completions[normalized] = completed
+                statuses[normalized] = status
 
-    return completions
+    return statuses
 
 
 def _read_aggregate_due_dates(aggregate_file: Path) -> dict[str, str]:
@@ -404,21 +427,24 @@ def _read_aggregate_due_dates(aggregate_file: Path) -> dict[str, str]:
     return due_dates
 
 
+_STATUS_CHECKBOX = {"open": "- [ ]", "in_progress": "- [/]", "done": "- [x]"}
+
+
 def _sync_changes_to_daily(
     daily_dir: Path,
     all_tasks: list[Task],
-    existing_completions: dict[str, bool],
+    existing_statuses: dict[str, str],
     existing_due_dates: dict[str, str] | None = None,
 ) -> int:
-    """Push completions and due dates from aggregate file back to daily notes.
+    """Push statuses and due dates from aggregate file back to daily notes.
 
-    If a task is marked completed in the aggregate but open in a daily note,
-    update the daily note. If a due date was added/changed/removed in the
+    If a task's status in the aggregate differs from the daily note,
+    update the daily note's checkbox. If a due date was added/changed in the
     aggregate, sync it back to the daily note.
 
     Returns number of daily note files updated.
     """
-    if not existing_completions and not existing_due_dates:
+    if not existing_statuses and not existing_due_dates:
         return 0
 
     if existing_due_dates is None:
@@ -441,16 +467,23 @@ def _sync_changes_to_daily(
         for task in tasks:
             old_line = lines[task.line_number]
 
-            # Sync completions: aggregate completed -> daily note
-            if not task.completed:
-                agg_completed = existing_completions.get(task.normalized)
-                if agg_completed:
-                    new_line = old_line.replace("- [ ]", "- [x]", 1)
-                    if old_line != new_line:
-                        lines[task.line_number] = new_line
-                        old_line = new_line
-                        file_changed = True
-                        logger.info("Synced completion: %s in %s", task.text, date_str)
+            # Sync statuses: aggregate status -> daily note
+            agg_status = existing_statuses.get(task.normalized)
+            if agg_status and agg_status != task.status:
+                old_checkbox = _STATUS_CHECKBOX[task.status]
+                new_checkbox = _STATUS_CHECKBOX[agg_status]
+                new_line = old_line.replace(old_checkbox, new_checkbox, 1)
+                if old_line != new_line:
+                    lines[task.line_number] = new_line
+                    old_line = new_line
+                    file_changed = True
+                    logger.info(
+                        "Synced status %s -> %s: %s in %s",
+                        task.status,
+                        agg_status,
+                        task.text,
+                        date_str,
+                    )
 
             # Sync due dates: aggregate due date -> daily note
             # Only sync non-empty due dates from aggregate. If aggregate
@@ -484,10 +517,10 @@ def _write_aggregate_file(aggregate_file: Path, aggregated: list[AggregatedTask]
     """Generate All Tasks.md as tables with only open tasks."""
     today = datetime.now().strftime("%Y-%m-%d")
 
-    # Group open tasks by category then sub_project
+    # Group non-done tasks by category then sub_project
     by_category: dict[str, dict[str, list[AggregatedTask]]] = {}
     for task in aggregated:
-        if task.completed:
+        if task.status == "done":
             continue
         cat = task.category or "Uncategorized"
         sub = task.sub_project or ""
@@ -523,7 +556,7 @@ def _write_aggregate_file(aggregate_file: Path, aggregated: list[AggregatedTask]
             lines.append("|:---:|------|:---:|:---:|:---:|")
 
             for task in tasks:
-                status = "Open"
+                status = "In Progress" if task.status == "in_progress" else "Open"
                 added = f"[[{task.first_date}]]"
                 due_col = task.due_date if task.due_date else ""
                 label = task.due_label()
@@ -544,7 +577,7 @@ def _write_completed_file(completed_file: Path, aggregated: list[AggregatedTask]
     """Generate Completed Tasks.md with completed tasks ordered by completion date."""
     today = datetime.now().strftime("%Y-%m-%d")
 
-    done_tasks = [t for t in aggregated if t.completed]
+    done_tasks = [t for t in aggregated if t.status == "done"]
     done_tasks.sort(key=lambda t: t.latest_date, reverse=True)
 
     lines = [
@@ -584,3 +617,88 @@ def _write_completed_file(completed_file: Path, aggregated: list[AggregatedTask]
         return
     completed_file.write_text(new_content, encoding="utf-8")
     logger.info("Wrote completed file: %s", completed_file)
+
+
+def update_task_in_daily(
+    vault_path: Path,
+    text: str,
+    category: str,
+    sub_project: str,
+    status: str | None = None,
+    due_date: str | None = None,
+) -> TaskResponse | None:
+    """Update a task's status and/or due date in the latest daily note.
+
+    Returns updated TaskResponse, or None if not found.
+    """
+    from secondbrain.models import TaskResponse
+
+    daily_dir = vault_path / "00_Daily"
+    if not daily_dir.exists():
+        return None
+
+    # Build lookup key
+    normalized_text = _normalize(text)
+    target_key = f"{category}|{sub_project}|{normalized_text}"
+
+    # Scan all daily notes for task appearances
+    all_tasks = scan_daily_notes(daily_dir)
+    aggregated = aggregate_tasks(all_tasks)
+
+    # Find the matching aggregated task
+    target_agg = None
+    for agg in aggregated:
+        key = f"{agg.category}|{agg.sub_project}|{agg.normalized}"
+        if key == target_key:
+            target_agg = agg
+            break
+
+    if not target_agg or not target_agg.appearances:
+        return None
+
+    # Get the latest appearance to update
+    latest = target_agg.appearances[-1]
+    daily_file = daily_dir / f"{latest.source_date}.md"
+    if not daily_file.exists():
+        return None
+
+    lines = daily_file.read_text(encoding="utf-8").split("\n")
+    line = lines[latest.line_number]
+
+    # Update status checkbox
+    if status and status != latest.status:
+        old_checkbox = _STATUS_CHECKBOX[latest.status]
+        new_checkbox = _STATUS_CHECKBOX[status]
+        line = line.replace(old_checkbox, new_checkbox, 1)
+
+    # Update due date
+    if due_date is not None:
+        # Strip existing due date
+        line = DUE_DATE_RE.sub("", line).rstrip()
+        if due_date:  # Add new due date (non-empty string)
+            line = f"{line} (due: {due_date})"
+
+    lines[latest.line_number] = line
+    daily_file.write_text("\n".join(lines), encoding="utf-8")
+
+    # Re-scan to get updated state
+    updated_tasks = scan_daily_notes(daily_dir)
+    updated_agg = aggregate_tasks(updated_tasks)
+
+    for agg in updated_agg:
+        key = f"{agg.category}|{agg.sub_project}|{agg.normalized}"
+        if key == target_key:
+            return TaskResponse(
+                text=agg.text,
+                category=agg.category,
+                sub_project=agg.sub_project,
+                due_date=agg.due_date,
+                completed=agg.completed,
+                status=agg.status,
+                days_open=agg.days_open,
+                first_date=agg.first_date,
+                latest_date=agg.latest_date,
+                appearance_count=len(agg.appearances),
+            )
+
+    return None

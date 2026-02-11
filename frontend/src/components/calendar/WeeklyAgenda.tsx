@@ -10,17 +10,19 @@ import { OverdueSection } from "./OverdueSection";
 import { DaySection } from "./DaySection";
 import { AgendaTask } from "./AgendaTask";
 import { MultiDayBanner } from "./MultiDayBanner";
+import { TaskDetailPanel } from "../tasks/TaskDetailPanel";
 
 type AgendaSection =
   | { type: "day"; date: string; tasks: TaskResponse[]; events: CalendarEvent[] }
   | { type: "empty-range"; startDate: string; endDate: string };
 
-export function WeeklyAgenda() {
+export function WeeklyAgenda(): React.JSX.Element {
   const [tasks, setTasks] = useState<TaskResponse[]>([]);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [weekOffset, setWeekOffset] = useState(0);
+  const [selectedTask, setSelectedTask] = useState<TaskResponse | null>(null);
 
   const weekStart = useMemo(
     () => addDays(startOfWeek(new Date()), weekOffset * 7),
@@ -49,6 +51,11 @@ export function WeeklyAgenda() {
   }, [weekStartStr, weekEndStr]);
 
   useEffect(() => {
+    load();
+  }, [load]);
+
+  const handleTaskUpdate = useCallback(() => {
+    setSelectedTask(null);
     load();
   }, [load]);
 
@@ -155,7 +162,7 @@ export function WeeklyAgenda() {
           <MultiDayBanner key={`multi-${i}`} event={event} />
         ))}
 
-        {weekOffset === 0 && <OverdueSection tasks={overdue} />}
+        {weekOffset === 0 && <OverdueSection tasks={overdue} onTaskUpdate={handleTaskUpdate} onTaskSelect={setSelectedTask} />}
 
         {daySections.map((section) => {
           if (section.type === "empty-range") {
@@ -180,6 +187,8 @@ export function WeeklyAgenda() {
               date={new Date(section.date + "T00:00:00")}
               tasks={section.tasks}
               events={section.events}
+              onTaskUpdate={handleTaskUpdate}
+              onTaskSelect={setSelectedTask}
             />
           );
         })}
@@ -192,11 +201,19 @@ export function WeeklyAgenda() {
               </span>
             </div>
             {noDueDate.map((task, i) => (
-              <AgendaTask key={i} task={task} />
+              <AgendaTask key={i} task={task} onUpdate={handleTaskUpdate} onSelect={setSelectedTask} />
             ))}
           </div>
         )}
       </div>
+
+      {selectedTask && (
+        <TaskDetailPanel
+          task={selectedTask}
+          onClose={() => setSelectedTask(null)}
+          onUpdate={handleTaskUpdate}
+        />
+      )}
     </div>
   );
 }

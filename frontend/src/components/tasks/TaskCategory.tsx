@@ -9,9 +9,11 @@ import { TaskSubProject } from "./TaskSubProject";
 interface TaskCategoryProps {
   category: string;
   tasks: TaskResponse[];
+  onUpdate?: () => void;
+  onSelect?: (task: TaskResponse) => void;
 }
 
-export function TaskCategory({ category, tasks }: TaskCategoryProps): React.JSX.Element {
+export function TaskCategory({ category, tasks, onUpdate, onSelect }: TaskCategoryProps): React.JSX.Element {
   const [expanded, setExpanded] = useState(true);
   const openCount = tasks.filter((t) => !t.completed).length;
 
@@ -45,7 +47,7 @@ export function TaskCategory({ category, tasks }: TaskCategoryProps): React.JSX.
         <div>
           <div className="px-3 pb-3">
             {Array.from(grouped.entries()).map(([sub, subTasks]) => (
-              <TaskSubProject key={sub || "__none"} name={sub} tasks={subTasks} />
+              <TaskSubProject key={sub || "__none"} name={sub} tasks={subTasks} onUpdate={onUpdate} onSelect={onSelect} />
             ))}
           </div>
         </div>
