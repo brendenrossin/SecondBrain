@@ -97,6 +97,36 @@ make index
 make reindex
 ```
 
+### Local-Only Setup (Optional)
+
+SecondBrain can run entirely on your machine with no API keys — using local embeddings and a local LLM via [Ollama](https://ollama.com).
+
+**Local embeddings** are enabled by default (`SECONDBRAIN_EMBEDDING_PROVIDER=local`). The model (~400MB) downloads automatically on first run — no manual step needed.
+
+**Local LLM** requires Ollama:
+
+```bash
+# Install Ollama (macOS)
+brew install ollama
+
+# Start the Ollama server
+ollama serve
+
+# Pull a model (any model works — pick one that fits your hardware)
+ollama pull llama3.2:3b        # 3B params, ~2GB, runs on most machines
+ollama pull mistral:7b         # 7B params, ~4GB, good quality/speed balance
+```
+
+Then set your model in `.env`:
+```bash
+SECONDBRAIN_OLLAMA_MODEL=llama3.2:3b          # whichever model you pulled
+SECONDBRAIN_OLLAMA_BASE_URL=http://127.0.0.1:11434/v1  # default, usually no change needed
+```
+
+The chat UI has a provider toggle — switch between "Local (Ollama)" and your API provider at any time.
+
+> **No API keys at all?** With local embeddings + Ollama, the only required env var is `SECONDBRAIN_VAULT_PATH`. Everything else runs on your hardware.
+
 ## Customize for Your Notes
 
 After cloning, edit these files to make it yours:
@@ -116,8 +146,17 @@ SECONDBRAIN_VAULT_PATH=/path/to/your/notes             # Required — your Markd
 SECONDBRAIN_HOST=127.0.0.1                             # API server host
 SECONDBRAIN_PORT=8000                                  # API server port
 SECONDBRAIN_DATA_PATH=data                             # Data storage directory
-SECONDBRAIN_OPENAI_API_KEY=sk-...                      # Required for LLM features
-SECONDBRAIN_EMBEDDING_PROVIDER=local                   # "local" or "openai"
+
+# LLM API keys (at least one recommended, or use Ollama for fully local)
+SECONDBRAIN_ANTHROPIC_API_KEY=sk-ant-...               # Anthropic Claude (preferred)
+SECONDBRAIN_OPENAI_API_KEY=sk-...                      # OpenAI GPT-4o-mini
+
+# Local LLM via Ollama (no API key needed)
+SECONDBRAIN_OLLAMA_MODEL=llama3.2:3b                   # Any Ollama model you've pulled
+SECONDBRAIN_OLLAMA_BASE_URL=http://127.0.0.1:11434/v1  # Default Ollama endpoint
+
+# Embeddings
+SECONDBRAIN_EMBEDDING_PROVIDER=local                   # "local" (default) or "openai"
 SECONDBRAIN_EMBEDDING_MODEL=BAAI/bge-base-en-v1.5     # Local embedding model
 SECONDBRAIN_OPENAI_EMBEDDING_MODEL=text-embedding-3-small  # OpenAI embedding model
 ```
