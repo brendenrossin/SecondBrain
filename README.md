@@ -1,23 +1,29 @@
 # SecondBrain
 
-A personal semantic memory system built on top of an Obsidian vault. Combines Markdown note ingestion, embeddings, hybrid search (BM25 + vectors), LLM reranking, and answer synthesis to enable intelligent retrieval from personal notes.
+A personal semantic memory system that turns a folder of Markdown notes into a searchable, queryable knowledge base with task management, calendar, and an LLM-powered chat interface.
+
+Works with any directory of `.md` files — an Obsidian vault, a folder of plain Markdown, or any note-taking setup that uses text files. No proprietary formats, no lock-in.
 
 ## Key Principles
 
 - **Local-first, privacy-preserving** — all data stays on your machine
-- **Vault is the single source of truth** — no application state outside it
+- **Your notes are the source of truth** — no application state outside your Markdown files
 - **Suggestion-only** — the system recommends, never acts autonomously
 - **Simple over clever** — maintainable systems over fragile ones
 
 ## Features
 
 - **Hybrid search** — BM25 lexical + vector similarity with reciprocal rank fusion
-- **LLM reranking + synthesis** — gpt-4o-mini or local Ollama for answer generation with citations
+- **LLM reranking + synthesis** — Claude, GPT-4o-mini, or local Ollama for answer generation with citations
+- **Task management** — aggregates tasks from daily notes, three-value status (open/in-progress/done), due dates, category reassignment — all from the browser
+- **Calendar** — weekly agenda with events, overdue tracking, and due date badges
 - **Metadata extraction** — summaries, entities, key phrases, action items, deadlines
-- **Task management** — aggregates tasks from daily notes with bi-directional vault sync
-- **Next.js dashboard** — dark "mission control" UI with chat, tasks, calendar, and insights pages
-- **Dual LLM providers** — OpenAI API or local Ollama (gpt-oss, llama3.2, etc.)
+- **Morning briefing** — overdue tasks, due today, aging follow-ups, yesterday's context
+- **Quick capture** — get thoughts into the system in seconds from your phone
+- **Next.js dashboard** — dark "mission control" UI with chat, tasks, calendar, admin, and capture pages
+- **Dual LLM providers** — Anthropic Claude, OpenAI API, or local Ollama
 - **Secure remote access** — Tailscale VPN for private mobile access
+- **LLM cost tracking** — per-call token and cost logging with admin dashboard
 
 ## Tech Stack
 
@@ -29,7 +35,7 @@ A personal semantic memory system built on top of an Obsidian vault. Combines Ma
 | **Vectors** | ChromaDB (local) |
 | **Lexical search** | SQLite FTS5 |
 | **Embeddings** | BAAI/bge-base-en-v1.5 (local) or OpenAI text-embedding-3-small |
-| **LLM** | OpenAI gpt-4o-mini or local Ollama |
+| **LLM** | Anthropic Claude, OpenAI GPT-4o-mini, or local Ollama |
 | **Package management** | uv (Python), npm (frontend) |
 
 ## Quick Start
@@ -39,7 +45,7 @@ A personal semantic memory system built on top of an Obsidian vault. Combines Ma
 - Python 3.12+
 - [uv](https://docs.astral.sh/uv/) (Python package manager)
 - Node.js 18+ and npm (for the frontend)
-- An Obsidian vault with Markdown notes
+- A folder of Markdown notes (Obsidian vault, plain `.md` files, or any Markdown-based note system)
 
 ### Setup
 
@@ -91,20 +97,22 @@ make index
 make reindex
 ```
 
-## Customize for Your Vault
+## Customize for Your Notes
 
 After cloning, edit these files to make it yours:
 
-1. **Environment** — Copy `.env.example` to `.env` and set `SECONDBRAIN_VAULT_PATH` to your Obsidian vault
-2. **Vault folders** — Create these folders in your vault: `00_Daily/`, `10_Notes/`, `20_Projects/`, `30_Concepts/`, `Inbox/`, `Tasks/`, `90_Meta/Templates/`
+1. **Environment** — Copy `.env.example` to `.env` and set `SECONDBRAIN_VAULT_PATH` to your notes folder (any directory of `.md` files works)
+2. **Folder structure** — Create these folders in your notes directory: `00_Daily/`, `10_Notes/`, `20_Projects/`, `30_Concepts/`, `Inbox/`, `Tasks/`, `90_Meta/Templates/`
 3. **Frontend branding** — Edit `frontend/src/lib/config.ts` to set your display name, app name, and user initial
 4. **Inbox categories** — Edit task categories and living documents at the top of `src/secondbrain/scripts/inbox_processor.py`
 5. **PWA manifest** — Update `frontend/public/manifest.json` and `frontend/package.json` with your app name
 
+> **Note on Obsidian:** This project was originally built with Obsidian in mind, and Obsidian users will get the best experience (the `- [/]` in-progress checkbox renders natively, wiki-links work, etc.). But the system reads plain Markdown — no Obsidian plugins or proprietary features are required. If you use a different Markdown editor or just plain text files, everything works the same.
+
 ## Environment Variables
 
 ```bash
-SECONDBRAIN_VAULT_PATH=/path/to/obsidian/vault        # Required for indexing
+SECONDBRAIN_VAULT_PATH=/path/to/your/notes             # Required — your Markdown folder
 SECONDBRAIN_HOST=127.0.0.1                             # API server host
 SECONDBRAIN_PORT=8000                                  # API server port
 SECONDBRAIN_DATA_PATH=data                             # Data storage directory
@@ -119,7 +127,7 @@ SECONDBRAIN_OPENAI_EMBEDDING_MODEL=text-embedding-3-small  # OpenAI embedding mo
 ```bash
 # Backend
 make dev           # Run FastAPI server with hot reload
-make test          # Run pytest (156 tests)
+make test          # Run pytest (282 tests)
 make lint          # Run ruff linter
 make format        # Run ruff formatter
 make typecheck     # Run mypy type checker
@@ -233,11 +241,13 @@ Detailed docs are in the `docs/` directory:
 | 5.5 | Inbox upgrade + Anthropic migration | Done |
 | 5.7 | User configurability (branding, constants) | Done |
 | 6 | LLM cost tracking + admin dashboard | Done |
-| 6.5 | Quick capture | Planned |
-| 7 | Weekly review generation | Planned |
-| 8 | Voice chat via OpenAI Realtime API | Future |
-| 9 | Knowledge graph | Future |
-| 10 | Write-back workflow (PR-style changesets) | Future |
+| 6.5 | Quick capture | Done |
+| 7 | Weekly review generation | Done |
+| 7.5 | Calendar events | Done |
+| 8 | Task management UI (status, due dates, categories, detail panel) | Done |
+| 9 | Voice chat via OpenAI Realtime API | Planned |
+| 10 | Knowledge graph | Future |
+| 11 | Write-back workflow (PR-style changesets) | Future |
 
 ## Security
 
