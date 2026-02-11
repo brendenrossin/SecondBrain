@@ -99,6 +99,8 @@ async def update_task(
         sub_project=req.sub_project,
         status=req.status,
         due_date=req.due_date,
+        new_category=req.new_category,
+        new_sub_project=req.new_sub_project,
     )
 
     if result is None:

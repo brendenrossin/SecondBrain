@@ -626,8 +626,13 @@ def update_task_in_daily(
     sub_project: str,
     status: str | None = None,
     due_date: str | None = None,
+    new_category: str | None = None,
+    new_sub_project: str | None = None,
 ) -> TaskResponse | None:
-    """Update a task's status and/or due date in the latest daily note.
+    """Update a task's status, due date, or category in daily notes.
+
+    For status/due_date changes, updates the latest appearance only.
+    For category reassignment, updates ALL appearances to avoid duplicate entries.
 
     Returns updated TaskResponse, or None if not found.
     """
@@ -656,34 +661,53 @@ def update_task_in_daily(
     if not target_agg or not target_agg.appearances:
         return None
 
-    # Get the latest appearance to update
-    latest = target_agg.appearances[-1]
-    daily_file = daily_dir / f"{latest.source_date}.md"
-    if not daily_file.exists():
-        return None
+    # Category reassignment: update ALL appearances across all daily notes
+    if new_category is not None:
+        _reassign_all_appearances(daily_dir, target_agg.appearances, new_category, new_sub_project)
+        target_key = f"{new_category}|{new_sub_project or ''}|{normalized_text}"
 
-    lines = daily_file.read_text(encoding="utf-8").split("\n")
-    line = lines[latest.line_number]
+    # Status/due_date: update only the latest appearance
+    if status is not None or due_date is not None:
+        latest = target_agg.appearances[-1]
+        daily_file = daily_dir / f"{latest.source_date}.md"
+        if not daily_file.exists():
+            return None
 
-    # Update status checkbox
-    if status and status != latest.status:
-        old_checkbox = _STATUS_CHECKBOX[latest.status]
-        new_checkbox = _STATUS_CHECKBOX[status]
-        line = line.replace(old_checkbox, new_checkbox, 1)
+        # Re-read file (may have been modified by category reassignment above)
+        lines = daily_file.read_text(encoding="utf-8").split("\n")
 
-    # Update due date
-    if due_date is not None:
-        # Strip existing due date
-        line = DUE_DATE_RE.sub("", line).rstrip()
-        if due_date:  # Add new due date (non-empty string)
-            line = f"{line} (due: {due_date})"
+        # If category was reassigned, we need to find the task's new line number
+        if new_category is not None:
+            task_line_idx = _find_task_line(lines, normalized_text)
+            if task_line_idx is None:
+                return None
+        else:
+            task_line_idx = latest.line_number
 
-    lines[latest.line_number] = line
-    daily_file.write_text("\n".join(lines), encoding="utf-8")
+        line = lines[task_line_idx]
+
+        if status and status != latest.status:
+            old_checkbox = _STATUS_CHECKBOX[latest.status]
+            new_checkbox = _STATUS_CHECKBOX[status]
+            line = line.replace(old_checkbox, new_checkbox, 1)
+
+        if due_date is not None:
+            line = DUE_DATE_RE.sub("", line).rstrip()
+            if due_date:
+                line = f"{line} (due: {due_date})"
+
+        lines[task_line_idx] = line
+        daily_file.write_text("\n".join(lines), encoding="utf-8")
 
     # Re-scan to get updated state
     updated_tasks = scan_daily_notes(daily_dir)
     updated_agg = aggregate_tasks(updated_tasks)
+
+    # Regenerate aggregate files so next sync sees current state
+    tasks_dir = vault_path / "Tasks"
+    tasks_dir.mkdir(parents=True, exist_ok=True)
+    _write_aggregate_file(tasks_dir / "All Tasks.md", updated_agg)
+    _write_completed_file(tasks_dir / "Completed Tasks.md", updated_agg)
 
     for agg in updated_agg:
         key = f"{agg.category}|{agg.sub_project}|{agg.normalized}"
@@ -702,3 +726,169 @@ def update_task_in_daily(
             )
 
     return None
+
+
+def _find_task_line(lines: list[str], normalized_text: str) -> int | None:
+    """Find a task line by its normalized text. Returns line index or None."""
+    for i, line in enumerate(lines):
+        match = re.match(r"^-\s*\[([ xX/])\]\s*(.+)$", line.strip())
+        if match:
+            raw = DUE_DATE_RE.sub("", match.group(2)).strip()
+            if _normalize(raw) == normalized_text:
+                return i
+    return None
+
+
+def _reassign_all_appearances(
+    daily_dir: Path,
+    appearances: list[Task],
+    new_category: str,
+    new_sub_project: str | None,
+) -> None:
+    """Move a task to a new category in ALL daily notes where it appears."""
+    # Group appearances by source file to batch edits per file
+    by_file: dict[str, list[Task]] = {}
+    for app in appearances:
+        by_file.setdefault(app.source_date, []).append(app)
+
+    for date_str, tasks in by_file.items():
+        daily_file = daily_dir / f"{date_str}.md"
+        if not daily_file.exists():
+            continue
+
+        lines = daily_file.read_text(encoding="utf-8").split("\n")
+
+        # Process appearances in reverse line order to preserve indices
+        for task in sorted(tasks, key=lambda t: t.line_number, reverse=True):
+            lines = _move_task_to_category(lines, task.line_number, new_category, new_sub_project)
+
+        daily_file.write_text("\n".join(lines), encoding="utf-8")
+
+
+def _move_task_to_category(
+    lines: list[str],
+    task_line_idx: int,
+    new_category: str,
+    new_sub_project: str | None,
+) -> list[str]:
+    """Move a task line from its current position to a new heading section.
+
+    Finds or creates the target ### / #### headings within the ## Tasks section
+    and inserts the task line there. Returns the modified lines list.
+    """
+    task_line = lines[task_line_idx]
+
+    # Remove the task from its current position
+    lines = lines[:task_line_idx] + lines[task_line_idx + 1 :]
+
+    # Find the ## Tasks section boundaries
+    tasks_start = None
+    tasks_end = len(lines)
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped == "## Tasks":
+            tasks_start = i
+            continue
+        if (
+            tasks_start is not None
+            and stripped.startswith("## ")
+            and not stripped.startswith("### ")
+        ):
+            tasks_end = i
+            break
+
+    if tasks_start is None:
+        # No ## Tasks section — shouldn't happen, just append at end
+        lines.append(task_line)
+        return lines
+
+    # Search within ## Tasks for the target ### category heading
+    cat_heading = f"### {new_category}"
+    cat_start = None
+    cat_end = tasks_end
+
+    for i in range(tasks_start + 1, tasks_end):
+        stripped = lines[i].strip()
+        if stripped == cat_heading:
+            cat_start = i
+            continue
+        if (
+            cat_start is not None
+            and stripped.startswith("### ")
+            and not stripped.startswith("#### ")
+        ):
+            cat_end = i
+            break
+
+    if cat_start is None:
+        # Category doesn't exist — create it at end of ## Tasks section
+        insert_lines = [cat_heading]
+        if new_sub_project:
+            insert_lines.append(f"#### {new_sub_project}")
+        insert_lines.append(task_line)
+        insert_lines.append("")  # blank line after section
+        # Insert before tasks_end (which is the next ## heading or end of file)
+        for j, insert_line in enumerate(insert_lines):
+            lines.insert(tasks_end + j, insert_line)
+        return lines
+
+    # Category exists — look for sub-project heading within it
+    if new_sub_project:
+        sub_heading = f"#### {new_sub_project}"
+        sub_start = None
+        sub_end = cat_end
+
+        for i in range(cat_start + 1, cat_end):
+            stripped = lines[i].strip()
+            if stripped == sub_heading:
+                sub_start = i
+                continue
+            if sub_start is not None and stripped.startswith("#### "):
+                sub_end = i
+                break
+
+        if sub_start is None:
+            # Sub-project doesn't exist — create it at end of category section
+            lines.insert(cat_end, f"#### {new_sub_project}")
+            lines.insert(cat_end + 1, task_line)
+            lines.insert(cat_end + 2, "")  # blank line after section
+            return lines
+
+        # Sub-project exists — find insertion point (after last task line in sub-section)
+        insert_at = _find_last_task_line(lines, sub_start + 1, sub_end) + 1
+        lines.insert(insert_at, task_line)
+        return lines
+
+    # No sub-project — insert at end of category section (before next ### or end)
+    # But we need to insert after any task lines that are directly under ###
+    # (not under a #### sub-heading)
+    insert_at = _find_insert_point_in_category(lines, cat_start + 1, cat_end)
+    lines.insert(insert_at, task_line)
+    return lines
+
+
+def _find_last_task_line(lines: list[str], start: int, end: int) -> int:
+    """Find the index of the last task (checkbox) line in a range. Returns start - 1 if none."""
+    last = start - 1
+    for i in range(start, end):
+        stripped = lines[i].strip()
+        if re.match(r"^-\s*\[([ xX/])\]", stripped):
+            last = i
+    return last
+
+
+def _find_insert_point_in_category(lines: list[str], start: int, end: int) -> int:
+    """Find where to insert a task directly under a ### category heading.
+
+    Inserts after existing direct tasks (before any #### sub-heading).
+    """
+    for i in range(start, end):
+        stripped = lines[i].strip()
+        if stripped.startswith("#### "):
+            return i
+    # No sub-headings — insert at end of category section
+    # But prefer after the last task line if any
+    last_task = _find_last_task_line(lines, start, end)
+    if last_task >= start:
+        return last_task + 1
+    return start

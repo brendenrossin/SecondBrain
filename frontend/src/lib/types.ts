@@ -62,6 +62,8 @@ export interface TaskUpdateRequest {
   sub_project: string;
   status?: "open" | "in_progress" | "done" | null;
   due_date?: string | null;
+  new_category?: string | null;
+  new_sub_project?: string | null;
 }
 
 export interface TaskCategory {

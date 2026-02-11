@@ -12,6 +12,7 @@ from secondbrain.scripts.task_aggregator import (
     _write_aggregate_file,
     _write_completed_file,
     aggregate_tasks,
+    scan_daily_notes,
     sync_tasks,
     update_task_in_daily,
 )
@@ -616,3 +617,277 @@ class TestUpdateTaskInDaily:
         vault = self._setup_vault(tmp_path)
         result = update_task_in_daily(vault, "Nonexistent task", "Personal", "", status="done")
         assert result is None
+
+    def test_regenerates_aggregate_files(self, tmp_path):
+        """update_task_in_daily should regenerate aggregate files so sync doesn't revert."""
+        daily_dir = tmp_path / "00_Daily"
+        daily_dir.mkdir()
+        tasks_dir = tmp_path / "Tasks"
+        tasks_dir.mkdir()
+        (daily_dir / "2026-02-05.md").write_text(
+            "## Tasks\n### Personal\n- [ ] Send resume\n- [ ] Buy milk\n"
+        )
+        # First sync to create aggregate files
+        sync_tasks(tmp_path)
+        agg_before = (tasks_dir / "All Tasks.md").read_text()
+        assert "| Open | Send resume |" in agg_before
+
+        # Update via API (mark as done)
+        result = update_task_in_daily(tmp_path, "Send resume", "Personal", "", status="done")
+        assert result is not None
+        assert result.status == "done"
+
+        # Aggregate files should be updated immediately (not stale)
+        agg_after = (tasks_dir / "All Tasks.md").read_text()
+        assert "Send resume" not in agg_after  # done tasks not in All Tasks
+        completed = (tasks_dir / "Completed Tasks.md").read_text()
+        assert "Send resume" in completed
+
+        # Now run sync again — should NOT revert the change
+        sync_tasks(tmp_path)
+        daily = (daily_dir / "2026-02-05.md").read_text()
+        assert "- [x] Send resume" in daily  # still done, not reverted
+
+
+# --- Category reassignment ---
+
+
+class TestCategoryReassignment:
+    def _setup_vault(self, tmp_path):
+        daily_dir = tmp_path / "00_Daily"
+        daily_dir.mkdir()
+        tasks_dir = tmp_path / "Tasks"
+        tasks_dir.mkdir()
+        (daily_dir / "2026-02-05.md").write_text(
+            "## Tasks\n"
+            "### AT&T\n"
+            "#### AI Receptionist\n"
+            "- [ ] Build prototype\n"
+            "- [ ] Write docs\n"
+            "### Personal\n"
+            "- [ ] Buy groceries\n"
+            "## Notes\n"
+            "Some notes here\n"
+        )
+        return tmp_path
+
+    def test_move_to_existing_category(self, tmp_path):
+        vault = self._setup_vault(tmp_path)
+        result = update_task_in_daily(
+            vault,
+            "Build prototype",
+            "AT&T",
+            "AI Receptionist",
+            new_category="Personal",
+            new_sub_project="",
+        )
+        assert result is not None
+        assert result.category == "Personal"
+        assert result.sub_project == ""
+
+        daily = (vault / "00_Daily" / "2026-02-05.md").read_text()
+        # Task should be under Personal, not AT&T > AI Receptionist
+        lines = daily.split("\n")
+        personal_idx = next(i for i, ln in enumerate(lines) if ln.strip() == "### Personal")
+        # Find the task after Personal heading
+        found = False
+        for i in range(personal_idx + 1, len(lines)):
+            if lines[i].strip().startswith("### ") or lines[i].strip().startswith("## "):
+                break
+            if "Build prototype" in lines[i]:
+                found = True
+                break
+        assert found, "Task should be under ### Personal"
+
+    def test_move_to_new_category(self, tmp_path):
+        vault = self._setup_vault(tmp_path)
+        result = update_task_in_daily(
+            vault,
+            "Buy groceries",
+            "Personal",
+            "",
+            new_category="Health",
+            new_sub_project="",
+        )
+        assert result is not None
+        assert result.category == "Health"
+
+        daily = (vault / "00_Daily" / "2026-02-05.md").read_text()
+        assert "### Health" in daily
+        # Task should be under Health
+        lines = daily.split("\n")
+        health_idx = next(i for i, ln in enumerate(lines) if ln.strip() == "### Health")
+        found = False
+        for i in range(health_idx + 1, len(lines)):
+            if lines[i].strip().startswith("### ") or lines[i].strip().startswith("## "):
+                break
+            if "Buy groceries" in lines[i]:
+                found = True
+                break
+        assert found, "Task should be under ### Health"
+
+    def test_move_to_new_sub_project(self, tmp_path):
+        vault = self._setup_vault(tmp_path)
+        result = update_task_in_daily(
+            vault,
+            "Buy groceries",
+            "Personal",
+            "",
+            new_category="AT&T",
+            new_sub_project="Billing",
+        )
+        assert result is not None
+        assert result.category == "AT&T"
+        assert result.sub_project == "Billing"
+
+        daily = (vault / "00_Daily" / "2026-02-05.md").read_text()
+        assert "#### Billing" in daily
+        lines = daily.split("\n")
+        billing_idx = next(i for i, ln in enumerate(lines) if ln.strip() == "#### Billing")
+        found = False
+        for i in range(billing_idx + 1, len(lines)):
+            if (
+                lines[i].strip().startswith("#### ")
+                or lines[i].strip().startswith("### ")
+                or lines[i].strip().startswith("## ")
+            ):
+                break
+            if "Buy groceries" in lines[i]:
+                found = True
+                break
+        assert found, "Task should be under #### Billing"
+
+    def test_move_from_sub_project_to_no_sub_project(self, tmp_path):
+        vault = self._setup_vault(tmp_path)
+        result = update_task_in_daily(
+            vault,
+            "Build prototype",
+            "AT&T",
+            "AI Receptionist",
+            new_category="AT&T",
+            new_sub_project="",
+        )
+        assert result is not None
+        assert result.category == "AT&T"
+        assert result.sub_project == ""
+
+        daily = (vault / "00_Daily" / "2026-02-05.md").read_text()
+        lines = daily.split("\n")
+        # Task should be under ### AT&T but NOT under #### AI Receptionist
+        att_idx = next(i for i, ln in enumerate(lines) if ln.strip() == "### AT&T")
+        ai_idx = next(i for i, ln in enumerate(lines) if ln.strip() == "#### AI Receptionist")
+        # Find task between ### AT&T and #### AI Receptionist
+        found_before_sub = False
+        for i in range(att_idx + 1, ai_idx):
+            if "Build prototype" in lines[i]:
+                found_before_sub = True
+                break
+        assert found_before_sub, "Task should be directly under ### AT&T, before #### sub-heading"
+
+    def test_multi_appearance_all_notes_updated(self, tmp_path):
+        """Moving a task's category should update ALL daily notes, not just the latest."""
+        daily_dir = tmp_path / "00_Daily"
+        daily_dir.mkdir()
+        tasks_dir = tmp_path / "Tasks"
+        tasks_dir.mkdir()
+
+        # Task appears in two daily notes under Personal
+        (daily_dir / "2026-02-04.md").write_text("## Tasks\n### Personal\n- [ ] Send resume\n")
+        (daily_dir / "2026-02-05.md").write_text("## Tasks\n### Personal\n- [ ] Send resume\n")
+
+        result = update_task_in_daily(
+            tmp_path,
+            "Send resume",
+            "Personal",
+            "",
+            new_category="Job Search",
+            new_sub_project="",
+        )
+        assert result is not None
+        assert result.category == "Job Search"
+
+        # Both daily notes should be updated
+        daily_04 = (daily_dir / "2026-02-04.md").read_text()
+        daily_05 = (daily_dir / "2026-02-05.md").read_text()
+        assert "### Job Search" in daily_04
+        assert "### Job Search" in daily_05
+        assert "Send resume" in daily_04
+        assert "Send resume" in daily_05
+
+        # Should NOT have duplicate aggregated entries
+        all_tasks = scan_daily_notes(daily_dir)
+        agg = aggregate_tasks(all_tasks)
+        matching = [a for a in agg if a.normalized == _normalize("Send resume")]
+        assert len(matching) == 1, "Should be one aggregated entry, not duplicates"
+        assert matching[0].category == "Job Search"
+        assert len(matching[0].appearances) == 2
+
+    def test_combined_category_and_status_change(self, tmp_path):
+        """Category reassignment + status change in a single call should both work."""
+        daily_dir = tmp_path / "00_Daily"
+        daily_dir.mkdir()
+        tasks_dir = tmp_path / "Tasks"
+        tasks_dir.mkdir()
+
+        (daily_dir / "2026-02-05.md").write_text(
+            "## Tasks\n### Personal\n- [ ] Send resume\n### Work\n- [ ] Other task\n"
+        )
+
+        result = update_task_in_daily(
+            tmp_path,
+            "Send resume",
+            "Personal",
+            "",
+            status="in_progress",
+            new_category="Work",
+            new_sub_project="",
+        )
+        assert result is not None
+        assert result.category == "Work"
+        assert result.status == "in_progress"
+
+        daily = (daily_dir / "2026-02-05.md").read_text()
+        assert "- [/] Send resume" in daily
+        # Task should be under Work, not Personal
+        lines = daily.split("\n")
+        work_idx = next(i for i, ln in enumerate(lines) if ln.strip() == "### Work")
+        found = False
+        for i in range(work_idx + 1, len(lines)):
+            if lines[i].strip().startswith("### ") or lines[i].strip().startswith("## "):
+                break
+            if "Send resume" in lines[i]:
+                found = True
+                break
+        assert found, "Task should be under ### Work with in_progress status"
+
+    def test_aggregate_files_reflect_new_category(self, tmp_path):
+        vault = self._setup_vault(tmp_path)
+        # Initial sync
+        sync_tasks(vault)
+
+        result = update_task_in_daily(
+            vault,
+            "Build prototype",
+            "AT&T",
+            "AI Receptionist",
+            new_category="Personal",
+            new_sub_project="",
+        )
+        assert result is not None
+
+        agg = (vault / "Tasks" / "All Tasks.md").read_text()
+        # Task should appear under Personal in the aggregate
+        assert "## Personal" in agg
+        # Find "Build prototype" and verify it's under Personal, not AT&T
+        lines = agg.split("\n")
+        personal_section = False
+        found_in_personal = False
+        for line in lines:
+            if line.strip() == "## Personal":
+                personal_section = True
+            elif line.strip().startswith("## ") and personal_section:
+                personal_section = False
+            if personal_section and "Build prototype" in line:
+                found_in_personal = True
+                break
+        assert found_in_personal, "Aggregate should show task under Personal"

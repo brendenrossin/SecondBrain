@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { X, Circle, CircleDot, CheckCircle2 } from "lucide-react";
-import type { TaskResponse } from "@/lib/types";
-import { updateTask } from "@/lib/api";
+import type { TaskResponse, TaskCategory } from "@/lib/types";
+import { updateTask, getTaskCategories } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 interface TaskDetailPanelProps {
@@ -20,7 +20,18 @@ const STATUS_OPTIONS = [
 
 export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProps): React.JSX.Element {
   const [saving, setSaving] = useState(false);
+  const [categories, setCategories] = useState<TaskCategory[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState(task.category);
+  const [selectedSubProject, setSelectedSubProject] = useState(task.sub_project);
+  const [newCategoryInput, setNewCategoryInput] = useState("");
+  const [newSubProjectInput, setNewSubProjectInput] = useState("");
+  const [showNewCategory, setShowNewCategory] = useState(false);
+  const [showNewSubProject, setShowNewSubProject] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    getTaskCategories().then(setCategories).catch(() => {});
+  }, []);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -76,7 +87,75 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
     }
   }
 
-  const label = [task.category, task.sub_project].filter(Boolean).join(" > ");
+  async function handleCategoryChange(newCat: string, newSub: string | null) {
+    if (saving) return;
+    if (newCat === task.category && (newSub ?? task.sub_project) === task.sub_project) return;
+    setSaving(true);
+    try {
+      await updateTask({
+        text: task.text,
+        category: task.category,
+        sub_project: task.sub_project,
+        new_category: newCat,
+        new_sub_project: newSub ?? "",
+      });
+      setSelectedCategory(newCat);
+      setSelectedSubProject(newSub ?? "");
+      onUpdate();
+    } catch {
+      // Revert to original values on failure
+      setSelectedCategory(task.category);
+      setSelectedSubProject(task.sub_project);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleCategorySelect(value: string) {
+    if (value === "__new__") {
+      setShowNewCategory(true);
+      setNewCategoryInput("");
+      return;
+    }
+    setShowNewCategory(false);
+    setSelectedCategory(value);
+    setSelectedSubProject("");
+    setShowNewSubProject(false);
+    handleCategoryChange(value, "");
+  }
+
+  function handleSubProjectSelect(value: string) {
+    if (value === "__new__") {
+      setShowNewSubProject(true);
+      setNewSubProjectInput("");
+      return;
+    }
+    setShowNewSubProject(false);
+    const sub = value === "__none__" ? "" : value;
+    setSelectedSubProject(sub);
+    handleCategoryChange(selectedCategory, sub);
+  }
+
+  function handleNewCategorySubmit() {
+    const trimmed = newCategoryInput.trim();
+    if (!trimmed) return;
+    setShowNewCategory(false);
+    setSelectedCategory(trimmed);
+    setSelectedSubProject("");
+    setShowNewSubProject(false);
+    handleCategoryChange(trimmed, "");
+  }
+
+  function handleNewSubProjectSubmit() {
+    const trimmed = newSubProjectInput.trim();
+    if (!trimmed) return;
+    setShowNewSubProject(false);
+    setSelectedSubProject(trimmed);
+    handleCategoryChange(selectedCategory, trimmed);
+  }
+
+  const currentCat = categories.find((c) => c.category === selectedCategory);
+  const subProjects = currentCat?.sub_projects?.filter((s) => s.name) ?? [];
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -99,13 +178,96 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
           {/* Task text */}
           <p className="text-base font-semibold text-text leading-relaxed">{task.text}</p>
 
-          {/* Category label */}
-          {label && (
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-medium text-text-dim uppercase tracking-wider">Category</span>
-              <span className="text-xs text-text-muted font-medium bg-white/[0.04] px-2.5 py-1 rounded-lg">{label}</span>
-            </div>
-          )}
+          {/* Category selector */}
+          <div>
+            <span className="text-[10px] font-medium text-text-dim uppercase tracking-wider block mb-2.5">Category</span>
+            {!showNewCategory ? (
+              <select
+                value={selectedCategory}
+                onChange={(e) => handleCategorySelect(e.target.value)}
+                className="w-full bg-white/[0.04] border border-border rounded-xl px-3.5 py-2.5 text-sm text-text focus:ring-1 focus:ring-accent/30 focus:border-accent/20 outline-none transition-all appearance-none"
+              >
+                {categories.map((c) => (
+                  <option key={c.category} value={c.category}>{c.category}</option>
+                ))}
+                {/* Show current category even if not in open categories list */}
+                {!categories.find((c) => c.category === task.category) && (
+                  <option value={task.category}>{task.category}</option>
+                )}
+                <option value="__new__">New category...</option>
+              </select>
+            ) : (
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newCategoryInput}
+                  onChange={(e) => setNewCategoryInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleNewCategorySubmit()}
+                  placeholder="Category name"
+                  autoFocus
+                  className="flex-1 bg-white/[0.04] border border-border rounded-xl px-3.5 py-2.5 text-sm text-text focus:ring-1 focus:ring-accent/30 focus:border-accent/20 outline-none transition-all"
+                />
+                <button
+                  onClick={handleNewCategorySubmit}
+                  className="px-3 py-2 rounded-xl text-xs font-medium bg-accent/20 text-accent hover:bg-accent/30 transition-colors"
+                >
+                  Add
+                </button>
+                <button
+                  onClick={() => { setShowNewCategory(false); setSelectedCategory(task.category); }}
+                  className="px-3 py-2 rounded-xl text-xs font-medium text-text-dim hover:text-text hover:bg-white/[0.04] transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Sub-project selector */}
+          <div>
+            <span className="text-[10px] font-medium text-text-dim uppercase tracking-wider block mb-2.5">Sub-project</span>
+            {!showNewSubProject ? (
+              <select
+                value={selectedSubProject || "__none__"}
+                onChange={(e) => handleSubProjectSelect(e.target.value)}
+                className="w-full bg-white/[0.04] border border-border rounded-xl px-3.5 py-2.5 text-sm text-text focus:ring-1 focus:ring-accent/30 focus:border-accent/20 outline-none transition-all appearance-none"
+              >
+                <option value="__none__">None</option>
+                {subProjects.map((s) => (
+                  <option key={s.name} value={s.name}>{s.name}</option>
+                ))}
+                {/* Show current sub-project even if not in list */}
+                {selectedSubProject && !subProjects.find((s) => s.name === selectedSubProject) && (
+                  <option value={selectedSubProject}>{selectedSubProject}</option>
+                )}
+                <option value="__new__">New sub-project...</option>
+              </select>
+            ) : (
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newSubProjectInput}
+                  onChange={(e) => setNewSubProjectInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleNewSubProjectSubmit()}
+                  placeholder="Sub-project name"
+                  autoFocus
+                  className="flex-1 bg-white/[0.04] border border-border rounded-xl px-3.5 py-2.5 text-sm text-text focus:ring-1 focus:ring-accent/30 focus:border-accent/20 outline-none transition-all"
+                />
+                <button
+                  onClick={handleNewSubProjectSubmit}
+                  className="px-3 py-2 rounded-xl text-xs font-medium bg-accent/20 text-accent hover:bg-accent/30 transition-colors"
+                >
+                  Add
+                </button>
+                <button
+                  onClick={() => { setShowNewSubProject(false); setSelectedSubProject(task.sub_project); }}
+                  className="px-3 py-2 rounded-xl text-xs font-medium text-text-dim hover:text-text hover:bg-white/[0.04] transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* Status toggle */}
           <div>

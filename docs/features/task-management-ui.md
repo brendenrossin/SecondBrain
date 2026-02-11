@@ -186,3 +186,18 @@ Work Item 2: Frontend (depends on 1)
 | **Immediate save, no Save button** | Task status changes are small, reversible actions. A Save button adds friction for the most common operation (checking off a task). |
 | **PATCH not PUT** | Partial updates. You can change status without touching due date, and vice versa. |
 | **Composite key, no task IDs** | Tasks are identified by text + category + sub_project. Adding synthetic IDs would require a mapping layer between IDs and vault file locations that could get out of sync. |
+
+---
+
+## Known Minor Issues (future cleanup)
+
+These are non-blocking quality-of-life items identified during PM review. None affect correctness.
+
+| Issue | Detail | Priority |
+|-------|--------|----------|
+| **Double vault scan on update** | `update_task_in_daily()` calls `scan_daily_notes()` twice (once to find the task, once after writing to return fresh state). Fine at current vault size (~50 notes), worth optimizing at 1000+. | Low |
+| **Briefing cache not invalidated on task update** | The tasks API clears its own cache after PATCH, but the briefing endpoint has a separate 60s TTL cache. Checking off a task won't reflect in the briefing for up to 60 seconds. Fix: clear briefing cache from the PATCH handler too. | Low |
+| **Silent error handling in frontend** | All three update components (TaskDetailPanel, TaskItem, AgendaTask) swallow API errors silently. The UI stays in its current state, so the user doesn't know a toggle failed. Add a toast/notification on error. | Low |
+| **No optimistic UI** | Checkbox toggles wait for the full API round-trip before updating visually. Could feel sluggish on slow connections. Add optimistic state with rollback on error. | Low |
+| **Empty source sections after category move** | When all tasks are moved out of a `### Category`, the empty heading lingers in the daily note. Cosmetic only — doesn't affect parsing or aggregation. | Low |
+| **Native `<select>` styling** | Category/sub-project dropdowns use browser-default `<select>` which may look off on dark themes. Could replace with a custom dropdown component. | Low |

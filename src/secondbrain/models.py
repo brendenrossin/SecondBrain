@@ -106,6 +106,8 @@ class TaskUpdateRequest(BaseModel):
     sub_project: str
     status: Literal["open", "in_progress", "done"] | None = None
     due_date: str | None = None  # YYYY-MM-DD, "" to remove, None = no change
+    new_category: str | None = None  # Move to different category
+    new_sub_project: str | None = None  # Move to different sub-project
 
 
 class ConversationSummary(BaseModel):
