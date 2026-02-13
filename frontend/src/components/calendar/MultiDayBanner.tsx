@@ -4,7 +4,7 @@ import { CalendarDays } from "lucide-react";
 import type { CalendarEvent } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
 
-export function MultiDayBanner({ event }: { event: CalendarEvent }) {
+export function MultiDayBanner({ event }: { event: CalendarEvent }): React.JSX.Element {
   const startDisplay = formatDate(event.date);
   const endDisplay = formatDate(event.end_date);
 

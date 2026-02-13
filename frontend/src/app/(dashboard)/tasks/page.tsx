@@ -13,7 +13,7 @@ export default function TasksPage(): React.JSX.Element {
           </p>
         </div>
       </div>
-      <div className="overflow-y-auto flex-1 px-8 pb-6 pt-4">
+      <div className="overflow-y-auto flex-1 px-4 md:px-8 pb-6 pt-4">
         <TaskTree />
       </div>
     </div>

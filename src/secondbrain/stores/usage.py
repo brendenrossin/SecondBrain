@@ -96,7 +96,7 @@ class UsageStore:
         metadata: dict[str, Any] | None = None,
     ) -> None:
         """Log a single LLM API call."""
-        now = datetime.now(UTC).isoformat()
+        now = datetime.now().astimezone().isoformat()
         meta_json = json.dumps(metadata) if metadata else None
         params = (
             now,

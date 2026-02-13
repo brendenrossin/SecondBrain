@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { formatDateRange } from "@/lib/utils";
+import { cn, formatDateRange } from "@/lib/utils";
 
 interface WeekNavProps {
   weekStart: Date;
@@ -9,6 +9,8 @@ interface WeekNavProps {
   onPrev: () => void;
   onNext: () => void;
   onToday: () => void;
+  showWeekend?: boolean;
+  onToggleWeekend?: (show: boolean) => void;
 }
 
 export function WeekNav({
@@ -17,7 +19,9 @@ export function WeekNav({
   onPrev,
   onNext,
   onToday,
-}: WeekNavProps) {
+  showWeekend,
+  onToggleWeekend,
+}: WeekNavProps): React.JSX.Element {
   return (
     <div className="flex items-center gap-2 mb-5">
       <button
@@ -41,6 +45,34 @@ export function WeekNav({
       >
         Today
       </button>
+
+      {/* 5d/7d toggle — desktop only */}
+      {onToggleWeekend !== undefined && showWeekend !== undefined && (
+        <div className="hidden md:flex ml-2 rounded-xl border border-border overflow-hidden">
+          <button
+            onClick={() => onToggleWeekend(false)}
+            className={cn(
+              "px-3 py-1.5 text-[11px] font-semibold transition-colors",
+              !showWeekend
+                ? "bg-accent/15 text-accent"
+                : "text-text-dim hover:text-text-muted hover:bg-white/[0.03]"
+            )}
+          >
+            5d
+          </button>
+          <button
+            onClick={() => onToggleWeekend(true)}
+            className={cn(
+              "px-3 py-1.5 text-[11px] font-semibold transition-colors border-l border-border",
+              showWeekend
+                ? "bg-accent/15 text-accent"
+                : "text-text-dim hover:text-text-muted hover:bg-white/[0.03]"
+            )}
+          >
+            7d
+          </button>
+        </div>
+      )}
     </div>
   );
 }

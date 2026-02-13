@@ -12,7 +12,7 @@ function formatTime(time: string): string {
   return `${h12}:${m} ${ampm}`;
 }
 
-export function AgendaEvent({ event }: { event: CalendarEvent }) {
+export function AgendaEvent({ event }: { event: CalendarEvent }): React.JSX.Element {
   return (
     <div className="flex items-center gap-3.5 px-7 py-4 hover:bg-card-hover transition-colors border-b border-border/50 last:border-b-0">
       <CalendarDays className="w-3.5 h-3.5 text-emerald-400 shrink-0" />

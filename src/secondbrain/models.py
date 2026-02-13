@@ -151,6 +151,8 @@ class BriefingResponse(BaseModel):
     due_today_tasks: list[BriefingTask]
     aging_followups: list[BriefingTask]
     yesterday_context: DailyContext | None
+    today_context: DailyContext | None
+    today_events: list["EventResponse"]
     total_open: int
 
 

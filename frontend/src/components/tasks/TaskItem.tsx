@@ -71,7 +71,7 @@ export function TaskItem({ task, onUpdate, onSelect }: TaskItemProps): React.JSX
     <div
       onClick={() => onSelect?.(task)}
       className={cn(
-        "flex items-center gap-3.5 px-5 py-3.5 mx-2 rounded-xl",
+        "flex items-center gap-3.5 px-3 md:px-5 py-3.5 mx-1 md:mx-2 rounded-xl",
         "hover:bg-white/[0.03] transition-all duration-150",
         "group",
         onSelect && "cursor-pointer",
@@ -89,7 +89,7 @@ export function TaskItem({ task, onUpdate, onSelect }: TaskItemProps): React.JSX
       <div className="flex-1 min-w-0">
         <p
           className={cn(
-            "text-[13px] leading-snug font-medium truncate",
+            "text-[13px] leading-snug font-medium break-words",
             task.status === "done" ? "text-text-dim line-through" : "text-text"
           )}
         >
@@ -97,9 +97,9 @@ export function TaskItem({ task, onUpdate, onSelect }: TaskItemProps): React.JSX
         </p>
       </div>
 
-      <div className="flex items-center gap-3 shrink-0">
+      <div className="flex items-center gap-2 md:gap-3 shrink-0 ml-auto">
         {task.status !== "done" && task.days_open > 0 && (
-          <span className="text-[10px] text-text-dim font-medium tabular-nums">
+          <span className="text-[10px] text-text-dim font-medium tabular-nums hidden md:inline">
             {task.days_open}d open
           </span>
         )}

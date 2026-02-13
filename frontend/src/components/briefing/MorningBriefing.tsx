@@ -10,10 +10,12 @@ import {
   CheckCircle2,
   RefreshCw,
   Circle,
+  Clock,
+  Sun,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getBriefing } from "@/lib/api";
-import type { BriefingResponse, BriefingTask } from "@/lib/types";
+import type { BriefingResponse, BriefingTask, CalendarEvent } from "@/lib/types";
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -36,7 +38,7 @@ function BriefingTaskItem({ task }: { task: BriefingTask }): React.JSX.Element {
     <div className="flex items-center gap-3 py-2">
       <Circle className="w-4 h-4 text-text-dim shrink-0" />
       <div className="flex-1 min-w-0">
-        <p className="text-[13px] text-text font-medium truncate">{task.text}</p>
+        <p className="text-[13px] text-text font-medium break-words">{task.text}</p>
         {task.category && (
           <p className="text-[11px] text-text-dim mt-0.5">
             {task.category}
@@ -192,6 +194,89 @@ function ContextList({
   );
 }
 
+function formatEventTime(time: string): string {
+  if (!time) return "All day";
+  const [h, m] = time.split(":").map(Number);
+  const suffix = h >= 12 ? "PM" : "AM";
+  const hour12 = h % 12 || 12;
+  return `${hour12}:${m.toString().padStart(2, "0")} ${suffix}`;
+}
+
+function TodayView({
+  events,
+  focusItems,
+  dueCount,
+}: {
+  events: CalendarEvent[];
+  focusItems: string[];
+  dueCount: number;
+}): React.JSX.Element | null {
+  const hasEvents = events.length > 0;
+  const hasFocus = focusItems.length > 0;
+
+  if (!hasEvents && !hasFocus && dueCount === 0) return null;
+
+  // Sort events by time (timed first, then all-day)
+  const sorted = [...events].sort((a, b) => {
+    if (a.time && !b.time) return -1;
+    if (!a.time && b.time) return 1;
+    return a.time.localeCompare(b.time);
+  });
+
+  return (
+    <div className="glass-card p-5" style={{ borderColor: "rgba(251, 191, 36, 0.2)" }}>
+      <div className="flex items-center gap-2 mb-3">
+        <Sun className="w-4.5 h-4.5 text-warning" />
+        <h2 className="text-sm font-semibold text-text">Today&apos;s View</h2>
+        {dueCount > 0 && (
+          <span className="ml-auto text-[11px] text-warning font-medium">
+            {dueCount} task{dueCount !== 1 ? "s" : ""} due
+          </span>
+        )}
+      </div>
+
+      <div className="space-y-3">
+        {/* Calendar events */}
+        {hasEvents && (
+          <div>
+            <p className="text-[11px] uppercase tracking-wider text-text-dim font-medium mb-1.5">
+              Schedule
+            </p>
+            <div className="space-y-1">
+              {sorted.map((event, i) => (
+                <div key={i} className="flex items-center gap-2 text-[13px] text-text-muted">
+                  <Clock className="w-3 h-3 text-text-dim shrink-0" />
+                  <span className="text-[11px] text-text-dim font-medium w-16 shrink-0">
+                    {formatEventTime(event.time)}
+                  </span>
+                  <span className="break-words">{event.title}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Focus items from today's daily note */}
+        {hasFocus && (
+          <div>
+            <p className="text-[11px] uppercase tracking-wider text-text-dim font-medium mb-1.5">
+              Focus
+            </p>
+            <ul className="space-y-1">
+              {focusItems.map((item, i) => (
+                <li key={i} className="flex items-start gap-2 text-[13px] text-text-muted">
+                  <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 bg-warning" />
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function MorningBriefing(): React.JSX.Element {
   const [data, setData] = useState<BriefingResponse | null>(null);
   const [error, setError] = useState(false);
@@ -235,7 +320,7 @@ export function MorningBriefing(): React.JSX.Element {
           </div>
         )}
       </div>
-      <div className="overflow-y-auto flex-1 px-8 pb-6 pt-4">
+      <div className="overflow-y-auto flex-1 px-4 md:px-8 pb-6 pt-4">
         {renderContent()}
       </div>
     </div>
@@ -250,6 +335,13 @@ function BriefingContent({ data }: { data: BriefingResponse }): React.JSX.Elemen
 
   return (
     <div className="space-y-5">
+      {/* Today's view */}
+      <TodayView
+        events={data.today_events}
+        focusItems={data.today_context?.focus_items ?? []}
+        dueCount={data.due_today_tasks.length}
+      />
+
       {/* Stat row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <StatCard label="Overdue" count={data.overdue_tasks.length} color="danger" />

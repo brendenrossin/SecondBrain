@@ -162,6 +162,8 @@ export interface BriefingResponse {
   due_today_tasks: BriefingTask[];
   aging_followups: BriefingTask[];
   yesterday_context: DailyContext | null;
+  today_context: DailyContext | null;
+  today_events: CalendarEvent[];
   total_open: number;
 }
 

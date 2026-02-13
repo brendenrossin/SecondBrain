@@ -10,11 +10,13 @@ from fastapi import APIRouter, Depends
 
 from secondbrain.api.dependencies import get_settings
 from secondbrain.config import Settings
-from secondbrain.models import BriefingResponse, BriefingTask, DailyContext
+from secondbrain.models import BriefingResponse, BriefingTask, DailyContext, EventResponse
+from secondbrain.scripts.event_parser import get_events_in_range
 from secondbrain.scripts.task_aggregator import (
     AggregatedTask,
     aggregate_tasks,
     find_recent_daily_context,
+    parse_daily_note_sections,
     scan_daily_notes,
 )
 
@@ -58,6 +60,8 @@ def _build_briefing(settings: Settings) -> BriefingResponse:
             due_today_tasks=[],
             aging_followups=[],
             yesterday_context=None,
+            today_context=None,
+            today_events=[],
             total_open=0,
         )
 
@@ -86,9 +90,26 @@ def _build_briefing(settings: Settings) -> BriefingResponse:
     overdue.sort(key=lambda t: t.due_date)
     aging.sort(key=lambda t: t.days_open, reverse=True)
 
-    # Yesterday's context
-    yesterday_ctx = find_recent_daily_context(daily_dir)
+    # Yesterday's context — strict yesterday only (no multi-day lookback)
+    yesterday_ctx = find_recent_daily_context(daily_dir, lookback_days=0)
     daily_context = DailyContext(**asdict(yesterday_ctx)) if yesterday_ctx else None
+
+    # Today's context — focus/notes from today's daily note
+    today_ctx_raw = parse_daily_note_sections(daily_dir, today_str)
+    today_context = DailyContext(**asdict(today_ctx_raw)) if today_ctx_raw else None
+
+    # Today's events
+    raw_events = get_events_in_range(daily_dir, today.date(), today.date())
+    today_events = [
+        EventResponse(
+            title=e.title,
+            date=e.date,
+            time=e.time,
+            end_date=e.end_date,
+            source_file=e.source_file,
+        )
+        for e in raw_events
+    ]
 
     result = BriefingResponse(
         today=today_str,
@@ -97,6 +118,8 @@ def _build_briefing(settings: Settings) -> BriefingResponse:
         due_today_tasks=due_today,
         aging_followups=aging,
         yesterday_context=daily_context,
+        today_context=today_context,
+        today_events=today_events,
         total_open=len(open_tasks),
     )
 
