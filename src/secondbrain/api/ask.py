@@ -11,6 +11,7 @@ from sse_starlette.sse import EventSourceResponse
 from secondbrain.api.dependencies import (
     get_answerer,
     get_conversation_store,
+    get_link_expander,
     get_local_answerer,
     get_local_reranker,
     get_openai_answerer,
@@ -22,6 +23,7 @@ from secondbrain.api.dependencies import (
 from secondbrain.logging.query_logger import QueryLogger
 from secondbrain.models import AskRequest, AskResponse, Citation
 from secondbrain.retrieval.hybrid import HybridRetriever
+from secondbrain.retrieval.link_expander import LinkExpander
 from secondbrain.retrieval.reranker import RankedCandidate
 from secondbrain.stores.conversation import ConversationStore
 
@@ -50,6 +52,7 @@ def _build_citations(ranked_candidates: list[RankedCandidate]) -> list[Citation]
 async def ask(
     request: AskRequest,
     retriever: Annotated[HybridRetriever, Depends(get_retriever)],
+    link_expander: Annotated[LinkExpander, Depends(get_link_expander)],
     conversation_store: Annotated[ConversationStore, Depends(get_conversation_store)],
     query_logger: Annotated[QueryLogger, Depends(get_query_logger)],
 ) -> AskResponse:
@@ -81,12 +84,16 @@ async def ask(
         request.query, candidates, top_n=request.top_n
     )
 
+    # Expand wiki links from top candidates
+    linked_context = link_expander.expand(ranked_candidates)
+
     # Generate answer
     answer = answerer.answer(
         request.query,
         ranked_candidates,
         retrieval_label,
         conversation_history=history,
+        linked_context=linked_context,
     )
 
     # Build citations
@@ -118,6 +125,7 @@ async def ask(
 async def ask_stream(
     request: AskRequest,
     retriever: Annotated[HybridRetriever, Depends(get_retriever)],
+    link_expander: Annotated[LinkExpander, Depends(get_link_expander)],
     conversation_store: Annotated[ConversationStore, Depends(get_conversation_store)],
     query_logger: Annotated[QueryLogger, Depends(get_query_logger)],
 ) -> EventSourceResponse:
@@ -147,6 +155,9 @@ async def ask_stream(
         request.query, candidates, top_n=request.top_n
     )
 
+    # Expand wiki links from top candidates
+    linked_context = link_expander.expand(ranked_candidates)
+
     # Build citations
     citations = _build_citations(ranked_candidates)
 
@@ -164,6 +175,7 @@ async def ask_stream(
             ranked_candidates,
             retrieval_label,
             conversation_history=history,
+            linked_context=linked_context,
         ):
             answer_parts.append(token)
             yield {"event": "token", "data": token}

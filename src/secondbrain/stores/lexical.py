@@ -375,6 +375,47 @@ class LexicalStore:
             self.conn.commit()
             self._rebuild_fts()
 
+    def resolve_note_path(self, title: str) -> str | None:
+        """Resolve a wiki link title to a note_path. Case-insensitive."""
+        try:
+            cursor = self.conn.execute(
+                "SELECT DISTINCT note_path FROM chunks WHERE LOWER(note_title) = LOWER(?) LIMIT 1",
+                (title,),
+            )
+        except sqlite3.DatabaseError:
+            logger.warning("LexicalStore: DatabaseError on resolve_note_path, reconnecting")
+            self._reconnect()
+            cursor = self.conn.execute(
+                "SELECT DISTINCT note_path FROM chunks WHERE LOWER(note_title) = LOWER(?) LIMIT 1",
+                (title,),
+            )
+        row = cursor.fetchone()
+        return row["note_path"] if row else None
+
+    def get_first_chunk(self, note_path: str) -> dict[str, Any] | None:
+        """Get the first chunk (chunk_index=0) for a note.
+
+        Args:
+            note_path: The note path.
+
+        Returns:
+            Chunk data as a dict, or None if not found.
+        """
+        try:
+            cursor = self.conn.execute(
+                "SELECT * FROM chunks WHERE note_path = ? ORDER BY chunk_index LIMIT 1",
+                (note_path,),
+            )
+        except sqlite3.DatabaseError:
+            logger.warning("LexicalStore: DatabaseError on get_first_chunk, reconnecting")
+            self._reconnect()
+            cursor = self.conn.execute(
+                "SELECT * FROM chunks WHERE note_path = ? ORDER BY chunk_index LIMIT 1",
+                (note_path,),
+            )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
     def close(self) -> None:
         """Close the database connection."""
         if self._conn:

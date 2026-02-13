@@ -10,6 +10,7 @@ from anthropic import Anthropic
 from openai import OpenAI
 
 from secondbrain.models import ConversationMessage, RetrievalLabel
+from secondbrain.retrieval.link_expander import LinkedContext
 from secondbrain.retrieval.reranker import RankedCandidate
 
 if TYPE_CHECKING:
@@ -31,6 +32,7 @@ IMPORTANT RULES:
 5. Do not make up information that isn't in the sources
 6. If asked to brainstorm or speculate, you may do so but clearly label it as speculation
 7. Sources include dates and folder context. Use dates to answer temporal queries like "yesterday", "this week", "most recent", etc.
+8. You also have access to connected notes that are explicitly linked from the retrieved sources. Use them for additional context when relevant.
 
 The user's relevant notes are provided below."""
 
@@ -92,6 +94,7 @@ You might want to:
         ranked_candidates: list[RankedCandidate],
         retrieval_label: RetrievalLabel,
         conversation_history: list[ConversationMessage] | None = None,
+        linked_context: list[LinkedContext] | None = None,
     ) -> str:
         """Generate an answer based on retrieved chunks.
 
@@ -100,6 +103,7 @@ You might want to:
             ranked_candidates: Ranked retrieval candidates.
             retrieval_label: The retrieval evaluation label.
             conversation_history: Optional conversation history.
+            linked_context: Optional linked notes from wiki link expansion.
 
         Returns:
             The generated answer.
@@ -109,7 +113,7 @@ You might want to:
             return self.NO_RESULTS_RESPONSE
 
         # Build context from candidates
-        context = self._build_context(ranked_candidates)
+        context = self._build_context(ranked_candidates, linked_context)
 
         if self.provider == "anthropic":
             # Anthropic: system is a separate param, not a message
@@ -166,6 +170,7 @@ You might want to:
         ranked_candidates: list[RankedCandidate],
         retrieval_label: RetrievalLabel,
         conversation_history: list[ConversationMessage] | None = None,
+        linked_context: list[LinkedContext] | None = None,
     ) -> Iterator[str]:
         """Generate a streaming answer based on retrieved chunks.
 
@@ -174,6 +179,7 @@ You might want to:
             ranked_candidates: Ranked retrieval candidates.
             retrieval_label: The retrieval evaluation label.
             conversation_history: Optional conversation history.
+            linked_context: Optional linked notes from wiki link expansion.
 
         Yields:
             Answer tokens as they're generated.
@@ -184,7 +190,7 @@ You might want to:
             return
 
         # Build context from candidates
-        context = self._build_context(ranked_candidates)
+        context = self._build_context(ranked_candidates, linked_context)
 
         if self.provider == "anthropic":
             system_text = self.SYSTEM_PROMPT + f"\n\nSOURCES FROM USER'S NOTES:\n\n{context}"
@@ -262,8 +268,12 @@ You might want to:
                 provider, model, "chat_answer", input_tokens, output_tokens, cost
             )
 
-    def _build_context(self, ranked_candidates: list[RankedCandidate]) -> str:
-        """Build context string from ranked candidates."""
+    def _build_context(
+        self,
+        ranked_candidates: list[RankedCandidate],
+        linked_context: list[LinkedContext] | None = None,
+    ) -> str:
+        """Build context string from ranked candidates and optional linked notes."""
         context_parts = []
 
         for i, rc in enumerate(ranked_candidates, 1):
@@ -279,4 +289,20 @@ You might want to:
 
             context_parts.append(f"{header}\n{candidate.chunk_text}")
 
-        return "\n\n---\n\n".join(context_parts)
+        result = "\n\n---\n\n".join(context_parts)
+
+        if linked_context:
+            linked_parts = []
+            for i, lc in enumerate(linked_context, 1):
+                # Extract folder from note_path
+                folder = lc.note_path.split("/")[0] if "/" in lc.note_path else ""
+                header = f"[C{i}]"
+                if folder:
+                    header += f" [{folder}]"
+                header += f" {lc.note_title} (linked from: {lc.linked_from})"
+                linked_parts.append(f"{header}\n{lc.chunk_text}")
+
+            result += "\n\n---\n\nCONNECTED NOTES (linked from retrieved results):\n\n"
+            result += "\n\n".join(linked_parts)
+
+        return result

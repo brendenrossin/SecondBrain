@@ -18,6 +18,7 @@ from secondbrain.indexing.embedder import (
 )
 from secondbrain.logging.query_logger import QueryLogger
 from secondbrain.retrieval.hybrid import HybridRetriever
+from secondbrain.retrieval.link_expander import LinkExpander
 from secondbrain.retrieval.reranker import LLMReranker
 from secondbrain.scripts.llm_client import LLMClient
 from secondbrain.stores.conversation import ConversationStore
@@ -133,6 +134,12 @@ def get_index_tracker() -> IndexTracker:
     """Get cached index tracker instance."""
     data_path = get_data_path()
     return IndexTracker(data_path / "index_tracker.db")
+
+
+@lru_cache
+def get_link_expander() -> LinkExpander:
+    """Get cached link expander instance."""
+    return LinkExpander(get_lexical_store())
 
 
 @lru_cache
