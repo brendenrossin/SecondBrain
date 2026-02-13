@@ -49,3 +49,14 @@ export function addDays(date: Date, days: number): Date {
 export function toDateStr(date: Date): string {
   return date.toISOString().split("T")[0];
 }
+
+/** Extract the display title from a vault note path (strips folder and .md extension). */
+export function extractTitle(notePath: string): string {
+  const filename = notePath.split("/").pop() || notePath;
+  return filename.replace(/\.md$/, "");
+}
+
+/** Extract the top-level folder from a vault note path, or empty string if at root. */
+export function extractFolder(notePath: string): string {
+  return notePath.includes("/") ? notePath.split("/")[0] : "";
+}

@@ -1,4 +1,5 @@
 import type {
+  ActionItemWithSource,
   AskRequest,
   BriefingResponse,
   CalendarEvent,
@@ -6,6 +7,9 @@ import type {
   Citation,
   ConversationSummary,
   Conversation,
+  EntityWithSource,
+  NoteMetadata,
+  NoteSuggestions,
   TaskResponse,
   TaskCategory,
   TaskUpdateRequest,
@@ -172,16 +176,35 @@ export async function triggerExtraction(): Promise<{ status: string }> {
   return fetchJSON(`${BASE}/extract`, { method: "POST" });
 }
 
-export async function getMetadata(
-  path: string
-): Promise<Record<string, unknown>> {
+export async function getMetadata(path: string): Promise<NoteMetadata> {
   return fetchJSON(`${BASE}/metadata/${encodeURIComponent(path)}`);
 }
 
 export async function getSuggestions(
   path: string
-): Promise<Record<string, unknown>> {
+): Promise<NoteSuggestions> {
   return fetchJSON(`${BASE}/suggestions/${encodeURIComponent(path)}`);
+}
+
+export async function listMetadata(
+  offset = 0,
+  limit = 200
+): Promise<NoteMetadata[]> {
+  return fetchJSON(`${BASE}/metadata?offset=${offset}&limit=${limit}`);
+}
+
+export async function listEntities(
+  entityType?: string
+): Promise<{ entities: EntityWithSource[]; total: number }> {
+  const qs = entityType ? `?entity_type=${entityType}` : "";
+  return fetchJSON(`${BASE}/entities${qs}`);
+}
+
+export async function listActionItems(): Promise<{
+  action_items: ActionItemWithSource[];
+  total: number;
+}> {
+  return fetchJSON(`${BASE}/action-items`);
 }
 
 // --- Admin ---

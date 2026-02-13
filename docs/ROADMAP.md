@@ -295,7 +295,38 @@ See `docs/features/operational-hardening.md` for full spec.
 
 ---
 
-## Phase 9 — Voice Chat via OpenAI Realtime API (~2-3 weeks)
+## Phase 9 — Smarter Retrieval (~2-3 days)
+Goal: make the RAG pipeline and capture flow aware of your vault's link structure.
+
+- [ ] Wiki link parser: extract `[[wiki links]]` from markdown text (handles aliases, headings, code block exclusion)
+- [ ] Link resolver: title → note_path lookup via LexicalStore (case-insensitive)
+- [ ] Link expander: after reranking, follow 1-hop wiki links from top candidates, inject up to 3 linked chunks as supplementary context for the answerer
+- [ ] Capture connections: after writing to Inbox, run hybrid retrieval on captured text, return top 5 related notes in the API response (no LLM reranking — raw scores only)
+- [ ] Metadata-enriched snippets: use extracted summaries as connection snippets when available
+- [ ] Frontend connection cards: show related notes below the success message on the Capture page
+
+Deliverable: chat answers incorporate context from linked notes; captures immediately show what's related in your vault.
+
+See `docs/features/link-aware-retrieval.md` and `docs/features/capture-connection-surfacing.md` for full specs.
+Implementation prompt: `docs/features/PROMPT-link-retrieval-and-capture-connections.md`
+
+---
+
+## Phase 9.5 — Insights Dashboard (~3-5 days)
+Goal: bring the placeholder Insights page to life using the existing backend APIs.
+
+- [ ] Note explorer: pick a note → see summary, entities, dates, action items, related notes, suggested links
+- [ ] Entity browser: vault-wide entity list filterable by type (person, org, product, place), click to see which notes mention them
+- [ ] Vault stats: total indexed notes, entity counts by type, most-connected notes (most incoming suggestions)
+- [ ] Wiki link map (post-Phase 9): for a selected note, show its outgoing `[[wiki links]]` and which notes link back to it
+
+Deliverable: browse your vault's knowledge structure — entities, connections, and metadata — without opening Obsidian.
+
+Note: All backend APIs already exist (`/metadata`, `/suggestions`, `/entities`, `/action-items`). This phase is purely frontend.
+
+---
+
+## Phase 10 — Voice Chat via OpenAI Realtime API (~2-3 weeks)
 Goal: hands-free voice interaction with the knowledge base using speech-to-speech.
 
 - [ ] Backend WebSocket relay (`/api/v1/voice`) proxying audio to OpenAI Realtime API
@@ -313,7 +344,7 @@ See `docs/features/voice-chat-realtime-api.md` for full spec.
 
 ---
 
-## Phase 10 — Knowledge graph (V2, 4–8+ weeks)
+## Phase 11 — Knowledge graph (V2, 4–8+ weeks)
 - [ ] Choose graph store (Neo4j or Postgres)
 - [ ] Entity resolution + dedupe
 - [ ] Relationship extraction (LLM-assisted, human-reviewed)
@@ -323,7 +354,7 @@ Deliverable: true navigable concept graph, beyond similarity search.
 
 ---
 
-## Phase 11 — Write-back workflow (V2+)
+## Phase 12 — Write-back workflow (V2+)
 - [ ] PR-style changesets
 - [ ] Apply suggested links/tags to Markdown files
 - [ ] Versioning + rollback

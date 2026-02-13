@@ -133,6 +133,20 @@ export interface NoteSuggestions {
   generated_at: string;
 }
 
+export interface EntityWithSource {
+  text: string;
+  entity_type: string;
+  confidence: number;
+  note_path: string;
+}
+
+export interface ActionItemWithSource {
+  text: string;
+  confidence: number;
+  priority: string | null;
+  note_path: string;
+}
+
 export interface IndexStats {
   vector_count: number;
   lexical_count: number;
