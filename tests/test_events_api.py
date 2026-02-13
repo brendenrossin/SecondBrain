@@ -2,16 +2,8 @@
 
 from unittest.mock import patch
 
-import pytest
-from fastapi.testclient import TestClient
-
-from secondbrain.main import app
 from secondbrain.scripts.event_parser import Event
-
-
-@pytest.fixture
-def client():
-    return TestClient(app)
+from tests.conftest import override_vault_path
 
 
 def _mock_events(_daily_dir, _start, _end):
@@ -41,17 +33,15 @@ def _mock_events(_daily_dir, _start, _end):
     ]
 
 
+_CLEAR_CACHE = patch("secondbrain.api.events._cache", {"data": None, "ts": 0.0, "key": ""})
+
+
 class TestEventsAPI:
     @patch("secondbrain.api.events.get_events_in_range", side_effect=_mock_events)
-    @patch("secondbrain.api.events._cache", {"data": None, "ts": 0.0, "key": ""})
+    @_CLEAR_CACHE
     def test_list_events(self, _mock_events, client, tmp_path):
-        from secondbrain.api.dependencies import get_settings
-
-        settings = get_settings()
-        original_vault = settings.vault_path
-        settings.vault_path = tmp_path
         (tmp_path / "00_Daily").mkdir()
-        try:
+        with override_vault_path(tmp_path):
             resp = client.get("/api/v1/events?start=2026-02-10&end=2026-02-16")
             assert resp.status_code == 200
             data = resp.json()
@@ -59,24 +49,22 @@ class TestEventsAPI:
             assert data[0]["title"] == "Standup"
             assert data[0]["time"] == "9:00"
             assert data[2]["end_date"] == "2026-02-14"
-        finally:
-            settings.vault_path = original_vault
 
     @patch("secondbrain.api.events.get_events_in_range", return_value=[])
-    @patch("secondbrain.api.events._cache", {"data": None, "ts": 0.0, "key": ""})
+    @_CLEAR_CACHE
     def test_empty_events(self, _mock_events, client, tmp_path):
-        from secondbrain.api.dependencies import get_settings
-
-        settings = get_settings()
-        original_vault = settings.vault_path
-        settings.vault_path = tmp_path
         (tmp_path / "00_Daily").mkdir()
-        try:
+        with override_vault_path(tmp_path):
             resp = client.get("/api/v1/events?start=2026-03-01&end=2026-03-07")
             assert resp.status_code == 200
             assert resp.json() == []
-        finally:
-            settings.vault_path = original_vault
+
+    @_CLEAR_CACHE
+    def test_returns_503_when_vault_none(self, client):
+        with override_vault_path(None):
+            resp = client.get("/api/v1/events?start=2026-02-10&end=2026-02-16")
+            assert resp.status_code == 503
+            assert "Vault path" in resp.json()["detail"]
 
     def test_missing_params(self, client):
         resp = client.get("/api/v1/events")

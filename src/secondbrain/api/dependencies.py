@@ -1,6 +1,8 @@
 """FastAPI dependency injection for shared resources."""
 
 import logging
+import os
+import time
 from functools import lru_cache
 from pathlib import Path
 
@@ -40,7 +42,7 @@ def get_settings() -> Settings:
 def get_data_path() -> Path:
     """Get the data directory path."""
     settings = get_settings()
-    data_path = Path(settings.data_path) if settings.data_path else Path("data")
+    data_path = Path(settings.data_path)
     data_path.mkdir(parents=True, exist_ok=True)
     return data_path
 
@@ -239,80 +241,97 @@ def check_and_reindex(full_rebuild: bool = False) -> str | None:
     vault_path_str = trigger.read_text().strip()
     trigger.unlink()
 
-    from secondbrain.indexing.chunker import Chunker
-    from secondbrain.vault.connector import VaultConnector
+    # Acquire reindex lock to prevent concurrent runs
+    _LOCK_TIMEOUT_S = 600  # 10 minutes
+    lock_file = data_path / ".reindex_lock"
+    if lock_file.exists():
+        lock_age = time.time() - lock_file.stat().st_mtime
+        if lock_age < _LOCK_TIMEOUT_S:
+            logger.info("Reindex already in progress (lock age: %.0fs), skipping", lock_age)
+            return None
+        else:
+            logger.warning("Stale reindex lock (%.0fs old), removing", lock_age)
+            lock_file.unlink()
 
-    vault_path = Path(vault_path_str)
-    if not vault_path.exists():
-        logger.error("Reindex trigger vault path does not exist: %s", vault_path)
-        return None
+    lock_file.write_text(str(os.getpid()))
 
-    logger.info("Reindex triggered for %s", vault_path)
-    connector = VaultConnector(vault_path)
-    chunker = Chunker()
-    embedder = get_embedder()
-    vector_store = get_vector_store()
-    lexical_store = get_lexical_store()
-    tracker = get_index_tracker()
+    try:
+        from secondbrain.indexing.chunker import Chunker
+        from secondbrain.vault.connector import VaultConnector
 
-    if full_rebuild:
-        tracker.clear()
+        vault_path = Path(vault_path_str)
+        if not vault_path.exists():
+            logger.error("Reindex trigger vault path does not exist: %s", vault_path)
+            return None
 
-    # Step 1: Get file metadata (mtimes + hashes)
-    vault_files = connector.get_file_metadata()
-    if not vault_files:
-        logger.info("Reindex: 0 notes found")
-        return "Reindex: 0 notes"
+        logger.info("Reindex triggered for %s", vault_path)
+        connector = VaultConnector(vault_path)
+        chunker = Chunker()
+        embedder = get_embedder()
+        vector_store = get_vector_store()
+        lexical_store = get_lexical_store()
+        tracker = get_index_tracker()
 
-    # Step 2: Classify changes
-    new_files, modified_files, deleted_files, unchanged_files = tracker.classify_changes(
-        vault_files
-    )
+        if full_rebuild:
+            tracker.clear()
 
-    # Step 3: Delete chunks for deleted + modified files
-    for file_path in deleted_files + modified_files:
-        vector_store.delete_by_note_path(file_path)
-        lexical_store.delete_by_note_path(file_path)
-        if file_path in deleted_files:
-            tracker.remove_file(file_path)
+        # Step 1: Get file metadata (mtimes + hashes)
+        vault_files = connector.get_file_metadata()
+        if not vault_files:
+            logger.info("Reindex: 0 notes found")
+            return "Reindex: 0 notes"
 
-    # Step 4: Re-chunk and embed new + modified files
-    files_to_index = new_files + modified_files
-    total_chunks = 0
-    for file_path in files_to_index:
-        try:
-            note = connector.read_note(Path(file_path))
-        except Exception as e:
-            logger.warning("Error reading %s: %s", file_path, e)
-            continue
+        # Step 2: Classify changes
+        new_files, modified_files, deleted_files, unchanged_files = tracker.classify_changes(
+            vault_files
+        )
 
-        chunks = chunker.chunk_note(note)
-        if chunks:
-            note_folder, note_date = extract_note_metadata(note.path, note.frontmatter)
-            for c in chunks:
-                c.note_folder = note_folder
-                c.note_date = note_date
-            texts = [build_embedding_text(c) for c in chunks]
-            embeddings = embedder.embed(texts)
-            vector_store.add_chunks(chunks, embeddings)
-            lexical_store.add_chunks(chunks)
+        # Step 3: Delete chunks for deleted + modified files
+        for file_path in deleted_files + modified_files:
+            vector_store.delete_by_note_path(file_path)
+            lexical_store.delete_by_note_path(file_path)
+            if file_path in deleted_files:
+                tracker.remove_file(file_path)
 
-        # Step 5: Update tracker
-        mtime, content_hash = vault_files[file_path]
-        tracker.mark_indexed(file_path, content_hash, mtime, len(chunks))
-        total_chunks += len(chunks)
+        # Step 4: Re-chunk and embed new + modified files
+        files_to_index = new_files + modified_files
+        total_chunks = 0
+        for file_path in files_to_index:
+            try:
+                note = connector.read_note(Path(file_path))
+            except Exception as e:
+                logger.warning("Error reading %s: %s", file_path, e)
+                continue
 
-    # Step 6: Store embedding model metadata
-    vector_store.set_stored_model(embedder.model_name)
+            chunks = chunker.chunk_note(note)
+            if chunks:
+                note_folder, note_date = extract_note_metadata(note.path, note.frontmatter)
+                for c in chunks:
+                    c.note_folder = note_folder
+                    c.note_date = note_date
+                texts = [build_embedding_text(c) for c in chunks]
+                embeddings = embedder.embed(texts)
+                vector_store.add_chunks(chunks, embeddings)
+                lexical_store.add_chunks(chunks)
 
-    # Step 7: Write epoch file for multi-process coordination
-    epoch_file = data_path / ".reindex_epoch"
-    epoch_file.write_text(str(Path(vault_path_str)))
+            # Step 5: Update tracker
+            mtime, content_hash = vault_files[file_path]
+            tracker.mark_indexed(file_path, content_hash, mtime, len(chunks))
+            total_chunks += len(chunks)
 
-    msg = (
-        f"Incremental reindex: {len(new_files)} new, {len(modified_files)} modified, "
-        f"{len(deleted_files)} deleted, {len(unchanged_files)} unchanged "
-        f"({total_chunks} chunks indexed)"
-    )
-    logger.info(msg)
-    return msg
+        # Step 6: Store embedding model metadata
+        vector_store.set_stored_model(embedder.model_name)
+
+        # Step 7: Write epoch file for multi-process coordination
+        epoch_file = data_path / ".reindex_epoch"
+        epoch_file.write_text(str(Path(vault_path_str)))
+
+        msg = (
+            f"Incremental reindex: {len(new_files)} new, {len(modified_files)} modified, "
+            f"{len(deleted_files)} deleted, {len(unchanged_files)} unchanged "
+            f"({total_chunks} chunks indexed)"
+        )
+        logger.info(msg)
+        return msg
+    finally:
+        lock_file.unlink(missing_ok=True)

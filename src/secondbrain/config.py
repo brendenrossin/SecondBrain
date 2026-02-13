@@ -4,13 +4,15 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     model_config = SettingsConfigDict(
         env_prefix="SECONDBRAIN_",
-        env_file=".env",
+        env_file=str(_PROJECT_ROOT / ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -24,7 +26,7 @@ class Settings(BaseSettings):
     vault_path: Path | None = None
 
     # Data storage
-    data_path: Path = Path("data")
+    data_path: Path = _PROJECT_ROOT / "data"
 
     # Embedding settings
     embedding_provider: str = "local"  # "local" or "openai"

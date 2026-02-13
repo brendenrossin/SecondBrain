@@ -1,10 +1,15 @@
 """CLI entry point for daily vault sync operations."""
 
 import argparse
+import json
 import logging
 import sys
+import time
+import urllib.error
 import urllib.request
+from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from secondbrain.config import get_settings
 from secondbrain.scripts.inbox_processor import process_inbox
@@ -12,6 +17,23 @@ from secondbrain.scripts.project_sync import sync_projects
 from secondbrain.scripts.task_aggregator import sync_tasks
 
 logger = logging.getLogger("secondbrain.scripts")
+
+
+def _log_structured(event: str, **kwargs: Any) -> None:
+    """Log a structured JSON event for critical sync milestones."""
+    logger.info(json.dumps({"event": event, **kwargs}))
+
+
+def _rotate_logs(data_path: Path, max_size_mb: float = 10.0) -> None:
+    """Rotate log files that exceed max_size_mb."""
+    for log_name in ["daily-sync.log", "api.log", "ui.log", "queries.jsonl"]:
+        log_file = data_path / log_name
+        if log_file.exists() and log_file.stat().st_size > max_size_mb * 1024 * 1024:
+            rotated = data_path / f"{log_name}.old"
+            if rotated.exists():
+                rotated.unlink()
+            log_file.rename(rotated)
+            logger.info("Rotated %s (exceeded %.1f MB)", log_name, max_size_mb)
 
 
 def reindex_vault(vault_path: Path, data_path: Path | None = None) -> str:
@@ -41,7 +63,8 @@ def reindex_vault(vault_path: Path, data_path: Path | None = None) -> str:
         )
         urllib.request.urlopen(req, timeout=120)
         return "Reindex triggered via API (server reindexed immediately)"
-    except Exception:
+    except (urllib.error.URLError, OSError, TimeoutError) as e:
+        logger.info("API reindex trigger failed (%s), using file trigger", e)
         return "Reindex trigger written (server not reachable; will reindex on next query)"
 
 
@@ -119,9 +142,15 @@ def main() -> None:
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
+    settings = get_settings()
+
+    # Rotate logs before doing anything else
+    data_path = Path(settings.data_path)
+    data_path.mkdir(parents=True, exist_ok=True)
+    _rotate_logs(data_path)
+
     vault_path = args.vault_path
     if vault_path is None:
-        settings = get_settings()
         vault_path = settings.vault_path
 
     if vault_path is None:
@@ -134,44 +163,69 @@ def main() -> None:
         sys.exit(1)
 
     logger.info("Vault path: %s", vault_path)
+    sync_start = time.time()
 
-    if args.command in ("inbox", "all"):
-        logger.info("--- Processing inbox ---")
-        actions = process_inbox(vault_path)
-        if actions:
-            for action in actions:
-                logger.info("  %s", action)
-        else:
-            logger.info("  No inbox items to process")
+    try:
+        if args.command in ("inbox", "all"):
+            logger.info("--- Processing inbox ---")
+            step_start = time.time()
+            actions = process_inbox(vault_path)
+            elapsed = int((time.time() - step_start) * 1000)
+            count = len(actions) if actions else 0
+            if actions:
+                for action in actions:
+                    logger.info("  %s", action)
+            else:
+                logger.info("  No inbox items to process")
+            _log_structured("inbox_complete", processed=count, duration_ms=elapsed)
 
-    if args.command in ("tasks", "all"):
-        logger.info("--- Syncing tasks ---")
-        summary = sync_tasks(vault_path)
-        logger.info("  %s", summary)
+        if args.command in ("tasks", "all"):
+            logger.info("--- Syncing tasks ---")
+            summary = sync_tasks(vault_path)
+            logger.info("  %s", summary)
 
-    if args.command in ("projects", "all"):
-        logger.info("--- Syncing projects ---")
-        summary = sync_projects(vault_path)
-        logger.info("  %s", summary)
+        if args.command in ("projects", "all"):
+            logger.info("--- Syncing projects ---")
+            summary = sync_projects(vault_path)
+            logger.info("  %s", summary)
 
-    if args.command in ("index", "all"):
-        logger.info("--- Reindexing vault ---")
-        summary = reindex_vault(vault_path)
-        logger.info("  %s", summary)
+        if args.command in ("index", "all"):
+            logger.info("--- Reindexing vault ---")
+            step_start = time.time()
+            summary = reindex_vault(vault_path)
+            elapsed = int((time.time() - step_start) * 1000)
+            logger.info("  %s", summary)
+            _log_structured("reindex_complete", summary=summary, duration_ms=elapsed)
 
-    if args.command in ("extract", "all"):
-        logger.info("--- Extracting metadata ---")
-        summary = extract_metadata(vault_path)
-        logger.info("  %s", summary)
+        if args.command in ("extract", "all"):
+            logger.info("--- Extracting metadata ---")
+            step_start = time.time()
+            summary = extract_metadata(vault_path)
+            elapsed = int((time.time() - step_start) * 1000)
+            logger.info("  %s", summary)
+            _log_structured("extraction_complete", summary=summary, duration_ms=elapsed)
 
-    if args.command == "weekly":
-        logger.info("--- Generating weekly review ---")
-        from secondbrain.scripts.weekly_review import generate_weekly_review
+        if args.command == "weekly":
+            logger.info("--- Generating weekly review ---")
+            from secondbrain.scripts.weekly_review import generate_weekly_review
 
-        summary = generate_weekly_review(vault_path)
-        logger.info("  %s", summary)
+            summary = generate_weekly_review(vault_path)
+            logger.info("  %s", summary)
 
-    logger.info("Done!")
+        # Write sync completion marker
+        total_elapsed = int((time.time() - sync_start) * 1000)
+        marker = data_path / ".sync_completed"
+        marker.write_text(datetime.now().isoformat())
+        logger.info("Sync completed successfully in %dms", total_elapsed)
+        _log_structured("sync_complete", command=args.command, duration_ms=total_elapsed)
+
+    except Exception as e:
+        # Write sync failure marker
+        marker = data_path / ".sync_failed"
+        marker.write_text(f"{datetime.now().isoformat()}: {e!s}")
+        logger.error("Sync FAILED: %s", e)
+        _log_structured("sync_failed", error=str(e))
+        raise
 
 
 if __name__ == "__main__":

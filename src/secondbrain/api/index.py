@@ -1,5 +1,6 @@
 """Index endpoint for triggering vault indexing."""
 
+import logging
 from pathlib import Path
 from typing import Annotated
 
@@ -20,6 +21,8 @@ from secondbrain.stores.index_tracker import IndexTracker
 from secondbrain.stores.lexical import LexicalStore
 from secondbrain.stores.vector import VectorStore
 from secondbrain.vault.connector import VaultConnector
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["index"])
 
@@ -103,6 +106,7 @@ async def index_vault(
         try:
             note = connector.read_note(Path(file_path))
         except Exception:
+            logger.warning("Failed to read note: %s", file_path, exc_info=True)
             continue
         chunks = chunker.chunk_note(note)
         if chunks:

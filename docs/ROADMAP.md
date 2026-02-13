@@ -243,6 +243,58 @@ See `docs/features/task-management-ui.md` for full spec.
 
 ---
 
+## Phase 8.5 — Calendar Week Grid (~3-5 days)
+Goal: see your whole week at a glance on desktop; navigate days instantly on mobile.
+
+- [ ] Fix mobile task text truncation (wrap instead of ellipsis on Tasks page)
+- [ ] Desktop multi-column grid: 1 column per day, all visible without scrolling
+- [ ] 5-day / 7-day toggle (smart default: 5d weekdays, 7d weekends)
+- [ ] Mobile day-picker ribbon: 7 day buttons with event/task count badges
+- [ ] Mobile single-day detail view with tap-to-select navigation
+- [ ] Responsive breakpoint orchestration (`md` = 768px)
+
+Deliverable: glance at your week on desktop, tap through days on mobile.
+
+See `docs/features/calendar-week-grid.md` for full spec.
+
+---
+
+## Phase 8.6 — Server Hardening (~1 day)
+Goal: eliminate silent failures from misconfigured server.
+
+- [ ] Make `.env` and `data_path` resolve from absolute paths (not cwd-dependent)
+- [ ] Add startup configuration logging (vault_path, data_path)
+- [ ] Replace silent empty API returns with HTTP 503 when vault missing
+- [ ] Remove redundant `Path("data")` fallbacks
+
+Deliverable: misconfigured server fails loudly instead of returning empty data.
+
+See `docs/features/server-hardening.md` for full spec.
+
+---
+
+## Phase 8.7 — Operational Hardening (~2-3 days)
+Goal: reliability, monitoring, and defensive infrastructure for sustained daily use.
+
+- [ ] Backend API launchd service (auto-start, auto-restart, correct cwd)
+- [ ] Meaningful health endpoint (vault, disk space, sync freshness)
+- [ ] Missing database indexes (conversation, index_tracker)
+- [ ] Daily sync completion marker
+- [ ] Log rotation (10MB threshold, keep 1 rotated copy)
+- [ ] Tighten exception handlers (specific exceptions, not blanket `Exception`)
+- [ ] Reindex lock (prevent double-reindex)
+- [ ] WAL checkpoint + synchronous=NORMAL tuning
+- [ ] Backup/restore Makefile commands
+- [ ] CORS middleware (defensive, localhost-only)
+- [ ] Structured logging for critical sync events
+- [ ] Sync status indicator in admin UI
+
+Deliverable: system that restarts itself, logs meaningfully, and fails loudly.
+
+See `docs/features/operational-hardening.md` for full spec.
+
+---
+
 ## Phase 9 — Voice Chat via OpenAI Realtime API (~2-3 weeks)
 Goal: hands-free voice interaction with the knowledge base using speech-to-speech.
 

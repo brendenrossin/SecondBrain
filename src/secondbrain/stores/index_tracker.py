@@ -27,6 +27,8 @@ class IndexTracker:
             self._conn.row_factory = sqlite3.Row
             self._conn.execute("PRAGMA journal_mode=WAL")
             self._conn.execute("PRAGMA busy_timeout=5000")
+            self._conn.execute("PRAGMA wal_autocheckpoint=1000")
+            self._conn.execute("PRAGMA synchronous=NORMAL")
             self._init_schema()
         return self._conn
 
@@ -45,6 +47,9 @@ class IndexTracker:
                 last_indexed_at TEXT NOT NULL,
                 chunk_count INTEGER DEFAULT 0
             );
+
+            CREATE INDEX IF NOT EXISTS idx_indexed_files_last_indexed
+            ON indexed_files(last_indexed_at);
         """)
         self.conn.commit()
 

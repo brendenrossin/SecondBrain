@@ -5,7 +5,7 @@ import time
 from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from secondbrain.api.dependencies import get_settings
 from secondbrain.config import Settings
@@ -39,7 +39,7 @@ async def list_events(
 
     vault_path = settings.vault_path
     if not vault_path or not vault_path.exists():
-        return []
+        raise HTTPException(status_code=503, detail="Vault path not configured or not found")
 
     daily_dir = vault_path / "00_Daily"
 

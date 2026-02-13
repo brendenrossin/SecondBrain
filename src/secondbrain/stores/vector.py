@@ -11,6 +11,7 @@ import numpy as np
 from chromadb.api import ClientAPI
 from chromadb.api.models.Collection import Collection
 from chromadb.api.types import Include, Metadata
+from chromadb.errors import ChromaError
 from numpy.typing import NDArray
 
 from secondbrain.models import Chunk
@@ -61,6 +62,7 @@ class VectorStore:
             meta = self.collection.metadata or {}
             return meta.get("embedding_model")
         except Exception:
+            logger.debug("VectorStore: could not read embedding model metadata", exc_info=True)
             return None
 
     def set_stored_model(self, model_name: str) -> None:
@@ -73,7 +75,7 @@ class VectorStore:
                 }
             )
         except Exception:
-            logger.warning("VectorStore: could not store embedding model metadata")
+            logger.debug("VectorStore: could not store embedding model metadata", exc_info=True)
 
     def check_model_mismatch(self, current_model: str) -> bool:
         """Check if the stored model differs from the current config.
@@ -150,7 +152,7 @@ class VectorStore:
                 metadatas=metadatas,
                 documents=documents,
             )
-        except Exception:
+        except (ChromaError, RuntimeError):
             logger.warning("VectorStore: error on add_chunks, reconnecting")
             self._reconnect()
             self.collection.upsert(
@@ -187,7 +189,7 @@ class VectorStore:
                 n_results=top_k,
                 include=includes,
             )
-        except Exception:
+        except (ChromaError, RuntimeError):
             logger.warning("VectorStore: error on search, reconnecting")
             self._reconnect()
             results = self.collection.query(
@@ -227,7 +229,7 @@ class VectorStore:
                 ids=[chunk_id],
                 include=["metadatas", "documents"],
             )
-        except Exception:
+        except (ChromaError, RuntimeError):
             logger.warning("VectorStore: error on get_chunk, reconnecting")
             self._reconnect()
             results = self.collection.get(
@@ -255,7 +257,7 @@ class VectorStore:
             chunk_ids = results["ids"] if results["ids"] else []
             if chunk_ids:
                 self.collection.delete(ids=chunk_ids)
-        except Exception:
+        except (ChromaError, RuntimeError):
             logger.warning("VectorStore: error on delete_by_note_path, reconnecting")
             self._reconnect()
             results = self.collection.get(
@@ -273,7 +275,7 @@ class VectorStore:
             return
         try:
             self.collection.delete(ids=chunk_ids)
-        except Exception:
+        except (ChromaError, RuntimeError):
             logger.warning("VectorStore: error on delete_chunks, reconnecting")
             self._reconnect()
             self.collection.delete(ids=chunk_ids)
@@ -282,7 +284,7 @@ class VectorStore:
         """Get the number of chunks in the store."""
         try:
             return self.collection.count()
-        except Exception:
+        except (ChromaError, RuntimeError):
             logger.warning("VectorStore: error on count, reconnecting")
             self._reconnect()
             return self.collection.count()

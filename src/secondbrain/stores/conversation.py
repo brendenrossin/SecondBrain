@@ -35,6 +35,8 @@ class ConversationStore:
             self._conn.row_factory = sqlite3.Row
             self._conn.execute("PRAGMA journal_mode=WAL")
             self._conn.execute("PRAGMA busy_timeout=5000")
+            self._conn.execute("PRAGMA wal_autocheckpoint=1000")
+            self._conn.execute("PRAGMA synchronous=NORMAL")
             self._init_schema()
         return self._conn
 
@@ -65,6 +67,9 @@ class ConversationStore:
 
             CREATE INDEX IF NOT EXISTS idx_messages_conversation
             ON messages(conversation_id, id);
+
+            CREATE INDEX IF NOT EXISTS idx_conversations_updated
+            ON conversations(updated_at DESC);
         """)
         self.conn.commit()
 

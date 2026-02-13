@@ -1,7 +1,9 @@
 """Admin endpoints for cost tracking and system stats."""
 
+import time
 from datetime import UTC, datetime, timedelta
-from typing import Annotated
+from pathlib import Path
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query
 
@@ -9,8 +11,10 @@ from secondbrain.api.dependencies import (
     get_conversation_store,
     get_index_tracker,
     get_query_logger,
+    get_settings,
     get_usage_store,
 )
+from secondbrain.config import Settings
 from secondbrain.logging.query_logger import QueryLogger
 from secondbrain.models import (
     AdminStatsResponse,
@@ -88,3 +92,30 @@ async def get_stats(
         total_llm_calls=usage_summary["total_calls"],
         total_llm_cost=usage_summary["total_cost"],
     )
+
+
+@router.get("/sync-status")
+async def sync_status(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, Any]:
+    """Get the status of the last daily sync."""
+    data_path = Path(settings.data_path)
+    result: dict[str, Any] = {"last_sync": None, "status": "unknown"}
+
+    completed = data_path / ".sync_completed"
+    failed = data_path / ".sync_failed"
+
+    if completed.exists():
+        mtime = completed.stat().st_mtime
+        age_hours = (time.time() - mtime) / 3600
+        result["last_sync"] = completed.read_text().strip()
+        result["status"] = "stale" if age_hours > 25 else "ok"
+        result["hours_ago"] = round(age_hours, 1)
+
+    if failed.exists() and (
+        not completed.exists() or failed.stat().st_mtime > completed.stat().st_mtime
+    ):
+        result["status"] = "failed"
+        result["error"] = failed.read_text().strip()
+
+    return result

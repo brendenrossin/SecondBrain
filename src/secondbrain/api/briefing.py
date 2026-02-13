@@ -6,7 +6,7 @@ from dataclasses import asdict
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from secondbrain.api.dependencies import get_settings
 from secondbrain.config import Settings
@@ -53,17 +53,7 @@ def _build_briefing(settings: Settings) -> BriefingResponse:
 
     vault_path = settings.vault_path
     if not vault_path or not vault_path.exists():
-        return BriefingResponse(
-            today=today_str,
-            today_display=today_display,
-            overdue_tasks=[],
-            due_today_tasks=[],
-            aging_followups=[],
-            yesterday_context=None,
-            today_context=None,
-            today_events=[],
-            total_open=0,
-        )
+        raise HTTPException(status_code=503, detail="Vault path not configured or not found")
 
     daily_dir = vault_path / "00_Daily"
 

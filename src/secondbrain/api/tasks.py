@@ -32,7 +32,7 @@ def _get_aggregated(settings: Settings) -> list[TaskResponse]:
 
     vault_path = settings.vault_path
     if not vault_path or not vault_path.exists():
-        return []
+        raise HTTPException(status_code=503, detail="Vault path not configured or not found")
 
     daily_dir = vault_path / "00_Daily"
     all_tasks = scan_daily_notes(daily_dir)
@@ -90,7 +90,7 @@ async def update_task(
     """Update a task's status or due date in the vault."""
     vault_path = settings.vault_path
     if not vault_path or not vault_path.exists():
-        raise HTTPException(status_code=500, detail="Vault path not configured")
+        raise HTTPException(status_code=503, detail="Vault path not configured or not found")
 
     result = update_task_in_daily(
         vault_path=vault_path,

@@ -200,6 +200,17 @@ export async function getAdminStats(): Promise<AdminStatsResponse> {
   return fetchJSON(`${BASE}/admin/stats`);
 }
 
+export interface SyncStatusResponse {
+  last_sync: string | null;
+  status: "ok" | "stale" | "failed" | "unknown";
+  hours_ago?: number;
+  error?: string;
+}
+
+export async function getSyncStatus(): Promise<SyncStatusResponse> {
+  return fetchJSON(`${BASE}/admin/sync-status`);
+}
+
 // --- Events ---
 
 export async function getEvents(

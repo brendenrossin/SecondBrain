@@ -10,7 +10,13 @@ import {
   Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getCostSummary, getDailyCosts, getAdminStats } from "@/lib/api";
+import {
+  getCostSummary,
+  getDailyCosts,
+  getAdminStats,
+  getSyncStatus,
+} from "@/lib/api";
+import type { SyncStatusResponse } from "@/lib/api";
 import type {
   CostSummaryResponse,
   DailyCost,
@@ -368,20 +374,23 @@ export function AdminDashboard() {
   const [costs, setCosts] = useState<CostSummaryResponse | null>(null);
   const [dailyCosts, setDailyCosts] = useState<DailyCostsResponse | null>(null);
   const [stats, setStats] = useState<AdminStatsResponse | null>(null);
+  const [syncStatus, setSyncStatus] = useState<SyncStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const chartDays = CHART_DAYS[period];
-      const [c, d, s] = await Promise.all([
+      const [c, d, s, ss] = await Promise.all([
         getCostSummary(period),
         getDailyCosts(chartDays),
         getAdminStats(),
+        getSyncStatus(),
       ]);
       setCosts(c);
       setDailyCosts(d);
       setStats(s);
+      setSyncStatus(ss);
     } catch (err) {
       console.error("Failed to load admin data:", err);
     } finally {
@@ -421,6 +430,39 @@ export function AdminDashboard() {
           <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
         </button>
       </div>
+
+      {/* Sync status indicator */}
+      {syncStatus && (
+        <div className="glass-card p-4 flex items-center gap-3">
+          <div
+            className={cn(
+              "w-2.5 h-2.5 rounded-full shrink-0",
+              syncStatus.status === "ok" && "bg-success",
+              syncStatus.status === "stale" && "bg-warning",
+              syncStatus.status === "failed" && "bg-red-500",
+              syncStatus.status === "unknown" && "bg-text-dim"
+            )}
+          />
+          <div className="text-sm">
+            <span className="text-text font-medium">Last sync: </span>
+            <span className="text-text-muted">
+              {syncStatus.hours_ago != null
+                ? syncStatus.hours_ago < 1
+                  ? "< 1 hour ago"
+                  : `${Math.round(syncStatus.hours_ago)}h ago`
+                : "Never"}
+            </span>
+            {syncStatus.status === "failed" && syncStatus.error && (
+              <span className="text-red-400 ml-2 text-xs">
+                Failed: {syncStatus.error.slice(0, 80)}
+              </span>
+            )}
+            {syncStatus.status === "stale" && (
+              <span className="text-warning ml-2 text-xs">Stale (&gt; 25h)</span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Row 1: Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

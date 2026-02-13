@@ -1,4 +1,4 @@
-.PHONY: install dev ui test lint format format-check typecheck check clean index reindex extract process-inbox sync-tasks weekly-review daily-sync install-cron uninstall-cron install-ui-service uninstall-ui-service eval frontend-install frontend-dev frontend-build dev-all setup-hooks
+.PHONY: install dev ui test lint format format-check typecheck check clean index reindex extract process-inbox sync-tasks weekly-review daily-sync install-cron uninstall-cron install-ui-service uninstall-ui-service install-api-service uninstall-api-service backup restore eval frontend-install frontend-dev frontend-build dev-all setup-hooks
 
 # Install dependencies
 install:
@@ -84,6 +84,30 @@ install-ui-service:
 uninstall-ui-service:
 	launchctl unload ~/Library/LaunchAgents/com.secondbrain.ui.plist 2>/dev/null || true
 	rm -f ~/Library/LaunchAgents/com.secondbrain.ui.plist
+
+# Install persistent API service (auto-start on boot, auto-restart on crash)
+install-api-service:
+	kill $$(lsof -ti:8000) 2>/dev/null || true
+	sleep 1
+	cp com.secondbrain.api.plist ~/Library/LaunchAgents/
+	launchctl load ~/Library/LaunchAgents/com.secondbrain.api.plist
+
+# Uninstall API service
+uninstall-api-service:
+	launchctl unload ~/Library/LaunchAgents/com.secondbrain.api.plist 2>/dev/null || true
+	rm -f ~/Library/LaunchAgents/com.secondbrain.api.plist
+
+# Backup all derived data
+backup:
+	@mkdir -p ~/SecondBrain-backups
+	@BACKUP_DIR=~/SecondBrain-backups/data-$$(date +%Y%m%d-%H%M%S); \
+	cp -r data "$$BACKUP_DIR" && \
+	echo "Backup complete: $$BACKUP_DIR ($$(du -sh "$$BACKUP_DIR" | cut -f1))"
+
+# List available backups (restore manually)
+restore:
+	@echo "Available backups:"; ls -1d ~/SecondBrain-backups/data-* 2>/dev/null || echo "  No backups found"
+	@echo "To restore: cp -r ~/SecondBrain-backups/data-YYYYMMDD-HHMMSS data"
 
 # Run RAG evaluation harness
 eval:
