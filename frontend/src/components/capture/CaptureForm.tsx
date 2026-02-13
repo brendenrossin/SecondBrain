@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Send, Check, AlertCircle } from "lucide-react";
 import { captureText } from "@/lib/api";
+import type { CaptureConnection } from "@/lib/types";
 
 type Status = "idle" | "sending" | "success" | "error";
 
@@ -10,6 +11,7 @@ export function CaptureForm(): React.JSX.Element {
   const [text, setText] = useState("");
   const [status, setStatus] = useState<Status>("idle");
   const [message, setMessage] = useState("");
+  const [connections, setConnections] = useState<CaptureConnection[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout>>(null);
 
@@ -20,22 +22,39 @@ export function CaptureForm(): React.JSX.Element {
     };
   }, []);
 
+  // When the user starts typing a new capture, clear stale feedback from
+  // the previous capture and cancel the auto-reset timer.
+  useEffect(() => {
+    if (text.length > 0) {
+      setConnections([]);
+      if (resetTimerRef.current) {
+        clearTimeout(resetTimerRef.current);
+        resetTimerRef.current = null;
+        setStatus("idle");
+        setMessage("");
+      }
+    }
+  }, [text]);
+
   async function handleSubmit(): Promise<void> {
     const trimmed = text.trim();
     if (!trimmed || status === "sending") return;
 
     setStatus("sending");
     setMessage("");
+    setConnections([]);
 
     try {
       const res = await captureText(trimmed);
       setStatus("success");
       setMessage(res.message);
+      setConnections(res.connections ?? []);
       setText("");
       // Reset to idle after 3 seconds so user can capture again
       resetTimerRef.current = setTimeout(() => {
         setStatus("idle");
         setMessage("");
+        setConnections([]);
         textareaRef.current?.focus();
       }, 3000);
     } catch (err) {
@@ -102,6 +121,38 @@ export function CaptureForm(): React.JSX.Element {
             <AlertCircle className="w-4 h-4 shrink-0" />
           )}
           {message}
+        </div>
+      )}
+
+      {/* Connection cards */}
+      {connections.length > 0 && (
+        <div className="mt-4 space-y-2">
+          <p className="text-xs text-text-dim font-medium">
+            Related in your vault:
+          </p>
+          {connections.map((conn) => {
+            const folder = conn.note_path.includes("/")
+              ? conn.note_path.split("/")[0]
+              : "";
+            return (
+              <div
+                key={conn.note_path}
+                className="glass-card px-4 py-3 space-y-1"
+              >
+                {folder && (
+                  <span className="text-[10px] font-medium text-accent/70 uppercase tracking-wider">
+                    {folder}
+                  </span>
+                )}
+                <p className="text-sm font-medium text-text">
+                  {conn.note_title}
+                </p>
+                <p className="text-xs text-text-dim line-clamp-2">
+                  {conn.snippet}
+                </p>
+              </div>
+            );
+          })}
         </div>
       )}
 

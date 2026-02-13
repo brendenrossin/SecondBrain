@@ -1,12 +1,14 @@
 """Quick capture endpoint: write text directly to the Inbox folder."""
 
+import contextlib
 import logging
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException
 
-from secondbrain.api.dependencies import get_settings
-from secondbrain.models import CaptureRequest, CaptureResponse
+from secondbrain.api.dependencies import get_metadata_store, get_retriever, get_settings
+from secondbrain.models import CaptureConnection, CaptureRequest, CaptureResponse
+from secondbrain.retrieval.hybrid import RetrievalCandidate
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +41,47 @@ async def capture(request: CaptureRequest) -> CaptureResponse:
     filepath.write_text(request.text, encoding="utf-8")
     logger.info("Captured to %s (%d chars)", filename, len(request.text))
 
+    # Surface related notes from the vault
+    connections: list[CaptureConnection] = []
+    try:
+        retriever = get_retriever()
+        candidates = retriever.retrieve(request.text, top_k=10)
+
+        # Deduplicate by note_path, keep highest RRF score
+        seen: dict[str, RetrievalCandidate] = {}
+        for c in candidates:
+            if c.note_path not in seen or c.rrf_score > seen[c.note_path].rrf_score:
+                seen[c.note_path] = c
+
+        top = sorted(seen.values(), key=lambda c: c.rrf_score, reverse=True)[:5]
+
+        # Try to load metadata store for richer snippets
+        metadata_store = None
+        with contextlib.suppress(Exception):
+            metadata_store = get_metadata_store()
+
+        for c in top:
+            snippet = c.chunk_text[:150].strip()
+            if metadata_store:
+                try:
+                    meta = metadata_store.get(c.note_path)
+                    if meta and meta.summary:
+                        snippet = meta.summary
+                except Exception:
+                    pass
+            connections.append(
+                CaptureConnection(
+                    note_path=c.note_path,
+                    note_title=c.note_title,
+                    snippet=snippet,
+                    score=round(c.rrf_score, 4),
+                )
+            )
+    except Exception:
+        logger.debug("Connection surfacing failed, returning capture without connections")
+
     return CaptureResponse(
         filename=filename,
         message=f"Captured to Inbox/{filename}",
+        connections=connections,
     )

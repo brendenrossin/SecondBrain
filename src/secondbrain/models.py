@@ -304,8 +304,18 @@ class CaptureRequest(BaseModel):
     text: str = Field(min_length=1, max_length=10000)
 
 
+class CaptureConnection(BaseModel):
+    """A note related to captured text."""
+
+    note_path: str
+    note_title: str
+    snippet: str
+    score: float
+
+
 class CaptureResponse(BaseModel):
     """Response body for the /capture endpoint."""
 
     filename: str
     message: str
+    connections: list[CaptureConnection] = []

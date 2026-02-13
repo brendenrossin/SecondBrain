@@ -217,7 +217,15 @@ export interface CalendarEvent {
 
 // --- Quick Capture ---
 
+export interface CaptureConnection {
+  note_path: string;
+  note_title: string;
+  snippet: string;
+  score: number;
+}
+
 export interface CaptureResponse {
   filename: string;
   message: string;
+  connections: CaptureConnection[];
 }
