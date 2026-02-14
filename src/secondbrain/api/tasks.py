@@ -1,5 +1,6 @@
 """Task aggregation API endpoints."""
 
+import asyncio
 import logging
 import time
 from typing import Annotated
@@ -68,7 +69,7 @@ async def list_tasks(
     sub_project: str | None = None,
 ) -> list[TaskResponse]:
     """List all aggregated tasks with optional filters."""
-    tasks = _get_aggregated(settings)
+    tasks = await asyncio.to_thread(_get_aggregated, settings)
 
     if category is not None:
         tasks = [t for t in tasks if t.category == category]
@@ -120,7 +121,7 @@ async def upcoming_tasks(
     """Get tasks due in the next N days, plus overdue tasks."""
     from datetime import datetime, timedelta
 
-    tasks = _get_aggregated(settings)
+    tasks = await asyncio.to_thread(_get_aggregated, settings)
     today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     cutoff = (today + timedelta(days=days)).strftime("%Y-%m-%d")
     today_str = today.strftime("%Y-%m-%d")
@@ -137,7 +138,7 @@ async def task_categories(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> list[dict[str, object]]:
     """List categories with sub-projects and task counts."""
-    tasks = _get_aggregated(settings)
+    tasks = await asyncio.to_thread(_get_aggregated, settings)
     open_tasks = [t for t in tasks if not t.completed]
 
     cats: dict[str, dict[str, int]] = {}

@@ -1,5 +1,6 @@
 """Morning briefing API endpoint."""
 
+import asyncio
 import logging
 import time
 from dataclasses import asdict
@@ -123,4 +124,4 @@ async def get_briefing(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> BriefingResponse:
     """Get the morning briefing: overdue tasks, due today, aging follow-ups, and yesterday's context."""
-    return _build_briefing(settings)
+    return await asyncio.to_thread(_build_briefing, settings)

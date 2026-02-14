@@ -59,6 +59,7 @@ def _mock_deps():
     }
 
     mock_conversation_store = MagicMock()
+    mock_conversation_store.count_conversations.return_value = 5
     mock_conversation_store.list_conversations.return_value = [
         {"conversation_id": f"conv-{i}"} for i in range(5)
     ]

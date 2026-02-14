@@ -77,7 +77,7 @@ async def get_stats(
     """Get system-wide admin statistics."""
     query_stats = query_logger.get_stats()
     usage_summary = usage_store.get_summary()
-    conversations = conversation_store.list_conversations(limit=10000)
+    total_conversations = conversation_store.count_conversations()
     index_stats = index_tracker.get_stats()
 
     total_queries = query_stats.get("total_queries", 0)
@@ -87,7 +87,7 @@ async def get_stats(
     return AdminStatsResponse(
         total_queries=total_queries if isinstance(total_queries, int) else 0,
         avg_latency_ms=float(avg_latency) if isinstance(avg_latency, (int, float)) else 0.0,
-        total_conversations=len(conversations),
+        total_conversations=total_conversations,
         index_file_count=file_count if isinstance(file_count, int) else 0,
         total_llm_calls=usage_summary["total_calls"],
         total_llm_cost=usage_summary["total_cost"],

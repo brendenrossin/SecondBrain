@@ -12,7 +12,7 @@ export function ConnectionMonitor(): React.ReactElement | null {
 
   const checkHealth = useCallback(async (): Promise<boolean> => {
     try {
-      const res = await fetch("/", { method: "HEAD", cache: "no-store" });
+      const res = await fetch("/api/v1/health", { cache: "no-store" });
       return res.ok;
     } catch {
       return false;

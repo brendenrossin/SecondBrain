@@ -302,6 +302,17 @@ class ConversationStore:
             for row in cursor.fetchall()
         ]
 
+    def count_conversations(self) -> int:
+        """Return the total number of conversations."""
+        try:
+            cursor = self.conn.execute("SELECT COUNT(*) FROM conversations")
+        except sqlite3.DatabaseError:
+            logger.warning("ConversationStore: DatabaseError on count_conversations, reconnecting")
+            self._reconnect()
+            cursor = self.conn.execute("SELECT COUNT(*) FROM conversations")
+        row = cursor.fetchone()
+        return row[0] if row else 0
+
     def delete_conversation(self, conversation_id: str) -> None:
         """Delete a conversation and all its messages."""
         try:

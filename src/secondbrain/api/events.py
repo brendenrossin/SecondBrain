@@ -1,5 +1,6 @@
 """Calendar events API endpoints."""
 
+import asyncio
 import logging
 import time
 from datetime import date
@@ -45,7 +46,7 @@ async def list_events(
 
     start_date = date.fromisoformat(start)
     end_date = date.fromisoformat(end)
-    events = get_events_in_range(daily_dir, start_date, end_date)
+    events = await asyncio.to_thread(get_events_in_range, daily_dir, start_date, end_date)
 
     result = [
         EventResponse(

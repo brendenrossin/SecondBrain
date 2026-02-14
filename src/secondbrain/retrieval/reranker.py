@@ -87,6 +87,7 @@ The array MUST have exactly the same number of elements as chunks provided."""
             self._openai_client = OpenAI(
                 api_key=api_key,
                 base_url=self.base_url,
+                timeout=60.0,
             )
         return self._openai_client
 
@@ -94,7 +95,10 @@ The array MUST have exactly the same number of elements as chunks provided."""
     def anthropic_client(self) -> Anthropic:
         """Lazy-load the Anthropic client."""
         if self._anthropic_client is None:
-            self._anthropic_client = Anthropic(api_key=self.api_key)
+            self._anthropic_client = Anthropic(
+                api_key=self.api_key,
+                timeout=60.0,
+            )
         return self._anthropic_client
 
     def rerank(

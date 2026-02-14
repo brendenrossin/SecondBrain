@@ -10,6 +10,7 @@ from typing import Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 
 from secondbrain import __version__
 from secondbrain.api.admin import router as admin_router
@@ -52,6 +53,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(GZipMiddleware, minimum_size=500)
 
 # Include API routers
 app.include_router(admin_router)

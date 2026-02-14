@@ -1,5 +1,6 @@
 """Ask endpoint for conversational RAG."""
 
+import asyncio
 import json
 import time
 from collections.abc import AsyncIterator
@@ -76,24 +77,25 @@ async def ask(
     # Get conversation history
     history = conversation_store.get_recent_messages(conversation_id, limit=10)
 
-    # Retrieve candidates
-    candidates = retriever.retrieve(request.query, top_k=10)
+    # Retrieve candidates (blocking I/O — run in thread)
+    candidates = await asyncio.to_thread(retriever.retrieve, request.query, 10)
 
-    # Rerank candidates
-    ranked_candidates, retrieval_label = reranker.rerank(
-        request.query, candidates, top_n=request.top_n
+    # Rerank candidates (blocking LLM call — run in thread)
+    ranked_candidates, retrieval_label = await asyncio.to_thread(
+        reranker.rerank, request.query, candidates, request.top_n
     )
 
     # Expand wiki links from top candidates
-    linked_context = link_expander.expand(ranked_candidates)
+    linked_context = await asyncio.to_thread(link_expander.expand, ranked_candidates)
 
-    # Generate answer
-    answer = answerer.answer(
+    # Generate answer (blocking LLM call — run in thread)
+    answer = await asyncio.to_thread(
+        answerer.answer,
         request.query,
         ranked_candidates,
         retrieval_label,
-        conversation_history=history,
-        linked_context=linked_context,
+        history,
+        linked_context,
     )
 
     # Build citations
@@ -149,14 +151,14 @@ async def ask_stream(
     # Get conversation history
     history = conversation_store.get_recent_messages(conversation_id, limit=10)
 
-    # Retrieve and rerank
-    candidates = retriever.retrieve(request.query, top_k=10)
-    ranked_candidates, retrieval_label = reranker.rerank(
-        request.query, candidates, top_n=request.top_n
+    # Retrieve and rerank (blocking I/O — run in thread)
+    candidates = await asyncio.to_thread(retriever.retrieve, request.query, 10)
+    ranked_candidates, retrieval_label = await asyncio.to_thread(
+        reranker.rerank, request.query, candidates, request.top_n
     )
 
     # Expand wiki links from top candidates
-    linked_context = link_expander.expand(ranked_candidates)
+    linked_context = await asyncio.to_thread(link_expander.expand, ranked_candidates)
 
     # Build citations
     citations = _build_citations(ranked_candidates)

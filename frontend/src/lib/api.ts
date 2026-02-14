@@ -20,13 +20,26 @@ import type {
 
 const BASE = "/api/v1";
 
-async function fetchJSON<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, init);
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`API error ${res.status}: ${text}`);
+async function fetchJSON<T>(
+  url: string,
+  init?: RequestInit,
+  timeoutMs = 30_000
+): Promise<T> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      ...init,
+      signal: init?.signal ?? controller.signal,
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`API error ${res.status}: ${text}`);
+    }
+    return res.json();
+  } finally {
+    clearTimeout(timeout);
   }
-  return res.json();
 }
 
 // --- Chat ---
