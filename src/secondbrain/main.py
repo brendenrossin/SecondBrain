@@ -5,6 +5,7 @@ import shutil
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI
@@ -89,7 +90,8 @@ async def health() -> dict[str, Any]:
         checks["vault"] = "ok"
 
     # Disk space
-    _, _, free = shutil.disk_usage(str(s.data_path))
+    disk_path = s.data_path if s.data_path.exists() else Path(".")
+    _, _, free = shutil.disk_usage(str(disk_path))
     free_gb = round(free / (1024**3), 2)
     checks["free_disk_gb"] = free_gb
     if free_gb < 1.0:
