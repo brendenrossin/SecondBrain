@@ -30,13 +30,15 @@ def _make_mock_settings(vault_path=None, data_path=None):
 
 
 class TestHealthEndpoint:
-    def test_returns_ok_with_valid_vault(self, client):
-        resp = client.get("/health")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["status"] == "ok"
-        assert data["vault"] == "ok"
-        assert "free_disk_gb" in data
+    def test_returns_ok_with_valid_vault(self, client, tmp_path):
+        mock_s = _make_mock_settings(vault_path=tmp_path, data_path=tmp_path)
+        with patch("secondbrain.main.get_settings", return_value=mock_s):
+            resp = client.get("/health")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["status"] == "ok"
+            assert data["vault"] == "ok"
+            assert "free_disk_gb" in data
 
     def test_returns_error_when_vault_none(self, client, tmp_path):
         mock_s = _make_mock_settings(vault_path=None, data_path=tmp_path)
