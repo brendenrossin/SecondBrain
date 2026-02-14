@@ -78,6 +78,7 @@ async def root() -> dict[str, str]:
 
 
 @app.get("/health")
+@app.get("/api/v1/health")
 async def health() -> dict[str, Any]:
     """Health check endpoint with vault, disk, and sync status."""
     s = get_settings()
@@ -97,7 +98,8 @@ async def health() -> dict[str, Any]:
     free_gb = round(free / (1024**3), 2)
     checks["free_disk_gb"] = free_gb
     if free_gb < 1.0:
-        checks["status"] = "warning"
+        if checks["status"] == "ok":
+            checks["status"] = "warning"
         checks["disk"] = "low"
 
     # Sync freshness

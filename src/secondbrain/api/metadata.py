@@ -1,5 +1,6 @@
 """API endpoints for metadata extraction and suggestions."""
 
+import asyncio
 import logging
 from pathlib import Path
 from typing import Annotated
@@ -81,13 +82,13 @@ async def extract_metadata(
     connector = VaultConnector(vault_path)
 
     if note_path:
-        # Single note extraction
+        # Single note extraction (blocking LLM call — run in thread)
         try:
             note = connector.read_note(Path(note_path))
         except Exception as e:
             raise HTTPException(status_code=404, detail=f"Note not found: {e}") from e
 
-        metadata = extractor.extract(note)
+        metadata = await asyncio.to_thread(extractor.extract, note)
         metadata_store.upsert(metadata)
         return ExtractResponse(
             status="success",
@@ -112,17 +113,22 @@ async def extract_metadata(
             message="All notes up to date",
         )
 
-    extracted = 0
-    failed = 0
-    for path in stale_paths:
-        try:
-            note = connector.read_note(Path(path))
-            metadata = extractor.extract(note)
-            metadata_store.upsert(metadata)
-            extracted += 1
-        except Exception:
-            logger.warning("Failed to extract %s", path, exc_info=True)
-            failed += 1
+    # Batch extraction loop is blocking (file I/O + LLM calls) — run in thread
+    def _extract_batch() -> tuple[int, int]:
+        _extracted = 0
+        _failed = 0
+        for path in stale_paths:
+            try:
+                note = connector.read_note(Path(path))
+                metadata = extractor.extract(note)
+                metadata_store.upsert(metadata)
+                _extracted += 1
+            except Exception:
+                logger.warning("Failed to extract %s", path, exc_info=True)
+                _failed += 1
+        return _extracted, _failed
+
+    extracted, failed = await asyncio.to_thread(_extract_batch)
 
     skipped = len(vault_files) - extracted - failed
     return ExtractResponse(

@@ -40,6 +40,16 @@ class TestHealthEndpoint:
             assert data["vault"] == "ok"
             assert "free_disk_gb" in data
 
+    def test_api_v1_health_alias_returns_same_as_health(self, client, tmp_path):
+        mock_s = _make_mock_settings(vault_path=tmp_path, data_path=tmp_path)
+        with patch("secondbrain.main.get_settings", return_value=mock_s):
+            resp = client.get("/api/v1/health")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["status"] == "ok"
+            assert data["vault"] == "ok"
+            assert "free_disk_gb" in data
+
     def test_returns_error_when_vault_none(self, client, tmp_path):
         mock_s = _make_mock_settings(vault_path=None, data_path=tmp_path)
         with patch("secondbrain.main.get_settings", return_value=mock_s):
@@ -56,8 +66,12 @@ class TestHealthEndpoint:
             assert data["status"] == "error"
             assert data["vault"] == "not configured or missing"
 
-    def test_warns_on_low_disk(self, client):
-        with patch("secondbrain.main.shutil.disk_usage") as mock_du:
+    def test_warns_on_low_disk(self, client, tmp_path):
+        mock_s = _make_mock_settings(vault_path=tmp_path, data_path=tmp_path)
+        with (
+            patch("secondbrain.main.get_settings", return_value=mock_s),
+            patch("secondbrain.main.shutil.disk_usage") as mock_du,
+        ):
             mock_du.return_value = (100 * 1024**3, 99.5 * 1024**3, int(0.5 * 1024**3))
             resp = client.get("/health")
             data = resp.json()

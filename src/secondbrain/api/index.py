@@ -1,5 +1,6 @@
 """Index endpoint for triggering vault indexing."""
 
+import asyncio
 import logging
 from pathlib import Path
 from typing import Annotated
@@ -43,33 +44,15 @@ class IndexStatsResponse(BaseModel):
     lexical_count: int
 
 
-@router.post("/index", response_model=IndexResponse)
-async def index_vault(
-    settings: Annotated[Settings, Depends(get_settings)],
-    vector_store: Annotated[VectorStore, Depends(get_vector_store)],
-    lexical_store: Annotated[LexicalStore, Depends(get_lexical_store)],
-    embedder: Annotated[Embedder, Depends(get_embedder)],
-    tracker: Annotated[IndexTracker, Depends(get_index_tracker)],
-    full_rebuild: bool = False,
+def _run_indexing(
+    vault_path: Path,
+    vector_store: VectorStore,
+    lexical_store: LexicalStore,
+    embedder: Embedder,
+    tracker: IndexTracker,
+    full_rebuild: bool,
 ) -> IndexResponse:
-    """Index the vault. Uses incremental indexing by default.
-
-    Args:
-        full_rebuild: If True, clear the tracker and do a full reindex.
-    """
-    if not settings.vault_path:
-        raise HTTPException(
-            status_code=400,
-            detail="Vault path not configured. Set SECONDBRAIN_VAULT_PATH environment variable.",
-        )
-
-    vault_path = Path(settings.vault_path)
-    if not vault_path.exists():
-        raise HTTPException(
-            status_code=400,
-            detail=f"Vault path does not exist: {vault_path}",
-        )
-
+    """Run vault indexing synchronously (called via asyncio.to_thread)."""
     connector = VaultConnector(vault_path)
     chunker = Chunker()
 
@@ -78,7 +61,6 @@ async def index_vault(
         vector_store.clear()
         lexical_store.clear()
 
-    # Get file metadata and classify changes
     vault_files = connector.get_file_metadata()
     if not vault_files:
         return IndexResponse(
@@ -92,14 +74,12 @@ async def index_vault(
         vault_files
     )
 
-    # Delete chunks for deleted + modified files
     for file_path in deleted_files + modified_files:
         vector_store.delete_by_note_path(file_path)
         lexical_store.delete_by_note_path(file_path)
         if file_path in deleted_files:
             tracker.remove_file(file_path)
 
-    # Index new + modified files
     files_to_index = new_files + modified_files
     total_chunks = 0
     for file_path in files_to_index:
@@ -134,6 +114,39 @@ async def index_vault(
             f"{len(deleted_files)} deleted, {len(unchanged_files)} unchanged "
             f"({total_chunks} chunks)"
         ),
+    )
+
+
+@router.post("/index", response_model=IndexResponse)
+async def index_vault(
+    settings: Annotated[Settings, Depends(get_settings)],
+    vector_store: Annotated[VectorStore, Depends(get_vector_store)],
+    lexical_store: Annotated[LexicalStore, Depends(get_lexical_store)],
+    embedder: Annotated[Embedder, Depends(get_embedder)],
+    tracker: Annotated[IndexTracker, Depends(get_index_tracker)],
+    full_rebuild: bool = False,
+) -> IndexResponse:
+    """Index the vault. Uses incremental indexing by default.
+
+    Args:
+        full_rebuild: If True, clear the tracker and do a full reindex.
+    """
+    if not settings.vault_path:
+        raise HTTPException(
+            status_code=400,
+            detail="Vault path not configured. Set SECONDBRAIN_VAULT_PATH environment variable.",
+        )
+
+    vault_path = Path(settings.vault_path)
+    if not vault_path.exists():
+        raise HTTPException(
+            status_code=400,
+            detail=f"Vault path does not exist: {vault_path}",
+        )
+
+    # Entire indexing pipeline is blocking I/O — run in thread
+    return await asyncio.to_thread(
+        _run_indexing, vault_path, vector_store, lexical_store, embedder, tracker, full_rebuild
     )
 
 

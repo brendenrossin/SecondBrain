@@ -1,5 +1,6 @@
 """Quick capture endpoint: write text directly to the Inbox folder."""
 
+import asyncio
 import contextlib
 import logging
 from datetime import UTC, datetime
@@ -41,11 +42,11 @@ async def capture(request: CaptureRequest) -> CaptureResponse:
     filepath.write_text(request.text, encoding="utf-8")
     logger.info("Captured to %s (%d chars)", filename, len(request.text))
 
-    # Surface related notes from the vault
+    # Surface related notes from the vault (blocking I/O — run in thread)
     connections: list[CaptureConnection] = []
     try:
         retriever = get_retriever()
-        candidates = retriever.retrieve(request.text, top_k=10)
+        candidates = await asyncio.to_thread(retriever.retrieve, request.text, 10)
 
         # Deduplicate by note_path, keep highest RRF score
         seen: dict[str, RetrievalCandidate] = {}
