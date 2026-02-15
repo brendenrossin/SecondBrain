@@ -1,10 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { TaskResponse } from "@/lib/types";
 import { TaskSubProject } from "./TaskSubProject";
+
+function sortTasksByDueDate(tasks: TaskResponse[]): TaskResponse[] {
+  return [...tasks].sort((a, b) => {
+    if (!a.due_date && !b.due_date) return 0;
+    if (!a.due_date) return 1;
+    if (!b.due_date) return -1;
+    return a.due_date.localeCompare(b.due_date);
+  });
+}
+
+function earliestDueDate(tasks: TaskResponse[]): string | null {
+  const dates = tasks.map((t) => t.due_date).filter(Boolean) as string[];
+  return dates.length > 0 ? dates.sort()[0] : null;
+}
 
 interface TaskCategoryProps {
   category: string;
@@ -17,13 +31,35 @@ export function TaskCategory({ category, tasks, onUpdate, onSelect }: TaskCatego
   const [expanded, setExpanded] = useState(true);
   const openCount = tasks.filter((t) => !t.completed).length;
 
-  // Group by sub_project
-  const grouped = new Map<string, TaskResponse[]>();
-  for (const task of tasks) {
-    const key = task.sub_project || "";
-    if (!grouped.has(key)) grouped.set(key, []);
-    grouped.get(key)!.push(task);
-  }
+  // Group by sub_project, sort tasks within each group by due date,
+  // then sort sub-project groups by most urgent task
+  const sortedGroups = useMemo(() => {
+    const grouped = new Map<string, TaskResponse[]>();
+    for (const task of tasks) {
+      const key = task.sub_project || "";
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key)!.push(task);
+    }
+
+    // Sort tasks within each group
+    const entries = Array.from(grouped.entries()).map(
+      ([key, groupTasks]) => [key, sortTasksByDueDate(groupTasks)] as [string, TaskResponse[]]
+    );
+
+    // Sort sub-project groups by urgency
+    entries.sort(([, tasksA], [, tasksB]) => {
+      const urgA = earliestDueDate(tasksA);
+      const urgB = earliestDueDate(tasksB);
+      if (!urgA && !urgB) return tasksB.length - tasksA.length;
+      if (!urgA) return 1;
+      if (!urgB) return -1;
+      const cmp = urgA.localeCompare(urgB);
+      if (cmp !== 0) return cmp;
+      return tasksB.length - tasksA.length;
+    });
+
+    return entries;
+  }, [tasks]);
 
   return (
     <div className="glass-card overflow-clip transition-all duration-200">
@@ -46,7 +82,7 @@ export function TaskCategory({ category, tasks, onUpdate, onSelect }: TaskCatego
       <div className={cn("accordion-body", expanded && "expanded")}>
         <div>
           <div className="px-3 pb-3">
-            {Array.from(grouped.entries()).map(([sub, subTasks]) => (
+            {sortedGroups.map(([sub, subTasks]) => (
               <TaskSubProject key={sub || "__none"} name={sub} tasks={subTasks} onUpdate={onUpdate} onSelect={onSelect} />
             ))}
           </div>

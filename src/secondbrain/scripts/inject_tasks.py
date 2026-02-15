@@ -82,9 +82,11 @@ def inject_tasks(
                     break
             content = "\n".join(lines)
 
-        actions.append(f"INJECT: [{category or 'Uncategorized'}"
-                       f"{' > ' + sub_project if sub_project else ''}] {text}"
-                       f"{due_suffix}")
+        actions.append(
+            f"INJECT: [{category or 'Uncategorized'}"
+            f"{' > ' + sub_project if sub_project else ''}] {text}"
+            f"{due_suffix}"
+        )
 
     if content != original:
         if dry_run:
@@ -129,12 +131,14 @@ def main() -> None:
             category = input("  Category [Personal]: ").strip() or "Personal"
             sub_project = input("  Sub-project []: ").strip() or None
             due_date = input("  Due date (YYYY-MM-DD) []: ").strip() or None
-            tasks.append({
-                "text": text,
-                "category": category,
-                "sub_project": sub_project,
-                "due_date": due_date,
-            })
+            tasks.append(
+                {
+                    "text": text,
+                    "category": category,
+                    "sub_project": sub_project,
+                    "due_date": due_date,
+                }
+            )
 
     if not tasks:
         print("No tasks to inject.")
