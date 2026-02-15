@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock, patch
 
 from secondbrain.scripts.inbox_processor import (
+    PERSONAL_SUB_PROJECTS,
     _append_to_daily,
     _append_to_existing_note,
     _create_daily_note,
@@ -11,10 +12,12 @@ from secondbrain.scripts.inbox_processor import (
     _get_existing_titles,
     _is_duplicate,
     _move_to_subfolder,
+    _normalize_personal_subcategory,
     _route_daily_note,
     _route_living_document,
     _validate_classification,
     _validate_segments,
+    _write_tasks_to_daily,
     process_inbox,
 )
 
@@ -452,3 +455,225 @@ class TestValidateClassificationWithExistingNote:
                 "existing_note": 123,
             }
         )
+
+
+class TestWriteTasksToDaily:
+    def test_creates_new_daily_note(self, tmp_path):
+        daily_dir = tmp_path / "00_Daily"
+        daily_dir.mkdir()
+        classification = {
+            "date": "2026-02-15",
+            "tasks": [
+                {
+                    "text": "Buy ring",
+                    "category": "Personal",
+                    "sub_project": "Rachel",
+                    "due_date": "2026-03-31",
+                },
+                {"text": "Call florist", "category": "Personal", "sub_project": "Rachel"},
+            ],
+        }
+        result = _write_tasks_to_daily(classification, tmp_path)
+        assert result is not None
+        assert "2 task(s)" in result
+        content = (daily_dir / "2026-02-15.md").read_text()
+        assert "## Tasks" in content
+        assert "- [ ] Buy ring (due: 2026-03-31)" in content
+        assert "- [ ] Call florist" in content
+
+    def test_appends_to_existing_daily_note(self, tmp_path):
+        daily_dir = tmp_path / "00_Daily"
+        daily_dir.mkdir()
+        (daily_dir / "2026-02-15.md").write_text(
+            "## Focus\n- Focus area\n\n## Notes\n- A note\n\n## Tasks\n### Personal\n- [ ] Existing task\n"
+        )
+        classification = {
+            "date": "2026-02-15",
+            "tasks": [{"text": "New task", "category": "Personal"}],
+        }
+        result = _write_tasks_to_daily(classification, tmp_path)
+        assert result is not None
+        content = (daily_dir / "2026-02-15.md").read_text()
+        assert "- [ ] Existing task" in content
+        assert "- [ ] New task" in content
+
+    def test_noop_when_no_tasks(self, tmp_path):
+        daily_dir = tmp_path / "00_Daily"
+        daily_dir.mkdir()
+        classification = {"date": "2026-02-15", "tasks": []}
+        result = _write_tasks_to_daily(classification, tmp_path)
+        assert result is None
+        assert not (daily_dir / "2026-02-15.md").exists()
+
+    def test_noop_when_tasks_missing(self, tmp_path):
+        daily_dir = tmp_path / "00_Daily"
+        daily_dir.mkdir()
+        classification = {"date": "2026-02-15"}
+        result = _write_tasks_to_daily(classification, tmp_path)
+        assert result is None
+
+    def test_skips_duplicate_tasks(self, tmp_path):
+        daily_dir = tmp_path / "00_Daily"
+        daily_dir.mkdir()
+        (daily_dir / "2026-02-15.md").write_text(
+            "## Focus\n- \n\n## Notes\n- \n\n## Tasks\n### Personal\n- [ ] Already here\n"
+        )
+        classification = {
+            "date": "2026-02-15",
+            "tasks": [{"text": "Already here", "category": "Personal"}],
+        }
+        _write_tasks_to_daily(classification, tmp_path)
+        content = (daily_dir / "2026-02-15.md").read_text()
+        assert content.count("Already here") == 1
+
+    def test_does_not_duplicate_focus_or_notes(self, tmp_path):
+        """Verify that _write_tasks_to_daily only writes tasks, not focus/notes items."""
+        daily_dir = tmp_path / "00_Daily"
+        daily_dir.mkdir()
+        (daily_dir / "2026-02-15.md").write_text(
+            "## Focus\n- \n\n## Notes\n- \n\n## Tasks\n- [ ] \n"
+        )
+        classification = {
+            "date": "2026-02-15",
+            "focus_items": ["Should not appear"],
+            "notes_items": ["Also should not appear"],
+            "tasks": [{"text": "Real task", "category": "Personal"}],
+        }
+        _write_tasks_to_daily(classification, tmp_path)
+        content = (daily_dir / "2026-02-15.md").read_text()
+        assert "Should not appear" not in content
+        assert "Also should not appear" not in content
+        assert "- [ ] Real task" in content
+
+
+class TestProcessExistingNoteAlsoWritesTasks:
+    @patch("secondbrain.scripts.inbox_processor.LLMClient")
+    def test_existing_note_writes_tasks_to_daily(self, mock_llm_cls, tmp_path):
+        """Integration test: existing note route writes content AND tasks to daily."""
+        # Set up vault structure
+        inbox = tmp_path / "Inbox"
+        inbox.mkdir()
+        notes_dir = tmp_path / "10_Notes"
+        notes_dir.mkdir()
+        daily_dir = tmp_path / "00_Daily"
+        daily_dir.mkdir()
+
+        # Create existing note
+        (notes_dir / "Engagement Ring.md").write_text(
+            "---\ntype: note\ncreated: 2026-01-01\nupdated: 2026-01-01\n---\nOriginal content"
+        )
+
+        # Create inbox file
+        (inbox / "capture.md").write_text("Some dictated note about the ring")
+
+        mock_llm = MagicMock()
+        mock_llm_cls.return_value = mock_llm
+        mock_llm.chat_json.return_value = {
+            "note_type": "note",
+            "suggested_title": "Engagement Ring",
+            "existing_note": "Engagement Ring",
+            "date": "2026-02-15",
+            "category": "Personal",
+            "sub_project": "Rachel",
+            "tags": [],
+            "focus_items": [],
+            "notes_items": [],
+            "tasks": [
+                {
+                    "text": "Call jeweler",
+                    "category": "Personal",
+                    "sub_project": "Rachel",
+                    "due_date": "2026-03-01",
+                },
+                {"text": "Set budget", "category": "Personal", "sub_project": "Rachel"},
+            ],
+            "content": "Updated ring notes from today",
+        }
+
+        actions = process_inbox(tmp_path)
+        assert len(actions) == 1
+
+        # Content appended to existing note
+        note_content = (notes_dir / "Engagement Ring.md").read_text()
+        assert "Updated ring notes from today" in note_content
+
+        # Tasks written to daily note
+        daily_content = (daily_dir / "2026-02-15.md").read_text()
+        assert "- [ ] Call jeweler (due: 2026-03-01)" in daily_content
+        assert "- [ ] Set budget" in daily_content
+
+
+class TestNormalizePersonalSubcategory:
+    def test_valid_subcategory_unchanged(self):
+        classification = {
+            "note_type": "daily_note",
+            "tasks": [{"text": "Visit parents", "category": "Personal", "sub_project": "Family"}],
+        }
+        _normalize_personal_subcategory(classification)
+        assert classification["tasks"][0]["sub_project"] == "Family"
+
+    def test_unknown_remaps_to_general(self):
+        classification = {
+            "note_type": "daily_note",
+            "tasks": [
+                {"text": "Do stuff", "category": "Personal", "sub_project": "SomeInventedThing"}
+            ],
+        }
+        _normalize_personal_subcategory(classification)
+        assert classification["tasks"][0]["sub_project"] == "General"
+
+    def test_non_personal_unchanged(self):
+        classification = {
+            "note_type": "daily_note",
+            "tasks": [{"text": "Deploy app", "category": "AT&T", "sub_project": "AI Receptionist"}],
+        }
+        _normalize_personal_subcategory(classification)
+        assert classification["tasks"][0]["sub_project"] == "AI Receptionist"
+
+    def test_top_level_subcategory_remapped(self):
+        classification = {
+            "note_type": "note",
+            "category": "Personal",
+            "sub_project": "BadValue",
+            "tasks": [],
+        }
+        _normalize_personal_subcategory(classification)
+        assert classification["sub_project"] == "General"
+
+    def test_top_level_valid_unchanged(self):
+        classification = {
+            "note_type": "note",
+            "category": "Personal",
+            "sub_project": "Health",
+            "tasks": [],
+        }
+        _normalize_personal_subcategory(classification)
+        assert classification["sub_project"] == "Health"
+
+    def test_top_level_non_personal_unchanged(self):
+        classification = {
+            "note_type": "note",
+            "category": "AT&T",
+            "sub_project": "Anything",
+            "tasks": [],
+        }
+        _normalize_personal_subcategory(classification)
+        assert classification["sub_project"] == "Anything"
+
+
+class TestPersonalSubProjectsConstant:
+    def test_general_fallback_exists(self):
+        assert "General" in PERSONAL_SUB_PROJECTS
+
+    def test_all_expected_subcategories_present(self):
+        expected = {
+            "Family",
+            "Rachel",
+            "Gifts",
+            "Health",
+            "Errands",
+            "Chores",
+            "Projects",
+            "General",
+        }
+        assert set(PERSONAL_SUB_PROJECTS.keys()) == expected

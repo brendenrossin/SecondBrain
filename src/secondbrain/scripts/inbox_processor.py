@@ -25,6 +25,19 @@ logger = logging.getLogger(__name__)
 # how tasks are organized on the Tasks page.
 TASK_CATEGORIES = ["AT&T", "PwC", "Personal"]
 
+# Subcategories for Personal tasks. Maps subcategory name to a
+# short description used in the classification prompt.
+PERSONAL_SUB_PROJECTS: dict[str, str] = {
+    "Family": "family logistics, visits, coordination with family members",
+    "Rachel": "anything specific to Rachel — relationship, proposal, dates, gifts for Rachel",
+    "Gifts": "gifts for anyone (birthdays, holidays, occasions) — EXCEPT gifts for Rachel (use Rachel)",
+    "Health": "medical appointments, fitness, wellness",
+    "Errands": "one-off errands, pickups, drop-offs",
+    "Chores": "recurring household tasks (cleaning, laundry, etc.)",
+    "Projects": "personal projects with ongoing scope (e.g., SecondBrain, home automation)",
+    "General": "anything that doesn't clearly fit above",
+}
+
 # Living documents: notes that get updated in-place instead
 # of creating new files. Each entry maps a document name to
 # (vault_path, semantics). "replace" overwrites content;
@@ -77,6 +90,10 @@ Output: 2 segments — work demo feedback and personal app idea are completely d
 _CATEGORY_OPTIONS = " | ".join(f'"{c}"' for c in TASK_CATEGORIES)
 _CATEGORY_LIST = ", ".join(TASK_CATEGORIES)
 _FIRST_CATEGORY = TASK_CATEGORIES[0] if TASK_CATEGORIES else "Work"
+_PERSONAL_SUB_PROMPT = "\n".join(
+    f'- "{name}": {desc}' for name, desc in PERSONAL_SUB_PROJECTS.items()
+)
+
 _LIVING_DOCS_PROMPT = "\n".join(
     f'    - "{name}" ({sem} semantics) → {"replaces existing content" if sem == "replace" else "appends new entries"}'
     for name, (_, sem) in LIVING_DOCUMENTS.items()
@@ -143,6 +160,10 @@ IMPORTANT due_date rules:
 - "in two days" = today + 2 days.
 - "next week" = the Monday of the following week.
 - If no deadline is mentioned, set due_date to null.
+
+When category is "Personal", assign sub_project from these subcategories:
+{_PERSONAL_SUB_PROMPT}
+If unsure between subcategories, prefer "General" over guessing wrong.
 
 For daily_note: extract focus_items, notes_items, and tasks with categories.
 For other types: put the main content in "content" field.
@@ -279,6 +300,32 @@ def _validate_classification(data: Any) -> bool:
     return existing_note is None or isinstance(existing_note, str)
 
 
+def _normalize_personal_subcategory(classification: dict[str, Any]) -> None:
+    """Remap unrecognized Personal sub_project values to 'General'."""
+    for task in classification.get("tasks", []):
+        if (
+            task.get("category") == "Personal"
+            and task.get("sub_project")
+            and task["sub_project"] not in PERSONAL_SUB_PROJECTS
+        ):
+            logger.warning(
+                "Unknown Personal sub_project '%s', remapping to 'General'",
+                task["sub_project"],
+            )
+            task["sub_project"] = "General"
+    # Also check top-level classification sub_project
+    if (
+        classification.get("category") == "Personal"
+        and classification.get("sub_project")
+        and classification["sub_project"] not in PERSONAL_SUB_PROJECTS
+    ):
+        logger.warning(
+            "Unknown Personal sub_project '%s', remapping to 'General'",
+            classification["sub_project"],
+        )
+        classification["sub_project"] = "General"
+
+
 def _validate_segments(data: Any) -> bool:
     """Validate that LLM segmentation output is a list of segment objects."""
     if not isinstance(data, list):
@@ -343,6 +390,8 @@ def _classify_with_retry(
         try:
             classification = llm.chat_json(CLASSIFICATION_PROMPT, user_prompt)
             if _validate_classification(classification):
+                _normalize_personal_subcategory(classification)
+                logger.debug("Classification result: %s", json.dumps(classification, indent=2))
                 return classification
             logger.warning(
                 "Classification validation failed (attempt %d): %s",
@@ -412,6 +461,12 @@ def _process_single_file(md_file: Path, vault_path: Path, llm: LLMClient) -> lis
                 action = _route_to_folder(
                     classification, vault_path, VAULT_FOLDERS["notes"], "note"
                 )
+
+        # Write tasks to daily note for routes that don't handle tasks themselves.
+        # daily_note writes tasks via _create/_append_to_daily; living_document and
+        # event routes don't carry actionable tasks.
+        if note_type not in ("daily_note", "living_document", "event"):
+            _write_tasks_to_daily(classification, vault_path)
 
         actions.append(action)
 
@@ -587,6 +642,33 @@ def _ensure_events_section(content: str, bullet: str) -> str:
             lines.insert(insert_at + j, item)
 
     return "\n".join(lines)
+
+
+def _write_tasks_to_daily(classification: dict[str, Any], vault_path: Path) -> str | None:
+    """Write tasks from any classification to the appropriate daily note.
+
+    Called after non-daily routing paths (existing note, folder routing) to ensure
+    tasks are always written to the daily note regardless of where content is routed.
+    Returns a description of what was written, or None if no tasks.
+    """
+    tasks = classification.get("tasks", [])
+    if not tasks:
+        return None
+
+    date_str = classification.get("date", datetime.now().strftime("%Y-%m-%d"))
+    daily_dir = vault_path / VAULT_FOLDERS["daily"]
+    daily_dir.mkdir(parents=True, exist_ok=True)
+    daily_file = daily_dir / f"{date_str}.md"
+
+    # Build a tasks-only classification to avoid duplicating focus/notes items
+    tasks_only = {"tasks": tasks, "focus_items": [], "notes_items": [], "tags": []}
+
+    if daily_file.exists():
+        _append_to_daily(daily_file, tasks_only)
+    else:
+        _create_daily_note(daily_file, tasks_only, date_str)
+
+    return f"Wrote {len(tasks)} task(s) to {VAULT_FOLDERS['daily']}/{date_str}.md"
 
 
 def _route_daily_note(classification: dict[str, Any], vault_path: Path) -> str:
