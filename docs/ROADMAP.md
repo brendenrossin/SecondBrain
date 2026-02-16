@@ -26,8 +26,12 @@ Captured 2026-02-07 after roadmap review session. The original brainstorm (with 
 | **Vault stays authoritative** | No task state, signal state, or other application state outside the vault and its derived indexes. The system is always a read-only view on top of personal notes. |
 | **Voice chat: resolve open questions for v1** | Single voice default (alloy, no UI picker). Fresh sessions (no text history injection). Error on offline (no Whisper STT fallback). Server VAD only (no push-to-talk). Keep reranker enabled but monitor latency. See resolved decisions in `docs/features/voice-chat-realtime-api.md`. |
 | **Reprioritized roadmap based on real-world usage (2026-02-08)** | Tasks/scheduling is the most-used feature. Vault has ~16 notes — RAG infrastructure is solid but the bottleneck is capture volume, not retrieval quality. Reordered phases to maximize daily value: morning briefing → inbox/model upgrade → quick capture → weekly review → voice chat. Moved retrieval transparency and full proactive signals to deferred (morning briefing absorbs the core escalation value). |
+| **Email ingestion: Gmail API direct, no MCP (2026-02-14)** | All existing Gmail MCP servers require write scopes; documented supply-chain attacks on MCP registries. Direct Gmail API with `gmail.readonly` is safer and simpler. Server-side query exclusions + Haiku `skip` classification control volume (replaces strict allowlist — too restrictive for new recruiters and unknown senders). Summary notes (not raw email) enter vault. Sandboxed LLM classification with spotlighting mitigates prompt injection. Cost: ~$1/month. See `docs/features/email-ingestion.md`. |
+| **Email ingestion deprioritized to Phase 10 (2026-02-15)** | Quick capture already covers the "email → SecondBrain" workflow manually. Phases 8.5–9.5 deliver more tangible daily value. Email integration is a nice-to-have, not a daily pain point. Spec is ready to build whenever the signal is there ("I keep wishing that email had been in SecondBrain"). |
 | **Deferred vault health checks** | Premature with ~16 notes. Note matching during inbox processing prevents the duplication that would make health checks necessary. Revisit at 100+ notes. |
 | **Inbox upgrade: resolve open questions** | Note matching restricted to `10_Notes/` and `30_Concepts/` only (not projects). Frontend toggle labeled "Claude" (specific, recognizable). See `docs/features/inbox-upgrade-anthropic-migration.md`. |
+| **Configurable categories over hardcoded constants (2026-02-15)** | Categories (AT&T, PwC, Personal) and subcategories are hardcoded Python constants. New users must edit source code. Moving to `data/settings.json` + Settings API + Settings UI makes SecondBrain adoptable by anyone. No automatic recategorization on change — users can already reassign per-task in the TaskDetailPanel. Defaults: "Work" + "Personal". See `docs/features/configurable-categories-ui.md`. |
+| **Public demo instance for portfolio (2026-02-15)** | No way to showcase SecondBrain without exposing personal vault data. Deploy to Fly.io with fictional sample vault, rate limiting, and auto-deploy from main. ~$10-15/month. See `docs/features/public-demo-instance.md`. |
 
 ---
 
@@ -243,15 +247,15 @@ See `docs/features/task-management-ui.md` for full spec.
 
 ---
 
-## Phase 8.5 — Calendar Week Grid (~3-5 days)
+## Phase 8.5 — Calendar Week Grid ✅
 Goal: see your whole week at a glance on desktop; navigate days instantly on mobile.
 
-- [ ] Fix mobile task text truncation (wrap instead of ellipsis on Tasks page)
-- [ ] Desktop multi-column grid: 1 column per day, all visible without scrolling
-- [ ] 5-day / 7-day toggle (smart default: 5d weekdays, 7d weekends)
-- [ ] Mobile day-picker ribbon: 7 day buttons with event/task count badges
-- [ ] Mobile single-day detail view with tap-to-select navigation
-- [ ] Responsive breakpoint orchestration (`md` = 768px)
+- [x] Fix mobile task text truncation (wrap instead of ellipsis on Tasks page)
+- [x] Desktop multi-column grid: 1 column per day, all visible without scrolling
+- [x] 5-day / 7-day toggle (smart default: 5d weekdays, 7d weekends)
+- [x] Mobile day-picker ribbon: 7 day buttons with event/task count badges
+- [x] Mobile single-day detail view with tap-to-select navigation
+- [x] Responsive breakpoint orchestration (`md` = 768px)
 
 Deliverable: glance at your week on desktop, tap through days on mobile.
 
@@ -259,13 +263,13 @@ See `docs/features/calendar-week-grid.md` for full spec.
 
 ---
 
-## Phase 8.6 — Server Hardening (~1 day)
+## Phase 8.6 — Server Hardening ✅
 Goal: eliminate silent failures from misconfigured server.
 
-- [ ] Make `.env` and `data_path` resolve from absolute paths (not cwd-dependent)
-- [ ] Add startup configuration logging (vault_path, data_path)
-- [ ] Replace silent empty API returns with HTTP 503 when vault missing
-- [ ] Remove redundant `Path("data")` fallbacks
+- [x] Make `.env` and `data_path` resolve from absolute paths (not cwd-dependent)
+- [x] Add startup configuration logging (vault_path, data_path)
+- [x] Replace silent empty API returns with HTTP 503 when vault missing
+- [x] Remove redundant `Path("data")` fallbacks
 
 Deliverable: misconfigured server fails loudly instead of returning empty data.
 
@@ -273,25 +277,55 @@ See `docs/features/server-hardening.md` for full spec.
 
 ---
 
-## Phase 8.7 — Operational Hardening (~2-3 days)
+## Phase 8.7 — Operational Hardening ✅
 Goal: reliability, monitoring, and defensive infrastructure for sustained daily use.
 
-- [ ] Backend API launchd service (auto-start, auto-restart, correct cwd)
-- [ ] Meaningful health endpoint (vault, disk space, sync freshness)
-- [ ] Missing database indexes (conversation, index_tracker)
-- [ ] Daily sync completion marker
-- [ ] Log rotation (10MB threshold, keep 1 rotated copy)
-- [ ] Tighten exception handlers (specific exceptions, not blanket `Exception`)
-- [ ] Reindex lock (prevent double-reindex)
-- [ ] WAL checkpoint + synchronous=NORMAL tuning
-- [ ] Backup/restore Makefile commands
-- [ ] CORS middleware (defensive, localhost-only)
-- [ ] Structured logging for critical sync events
-- [ ] Sync status indicator in admin UI
+- [x] Backend API launchd service (auto-start, auto-restart, correct cwd)
+- [x] Meaningful health endpoint (vault, disk space, sync freshness)
+- [x] Missing database indexes (conversation, index_tracker)
+- [x] Daily sync completion marker
+- [x] Log rotation (10MB threshold, keep 1 rotated copy)
+- [x] Tighten exception handlers (specific exceptions, not blanket `Exception`)
+- [x] Reindex lock (prevent double-reindex)
+- [x] WAL checkpoint + synchronous=NORMAL tuning
+- [x] Backup/restore Makefile commands
+- [x] CORS middleware (defensive, localhost-only)
+- [x] Structured logging for critical sync events
+- [x] Sync status indicator in admin UI
 
 Deliverable: system that restarts itself, logs meaningfully, and fails loudly.
 
 See `docs/features/operational-hardening.md` for full spec.
+
+---
+
+## Phase 8.8 — Configurable Categories UI (~3-4 days)
+Goal: make task categories and subcategories user-configurable via the UI instead of hardcoded Python constants.
+
+- [ ] Settings file (`data/settings.json`) with reader/writer and sensible defaults ("Work" + "Personal")
+- [ ] Settings API: `GET/PUT /api/v1/settings/categories`
+- [ ] Inbox processor reads categories from settings file (dynamic prompt building)
+- [ ] Settings UI page with category/subcategory CRUD (add, edit, delete)
+- [ ] Update frontend branding defaults to generic ("SecondBrain" instead of "Brent OS")
+
+Deliverable: new user clones repo, opens settings page, configures their categories — no code editing required.
+
+See `docs/features/configurable-categories-ui.md` for full spec.
+
+---
+
+## Phase 8.9 — Public Demo Instance (~4-5 days, ~$10-15/month)
+Goal: interactive demo with sample data that anyone can try from the README, without exposing personal vault data.
+
+- [ ] Sample vault with fictional persona ("Alex Chen") — daily notes, tasks, projects, concepts
+- [ ] Dockerfile (multi-stage: frontend build + backend + sample vault)
+- [ ] Rate limiting middleware (gated by `DEMO_MODE` env var)
+- [ ] GitHub Actions deploy pipeline → Fly.io (auto-deploy on push to main)
+- [ ] README badge and demo link
+
+Deliverable: visitors click "Live Demo" in README and interact with a fully functional SecondBrain using sample data.
+
+See `docs/features/public-demo-instance.md` for full spec.
 
 ---
 
@@ -326,7 +360,24 @@ Note: All backend APIs already exist (`/metadata`, `/suggestions`, `/entities`, 
 
 ---
 
-## Phase 10 — Voice Chat via OpenAI Realtime API (~2-3 weeks)
+## Phase 10 — Email Ingestion (Read-Only) (~5-7 days)
+Goal: bring email context into SecondBrain without compromising vault signal-to-noise or security.
+
+- [ ] Gmail API client with `gmail.readonly` OAuth scope (direct API, no MCP)
+- [ ] Email pre-filter + sanitizer (server-side query exclusions + optional sender blocklist, text-only extraction, hidden char stripping)
+- [ ] Sandboxed LLM classification with spotlighting (Haiku `skip` category filters remaining noise)
+- [ ] Vault note writer (summary notes to `40_Email/`, deduplication by message ID)
+- [ ] Daily sync integration (new stage, gated by `email_enabled` config flag)
+- [ ] Configuration (env vars for query filter, blocklist, max per sync)
+
+Deliverable: emails from your Primary inbox appear as searchable summary notes in your vault. New recruiters, appointment reminders, and family emails flow through automatically; noise is excluded by Gmail query filters and Haiku classification.
+
+See `docs/features/email-ingestion.md` for full spec.
+Implementation prompt: `docs/features/PROMPT-email-ingestion.md`
+
+---
+
+## Phase 11 — Voice Chat via OpenAI Realtime API (~2-3 weeks)
 Goal: hands-free voice interaction with the knowledge base using speech-to-speech.
 
 - [ ] Backend WebSocket relay (`/api/v1/voice`) proxying audio to OpenAI Realtime API
@@ -344,7 +395,7 @@ See `docs/features/voice-chat-realtime-api.md` for full spec.
 
 ---
 
-## Phase 11 — Knowledge graph (V2, 4–8+ weeks)
+## Phase 12 — Knowledge graph (V2, 4–8+ weeks)
 - [ ] Choose graph store (Neo4j or Postgres)
 - [ ] Entity resolution + dedupe
 - [ ] Relationship extraction (LLM-assisted, human-reviewed)
@@ -354,7 +405,7 @@ Deliverable: true navigable concept graph, beyond similarity search.
 
 ---
 
-## Phase 12 — Write-back workflow (V2+)
+## Phase 13 — Write-back workflow (V2+)
 - [ ] PR-style changesets
 - [ ] Apply suggested links/tags to Markdown files
 - [ ] Versioning + rollback
@@ -376,7 +427,7 @@ Features that were planned but deprioritized based on current usage patterns and
 ## Future explorations (not committed)
 These ideas have potential but need separate feasibility assessments before entering the roadmap.
 
-- **Email ingestion (read-only)** — See `docs/features/EXPLORATION-email-ingestion.md`
+- **Email ingestion (read-only)** — Assessed and promoted to Phase 10. See `docs/features/email-ingestion.md`
 - **Calendar integration (read-only)** — See `docs/features/EXPLORATION-calendar-integration.md`
 - **Daily digest** — Trivial once morning briefing ships; could be a push notification or email summary
 - **Task lifecycle engine** — See `docs/features/DEFERRED-task-lifecycle.md`
