@@ -14,33 +14,36 @@ from fastapi.testclient import TestClient
 from secondbrain.main import app
 
 
-@pytest.fixture
-def client():
-    return TestClient(app)
+def _make_mock_settings():
+    settings = MagicMock()
+    settings.vault_path = Path("/tmp")  # Must exist on disk — endpoints check .exists()
+    settings.data_path = Path("/tmp")
+    settings.debug = False
+    return settings
 
 
 @pytest.fixture(autouse=True)
-def _mock_vault_path():
-    """Ensure vault_path is set so endpoints don't 503."""
-    with patch("secondbrain.config.get_settings") as mock_settings:
-        settings = MagicMock()
-        settings.vault_path = Path("/tmp/test-vault")
-        settings.data_path = Path("/tmp/test-data")
-        settings.debug = False
-        mock_settings.return_value = settings
-        yield
+def _override_settings():
+    """Override get_settings dependency so endpoints don't 503."""
+    from secondbrain.api.dependencies import get_settings
+
+    app.dependency_overrides[get_settings] = _make_mock_settings
+    yield
+    app.dependency_overrides.pop(get_settings, None)
+
+
+@pytest.fixture
+def client():
+    return TestClient(app)
 
 
 class TestHealthLatency:
     """Health endpoint should respond very fast."""
 
     def test_health_under_100ms(self, client):
-        # Mock vault and disk checks
+        # Health endpoint uses main.get_settings directly (not Depends)
         with patch("secondbrain.main.get_settings") as mock_gs:
-            settings = MagicMock()
-            settings.vault_path = Path("/tmp")
-            settings.data_path = Path("/tmp")
-            mock_gs.return_value = settings
+            mock_gs.return_value = _make_mock_settings()
 
             start = time.perf_counter()
             response = client.get("/health")
