@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-from pathlib import Path
 
 from secondbrain.config import get_settings
 from secondbrain.scripts.task_aggregator import (
@@ -60,7 +59,10 @@ RECATEGORIZATIONS = [
 def run(dry_run: bool = False) -> None:
     """Execute the recategorization."""
     settings = get_settings()
-    vault_path = Path(settings.vault_path)
+    if not settings.vault_path:
+        logger.error("SECONDBRAIN_VAULT_PATH not configured")
+        return
+    vault_path = settings.vault_path
     daily_dir = vault_path / "00_Daily"
 
     # Scan current tasks to find matches
@@ -108,8 +110,8 @@ def run(dry_run: bool = False) -> None:
         result = update_task_in_daily(
             vault_path,
             matched_text,
-            category=matched_cat,
-            sub_project=matched_sub,
+            category=matched_cat or "",
+            sub_project=matched_sub or "",
             new_category=new_cat,
             new_sub_project=new_sub,
         )

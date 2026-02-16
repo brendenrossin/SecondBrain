@@ -13,30 +13,13 @@ from typing import Any
 import frontmatter
 
 from secondbrain.scripts.llm_client import LLMClient
+from secondbrain.settings import load_settings
 
 logger = logging.getLogger(__name__)
 
 # ============================================================
 # USER CONFIGURATION — Customize these for your vault
 # ============================================================
-
-# Task categories the LLM classifies dictated notes into.
-# These appear in the classification prompt and determine
-# how tasks are organized on the Tasks page.
-TASK_CATEGORIES = ["AT&T", "PwC", "Personal"]
-
-# Subcategories for Personal tasks. Maps subcategory name to a
-# short description used in the classification prompt.
-PERSONAL_SUB_PROJECTS: dict[str, str] = {
-    "Family": "family logistics, visits, coordination with family members",
-    "Rachel": "anything specific to Rachel — relationship, proposal, dates, gifts for Rachel",
-    "Gifts": "gifts for anyone (birthdays, holidays, occasions) — EXCEPT gifts for Rachel (use Rachel)",
-    "Health": "medical appointments, fitness, wellness",
-    "Errands": "one-off errands, pickups, drop-offs",
-    "Chores": "recurring household tasks (cleaning, laundry, etc.)",
-    "Projects": "personal projects with ongoing scope (e.g., SecondBrain, home automation)",
-    "General": "anything that doesn't clearly fit above",
-}
 
 # Living documents: notes that get updated in-place instead
 # of creating new files. Each entry maps a document name to
@@ -87,19 +70,51 @@ Output: 1 segment — all of this is career planning context that supports one s
 Input: "The AI Receptionist demo went well today. Client loved the voice quality. Separately, I had an idea for a personal budgeting app — track spending by category with weekly summaries."
 Output: 2 segments — work demo feedback and personal app idea are completely different domains."""
 
-_CATEGORY_OPTIONS = " | ".join(f'"{c}"' for c in TASK_CATEGORIES)
-_CATEGORY_LIST = ", ".join(TASK_CATEGORIES)
-_FIRST_CATEGORY = TASK_CATEGORIES[0] if TASK_CATEGORIES else "Work"
-_PERSONAL_SUB_PROMPT = "\n".join(
-    f'- "{name}": {desc}' for name, desc in PERSONAL_SUB_PROJECTS.items()
-)
 
-_LIVING_DOCS_PROMPT = "\n".join(
-    f'    - "{name}" ({sem} semantics) → {"replaces existing content" if sem == "replace" else "appends new entries"}'
-    for name, (_, sem) in LIVING_DOCUMENTS.items()
-)
+def _load_categories(data_path: Path) -> list[str]:
+    """Load category names from settings file."""
+    settings = load_settings(data_path)
+    return [c["name"] for c in settings.get("categories", [])]
 
-CLASSIFICATION_PROMPT = f"""You are an Obsidian vault organizer. Given a raw dictated note, classify it and extract structured data.
+
+def _load_all_sub_projects(data_path: Path) -> dict[str, dict[str, str]]:
+    """Return {category_name: {sub_project_name: description}} for all categories with sub_projects."""
+    settings = load_settings(data_path)
+    return {
+        c["name"]: c["sub_projects"]
+        for c in settings.get("categories", [])
+        if c.get("sub_projects")
+    }
+
+
+def _build_classification_prompt(data_path: Path) -> str:
+    """Build the classification prompt dynamically from settings."""
+    categories = _load_categories(data_path)
+    all_sub_projects = _load_all_sub_projects(data_path)
+
+    category_options = " | ".join(f'"{c}"' for c in categories)
+    category_list = ", ".join(categories)
+    first_category = categories[0] if categories else "Work"
+
+    # Build sub_project prompt for ALL categories that have them
+    sub_project_lines: list[str] = []
+    for cat_name, subs in all_sub_projects.items():
+        sub_project_lines.append(
+            f'\nFor category "{cat_name}", assign sub_project from these subcategories:'
+        )
+        for name, desc in subs.items():
+            sub_project_lines.append(f'- "{name}": {desc}')
+        sub_project_lines.append(
+            'If unsure between subcategories, prefer "General" over guessing wrong.'
+        )
+    sub_project_prompt = "\n".join(sub_project_lines)
+
+    living_docs_prompt = "\n".join(
+        f'    - "{name}" ({sem} semantics) → {"replaces existing content" if sem == "replace" else "appends new entries"}'
+        for name, (_, sem) in LIVING_DOCUMENTS.items()
+    )
+
+    return f"""You are an Obsidian vault organizer. Given a raw dictated note, classify it and extract structured data.
 
 Return ONLY valid JSON with these fields:
 {{
@@ -107,13 +122,13 @@ Return ONLY valid JSON with these fields:
   "suggested_title": "Short descriptive title",
   "existing_note": "exact title of an existing note to append to, or null",
   "date": "YYYY-MM-DD (the date the note is about, or today if unclear)",
-  "category": {_CATEGORY_OPTIONS} | null,
+  "category": {category_options} | null,
   "sub_project": "sub-project name or null",
   "tags": ["tag1", "tag2"],
   "focus_items": ["focus item 1"],
   "notes_items": ["note 1", "note 2"],
   "tasks": [
-    {{"text": "task description", "category": "{_FIRST_CATEGORY}", "sub_project": "AI Receptionist", "due_date": "YYYY-MM-DD or null"}}
+    {{"text": "task description", "category": "{first_category}", "sub_project": "AI Receptionist", "due_date": "YYYY-MM-DD or null"}}
   ],
   "event_title": "short event title or null",
   "event_date": "YYYY-MM-DD or null",
@@ -141,7 +156,7 @@ Classification rules:
   When classified as event, populate event_title, event_date, event_time (if known), event_end_date (if multi-day).
 - "living_document": Content that updates a known persistent document.
   Known living documents:
-{_LIVING_DOCS_PROMPT}
+{living_docs_prompt}
   Set "living_doc_name" to the matched document name.
 
 IMPORTANT task vs focus rules:
@@ -160,15 +175,12 @@ IMPORTANT due_date rules:
 - "in two days" = today + 2 days.
 - "next week" = the Monday of the following week.
 - If no deadline is mentioned, set due_date to null.
-
-When category is "Personal", assign sub_project from these subcategories:
-{_PERSONAL_SUB_PROMPT}
-If unsure between subcategories, prefer "General" over guessing wrong.
+{sub_project_prompt}
 
 For daily_note: extract focus_items, notes_items, and tasks with categories.
 For other types: put the main content in "content" field.
 Always provide a date (use today if not mentioned).
-Categories are typically: {_CATEGORY_LIST}."""
+Categories are typically: {category_list}."""
 
 
 def _get_existing_titles(vault_path: Path, max_per_folder: int = 75) -> str:
@@ -240,7 +252,7 @@ def process_inbox(vault_path: Path) -> list[str]:
 
     for md_file in md_files:
         try:
-            file_actions = _process_single_file(md_file, vault_path, llm)
+            file_actions = _process_single_file(md_file, vault_path, llm, data_path)
             actions.extend(file_actions)
             for action in file_actions:
                 logger.info("Processed: %s -> %s", md_file.name, action)
@@ -300,30 +312,25 @@ def _validate_classification(data: Any) -> bool:
     return existing_note is None or isinstance(existing_note, str)
 
 
-def _normalize_personal_subcategory(classification: dict[str, Any]) -> None:
-    """Remap unrecognized Personal sub_project values to 'General'."""
+def _remap_sub_project(record: dict[str, Any], all_sub_projects: dict[str, dict[str, str]]) -> None:
+    """Remap an unrecognized sub_project value to a valid fallback for a single record."""
+    cat = record.get("category")
+    sub = record.get("sub_project")
+    if not (cat and sub and cat in all_sub_projects):
+        return
+    valid_subs = all_sub_projects[cat]
+    if sub not in valid_subs:
+        fallback = "General" if "General" in valid_subs else sub
+        logger.warning("Unknown %s sub_project '%s', remapping to '%s'", cat, sub, fallback)
+        record["sub_project"] = fallback
+
+
+def _normalize_subcategory(classification: dict[str, Any], data_path: Path) -> None:
+    """Remap unrecognized sub_project values for any category with configured sub_projects."""
+    all_sub_projects = _load_all_sub_projects(data_path)
     for task in classification.get("tasks", []):
-        if (
-            task.get("category") == "Personal"
-            and task.get("sub_project")
-            and task["sub_project"] not in PERSONAL_SUB_PROJECTS
-        ):
-            logger.warning(
-                "Unknown Personal sub_project '%s', remapping to 'General'",
-                task["sub_project"],
-            )
-            task["sub_project"] = "General"
-    # Also check top-level classification sub_project
-    if (
-        classification.get("category") == "Personal"
-        and classification.get("sub_project")
-        and classification["sub_project"] not in PERSONAL_SUB_PROJECTS
-    ):
-        logger.warning(
-            "Unknown Personal sub_project '%s', remapping to 'General'",
-            classification["sub_project"],
-        )
-        classification["sub_project"] = "General"
+        _remap_sub_project(task, all_sub_projects)
+    _remap_sub_project(classification, all_sub_projects)
 
 
 def _validate_segments(data: Any) -> bool:
@@ -374,7 +381,11 @@ def _segment_content(raw_text: str, llm: LLMClient) -> list[dict[str, Any]]:
 
 
 def _classify_with_retry(
-    text: str, llm: LLMClient, vault_path: Path | None = None, max_retries: int = 1
+    text: str,
+    llm: LLMClient,
+    data_path: Path,
+    vault_path: Path | None = None,
+    max_retries: int = 1,
 ) -> dict[str, Any] | None:
     """Classify text with validation and retry on failure."""
     today = datetime.now().strftime("%Y-%m-%d")
@@ -386,11 +397,13 @@ def _classify_with_retry(
         if titles:
             user_prompt += f"\n\nExisting notes in vault:\n{titles}"
 
+    classification_prompt = _build_classification_prompt(data_path)
+
     for attempt in range(1 + max_retries):
         try:
-            classification = llm.chat_json(CLASSIFICATION_PROMPT, user_prompt)
+            classification = llm.chat_json(classification_prompt, user_prompt)
             if _validate_classification(classification):
-                _normalize_personal_subcategory(classification)
+                _normalize_subcategory(classification, data_path)
                 logger.debug("Classification result: %s", json.dumps(classification, indent=2))
                 return classification
             logger.warning(
@@ -404,7 +417,9 @@ def _classify_with_retry(
     return None
 
 
-def _process_single_file(md_file: Path, vault_path: Path, llm: LLMClient) -> list[str]:
+def _process_single_file(
+    md_file: Path, vault_path: Path, llm: LLMClient, data_path: Path
+) -> list[str]:
     """Process a single inbox file: segment, classify each segment, and route.
 
     Returns a list of action strings (one per segment routed).
@@ -423,7 +438,7 @@ def _process_single_file(md_file: Path, vault_path: Path, llm: LLMClient) -> lis
     actions: list[str] = []
     for segment in segments:
         segment_text = segment.get("content", raw_text)
-        classification = _classify_with_retry(segment_text, llm, vault_path=vault_path)
+        classification = _classify_with_retry(segment_text, llm, data_path, vault_path=vault_path)
         if classification is None:
             topic = segment.get("topic", "unknown")
             raise ValueError(f"Classification failed for segment: {topic}")

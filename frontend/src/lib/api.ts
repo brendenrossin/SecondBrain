@@ -256,6 +256,25 @@ export async function getEvents(
   return fetchJSON(`${BASE}/events?start=${start}&end=${end}`);
 }
 
+// --- Settings ---
+
+export interface CategoryConfig {
+  name: string;
+  sub_projects: Record<string, string>;
+}
+
+export async function getCategories(): Promise<CategoryConfig[]> {
+  return fetchJSON(`${BASE}/settings/categories`);
+}
+
+export async function updateCategories(categories: CategoryConfig[]): Promise<CategoryConfig[]> {
+  return fetchJSON(`${BASE}/settings/categories`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ categories }),
+  });
+}
+
 // --- Capture ---
 
 export async function captureText(text: string): Promise<CaptureResponse> {

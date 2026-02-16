@@ -11,6 +11,7 @@ import {
   Feather,
   Lightbulb,
   Shield,
+  Settings,
   ChevronRight,
   Brain,
 } from "lucide-react";
@@ -75,6 +76,13 @@ const NAV_COLORS: Record<string, {
     borderActive: "border-text-muted/15",
     glowActive: "shadow-[0_0_16px_rgba(148,163,184,0.1)]",
   },
+  "/settings": {
+    icon: "text-zinc-400",
+    iconActive: "text-zinc-200",
+    bgActive: "bg-zinc-500/10",
+    borderActive: "border-zinc-500/30",
+    glowActive: "shadow-[0_0_15px_rgba(161,161,170,0.08)]",
+  },
 };
 
 const coreNavItems = [
@@ -88,6 +96,7 @@ const coreNavItems = [
 const toolsNavItems = [
   { href: "/insights", label: "Insights", icon: Lightbulb },
   { href: "/admin", label: "Admin", icon: Shield },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 interface NavItem {

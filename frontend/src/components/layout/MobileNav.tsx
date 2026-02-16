@@ -11,6 +11,7 @@ import {
   Calendar,
   Lightbulb,
   Shield,
+  Settings,
   MoreHorizontal,
   X,
 } from "lucide-react";
@@ -27,6 +28,7 @@ const moreItems = [
   { href: "/calendar", label: "Calendar", icon: Calendar, color: "text-warning" },
   { href: "/insights", label: "Insights", icon: Lightbulb, color: "text-purple" },
   { href: "/admin", label: "Admin", icon: Shield, color: "text-text-muted" },
+  { href: "/settings", label: "Settings", icon: Settings, color: "text-zinc-400" },
 ];
 
 export function MobileNav(): React.JSX.Element {

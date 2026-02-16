@@ -3,16 +3,17 @@
 from unittest.mock import MagicMock, patch
 
 from secondbrain.scripts.inbox_processor import (
-    PERSONAL_SUB_PROJECTS,
     _append_to_daily,
     _append_to_existing_note,
+    _build_classification_prompt,
     _create_daily_note,
     _ensure_task_category,
     _ensure_task_hierarchy,
     _get_existing_titles,
     _is_duplicate,
+    _load_all_sub_projects,
     _move_to_subfolder,
-    _normalize_personal_subcategory,
+    _normalize_subcategory,
     _route_daily_note,
     _route_living_document,
     _validate_classification,
@@ -20,6 +21,7 @@ from secondbrain.scripts.inbox_processor import (
     _write_tasks_to_daily,
     process_inbox,
 )
+from secondbrain.settings import DEFAULT_SETTINGS, save_settings
 
 
 class TestAppendToDaily:
@@ -603,69 +605,110 @@ class TestProcessExistingNoteAlsoWritesTasks:
         assert "- [ ] Set budget" in daily_content
 
 
-class TestNormalizePersonalSubcategory:
-    def test_valid_subcategory_unchanged(self):
+class TestNormalizeSubcategory:
+    def test_valid_subcategory_unchanged(self, tmp_path):
+        save_settings(tmp_path, DEFAULT_SETTINGS)
         classification = {
             "note_type": "daily_note",
             "tasks": [{"text": "Visit parents", "category": "Personal", "sub_project": "Family"}],
         }
-        _normalize_personal_subcategory(classification)
+        _normalize_subcategory(classification, tmp_path)
         assert classification["tasks"][0]["sub_project"] == "Family"
 
-    def test_unknown_remaps_to_general(self):
+    def test_unknown_remaps_to_general(self, tmp_path):
+        save_settings(tmp_path, DEFAULT_SETTINGS)
         classification = {
             "note_type": "daily_note",
             "tasks": [
                 {"text": "Do stuff", "category": "Personal", "sub_project": "SomeInventedThing"}
             ],
         }
-        _normalize_personal_subcategory(classification)
+        _normalize_subcategory(classification, tmp_path)
         assert classification["tasks"][0]["sub_project"] == "General"
 
-    def test_non_personal_unchanged(self):
+    def test_category_without_sub_projects_unchanged(self, tmp_path):
+        save_settings(tmp_path, DEFAULT_SETTINGS)
         classification = {
             "note_type": "daily_note",
-            "tasks": [{"text": "Deploy app", "category": "AT&T", "sub_project": "AI Receptionist"}],
+            "tasks": [{"text": "Deploy app", "category": "Work", "sub_project": "AI Receptionist"}],
         }
-        _normalize_personal_subcategory(classification)
+        _normalize_subcategory(classification, tmp_path)
         assert classification["tasks"][0]["sub_project"] == "AI Receptionist"
 
-    def test_top_level_subcategory_remapped(self):
+    def test_top_level_subcategory_remapped(self, tmp_path):
+        save_settings(tmp_path, DEFAULT_SETTINGS)
         classification = {
             "note_type": "note",
             "category": "Personal",
             "sub_project": "BadValue",
             "tasks": [],
         }
-        _normalize_personal_subcategory(classification)
+        _normalize_subcategory(classification, tmp_path)
         assert classification["sub_project"] == "General"
 
-    def test_top_level_valid_unchanged(self):
+    def test_top_level_valid_unchanged(self, tmp_path):
+        save_settings(tmp_path, DEFAULT_SETTINGS)
         classification = {
             "note_type": "note",
             "category": "Personal",
             "sub_project": "Health",
             "tasks": [],
         }
-        _normalize_personal_subcategory(classification)
+        _normalize_subcategory(classification, tmp_path)
         assert classification["sub_project"] == "Health"
 
-    def test_top_level_non_personal_unchanged(self):
+    def test_top_level_category_without_subs_unchanged(self, tmp_path):
+        save_settings(tmp_path, DEFAULT_SETTINGS)
         classification = {
             "note_type": "note",
-            "category": "AT&T",
+            "category": "Work",
             "sub_project": "Anything",
             "tasks": [],
         }
-        _normalize_personal_subcategory(classification)
+        _normalize_subcategory(classification, tmp_path)
         assert classification["sub_project"] == "Anything"
 
+    def test_works_for_any_category_with_sub_projects(self, tmp_path):
+        """Normalize works for custom categories, not just Personal."""
+        custom = {
+            "categories": [
+                {"name": "Custom", "sub_projects": {"Alpha": "desc", "General": "fallback"}},
+            ]
+        }
+        save_settings(tmp_path, custom)
+        classification = {
+            "note_type": "note",
+            "tasks": [{"text": "Do thing", "category": "Custom", "sub_project": "Unknown"}],
+        }
+        _normalize_subcategory(classification, tmp_path)
+        assert classification["tasks"][0]["sub_project"] == "General"
 
-class TestPersonalSubProjectsConstant:
+    def test_leaves_unknown_when_no_general(self, tmp_path):
+        """When no General sub_project exists, leave unknown as-is."""
+        custom = {
+            "categories": [
+                {"name": "Custom", "sub_projects": {"Alpha": "desc"}},
+            ]
+        }
+        save_settings(tmp_path, custom)
+        classification = {
+            "note_type": "note",
+            "tasks": [{"text": "Do thing", "category": "Custom", "sub_project": "Unknown"}],
+        }
+        _normalize_subcategory(classification, tmp_path)
+        assert classification["tasks"][0]["sub_project"] == "Unknown"
+
+
+class TestDefaultSettingsSubProjects:
     def test_general_fallback_exists(self):
-        assert "General" in PERSONAL_SUB_PROJECTS
+        all_subs = {}
+        for cat in DEFAULT_SETTINGS["categories"]:
+            if cat.get("sub_projects"):
+                all_subs[cat["name"]] = cat["sub_projects"]
+        assert "General" in all_subs.get("Personal", {})
 
     def test_all_expected_subcategories_present(self):
+        personal = next(c for c in DEFAULT_SETTINGS["categories"] if c["name"] == "Personal")
         expected = {
             "Family",
             "Rachel",
@@ -676,4 +719,45 @@ class TestPersonalSubProjectsConstant:
             "Projects",
             "General",
         }
-        assert set(PERSONAL_SUB_PROJECTS.keys()) == expected
+        assert set(personal["sub_projects"].keys()) == expected
+
+
+class TestBuildClassificationPrompt:
+    def test_includes_all_categories(self, tmp_path):
+        save_settings(tmp_path, DEFAULT_SETTINGS)
+        prompt = _build_classification_prompt(tmp_path)
+        assert '"Work"' in prompt
+        assert '"Personal"' in prompt
+
+    def test_includes_sub_projects(self, tmp_path):
+        save_settings(tmp_path, DEFAULT_SETTINGS)
+        prompt = _build_classification_prompt(tmp_path)
+        assert "Family" in prompt
+        assert "Health" in prompt
+
+    def test_includes_custom_categories(self, tmp_path):
+        custom = {
+            "categories": [
+                {"name": "Startup", "sub_projects": {"MVP": "build the mvp"}},
+                {"name": "Hobby", "sub_projects": {}},
+            ]
+        }
+        save_settings(tmp_path, custom)
+        prompt = _build_classification_prompt(tmp_path)
+        assert '"Startup"' in prompt
+        assert '"Hobby"' in prompt
+        assert "MVP" in prompt
+
+
+class TestLoadAllSubProjects:
+    def test_returns_only_categories_with_subs(self, tmp_path):
+        save_settings(tmp_path, DEFAULT_SETTINGS)
+        result = _load_all_sub_projects(tmp_path)
+        assert "Personal" in result
+        assert "Work" not in result  # Work has empty sub_projects
+
+    def test_returns_empty_for_no_subs(self, tmp_path):
+        custom = {"categories": [{"name": "Work", "sub_projects": {}}]}
+        save_settings(tmp_path, custom)
+        result = _load_all_sub_projects(tmp_path)
+        assert result == {}

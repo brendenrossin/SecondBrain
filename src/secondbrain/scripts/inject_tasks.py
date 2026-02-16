@@ -25,6 +25,7 @@ import json
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from secondbrain.config import get_settings
 from secondbrain.scripts.inbox_processor import (
@@ -37,7 +38,7 @@ from secondbrain.scripts.inbox_processor import (
 def inject_tasks(
     vault_path: Path,
     date_str: str,
-    tasks: list[dict],
+    tasks: list[dict[str, Any]],
     *,
     dry_run: bool = False,
 ) -> list[str]:
@@ -112,7 +113,10 @@ def main() -> None:
         parser.error("Provide --file or --interactive")
 
     settings = get_settings()
-    vault_path = Path(settings.vault_path)
+    if not settings.vault_path:
+        print("ERROR: SECONDBRAIN_VAULT_PATH not configured")
+        sys.exit(1)
+    vault_path = settings.vault_path
 
     if args.file:
         data = json.loads(args.file.read_text(encoding="utf-8"))

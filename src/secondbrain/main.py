@@ -21,6 +21,7 @@ from secondbrain.api.conversations import router as conversations_router
 from secondbrain.api.events import router as events_router
 from secondbrain.api.index import router as index_router
 from secondbrain.api.metadata import router as metadata_router
+from secondbrain.api.settings import router as settings_router
 from secondbrain.api.tasks import router as tasks_router
 from secondbrain.config import get_settings
 
@@ -64,6 +65,7 @@ app.include_router(conversations_router)
 app.include_router(events_router)
 app.include_router(index_router)
 app.include_router(metadata_router)
+app.include_router(settings_router)
 app.include_router(tasks_router)
 
 
