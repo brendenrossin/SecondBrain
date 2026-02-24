@@ -73,6 +73,7 @@ async def get_stats(
     query_logger: Annotated[QueryLogger, Depends(get_query_logger)],
     conversation_store: Annotated[ConversationStore, Depends(get_conversation_store)],
     index_tracker: Annotated[IndexTracker, Depends(get_index_tracker)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> AdminStatsResponse:
     """Get system-wide admin statistics."""
     query_stats = query_logger.get_stats()
@@ -84,6 +85,19 @@ async def get_stats(
     avg_latency = query_stats.get("avg_latency_ms", 0)
     file_count = index_stats.get("file_count", 0)
 
+    # Today's cost and call count
+    today_str = datetime.now(UTC).strftime("%Y-%m-%d")
+    today_data = usage_store.get_daily_costs(days=1)
+    today_entry = next((d for d in today_data if d["date"] == today_str), None)
+    today_cost = today_entry["cost_usd"] if today_entry else 0.0
+    today_calls = today_entry["calls"] if today_entry else 0
+
+    # Cost alert if today exceeds threshold
+    threshold = settings.cost_alert_threshold
+    cost_alert = None
+    if today_cost >= threshold:
+        cost_alert = f"Today's LLM cost (${today_cost:.2f}) exceeds ${threshold:.2f} threshold"
+
     return AdminStatsResponse(
         total_queries=total_queries if isinstance(total_queries, int) else 0,
         avg_latency_ms=float(avg_latency) if isinstance(avg_latency, (int, float)) else 0.0,
@@ -91,6 +105,9 @@ async def get_stats(
         index_file_count=file_count if isinstance(file_count, int) else 0,
         total_llm_calls=usage_summary["total_calls"],
         total_llm_cost=usage_summary["total_cost"],
+        today_cost=today_cost,
+        today_calls=today_calls,
+        cost_alert=cost_alert,
     )
 
 

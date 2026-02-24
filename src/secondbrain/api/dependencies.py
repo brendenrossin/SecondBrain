@@ -114,9 +114,15 @@ def get_llm_client() -> LLMClient:
 
 
 @lru_cache
+def get_extraction_llm_client() -> LLMClient:
+    """Get cached LLM client for metadata extraction."""
+    return LLMClient(usage_store=get_usage_store(), usage_type="extraction")
+
+
+@lru_cache
 def get_extractor() -> MetadataExtractor:
     """Get cached metadata extractor instance."""
-    return MetadataExtractor(get_llm_client())
+    return MetadataExtractor(get_extraction_llm_client())
 
 
 @lru_cache

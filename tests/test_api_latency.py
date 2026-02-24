@@ -19,6 +19,7 @@ def _make_mock_settings():
     settings.vault_path = Path("/tmp")  # Must exist on disk — endpoints check .exists()
     settings.data_path = Path("/tmp")
     settings.debug = False
+    settings.cost_alert_threshold = 1.00
     return settings
 
 
@@ -127,6 +128,7 @@ class TestAdminStatsLatency:
             "by_provider": {},
             "by_usage_type": {},
         }
+        mock_usage.get_daily_costs.return_value = []
         mock_logger = MagicMock()
         mock_logger.get_stats.return_value = {"total_queries": 0, "avg_latency_ms": 0}
         mock_conv = MagicMock()

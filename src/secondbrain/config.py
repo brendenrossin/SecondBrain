@@ -54,6 +54,9 @@ class Settings(BaseSettings):
     # Metadata extraction settings
     metadata_db_name: str = "metadata.db"
 
+    # Cost alerting
+    cost_alert_threshold: float = 1.00
+
 
 def get_settings() -> Settings:
     """Get application settings instance."""

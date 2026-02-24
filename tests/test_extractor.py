@@ -5,7 +5,6 @@ from unittest.mock import MagicMock
 from secondbrain.extraction.extractor import (
     MetadataExtractor,
     _build_user_prompt,
-    _content_hash,
     _normalize_date,
     _parse_result,
 )
@@ -41,16 +40,6 @@ class TestNormalizeDate:
 
     def test_embedded_date(self) -> None:
         assert _normalize_date("deadline is 2025-12-31 for the project") == "2025-12-31"
-
-
-class TestContentHash:
-    def test_deterministic(self) -> None:
-        h1 = _content_hash("hello")
-        h2 = _content_hash("hello")
-        assert h1 == h2
-
-    def test_different_content(self) -> None:
-        assert _content_hash("a") != _content_hash("b")
 
 
 class TestBuildUserPrompt:

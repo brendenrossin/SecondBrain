@@ -1,5 +1,6 @@
 """Tests for the admin API endpoints."""
 
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
 import pytest
@@ -9,6 +10,7 @@ from secondbrain.api.dependencies import (
     get_conversation_store,
     get_index_tracker,
     get_query_logger,
+    get_settings,
     get_usage_store,
 )
 from secondbrain.main import app
@@ -71,10 +73,15 @@ def _mock_deps():
         "last_indexed_at": "2026-02-08T12:00:00",
     }
 
+    mock_settings = MagicMock()
+    mock_settings.cost_alert_threshold = 1.00
+    mock_settings.data_path = "/tmp/test"
+
     app.dependency_overrides[get_usage_store] = lambda: mock_usage_store
     app.dependency_overrides[get_query_logger] = lambda: mock_query_logger
     app.dependency_overrides[get_conversation_store] = lambda: mock_conversation_store
     app.dependency_overrides[get_index_tracker] = lambda: mock_index_tracker
+    app.dependency_overrides[get_settings] = lambda: mock_settings
 
     yield
 
@@ -133,3 +140,126 @@ class TestGetStats:
         assert data["index_file_count"] == 100
         assert data["total_llm_calls"] == 10
         assert data["total_llm_cost"] == 0.05
+        # Default mock returns date "2026-02-08" — not today, so today_cost=0
+        assert data["today_cost"] == 0.0
+        assert data["today_calls"] == 0
+        assert data["cost_alert"] is None
+
+
+class TestTodayCostFiltering:
+    """Verify today's cost filters by today's date, not positional order."""
+
+    def _make_usage_store(self, daily_costs: list[dict]) -> MagicMock:
+        mock = MagicMock()
+        mock.get_summary.return_value = {
+            "total_cost": 5.00,
+            "total_calls": 500,
+            "by_provider": {},
+            "by_usage_type": {},
+        }
+        mock.get_daily_costs.return_value = daily_costs
+        return mock
+
+    def test_picks_today_not_yesterday(self, client: TestClient):
+        """When both yesterday and today exist, picks today's entry."""
+        today = datetime.now(UTC).strftime("%Y-%m-%d")
+        yesterday = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
+        mock = self._make_usage_store(
+            [
+                {"date": yesterday, "cost_usd": 0.50, "calls": 50, "by_provider": {}},
+                {"date": today, "cost_usd": 0.10, "calls": 5, "by_provider": {}},
+            ]
+        )
+        app.dependency_overrides[get_usage_store] = lambda: mock
+
+        resp = client.get("/api/v1/admin/stats")
+        data = resp.json()
+        assert data["today_cost"] == 0.10
+        assert data["today_calls"] == 5
+
+    def test_yesterday_only_returns_zero(self, client: TestClient):
+        """When only yesterday has data, today_cost should be 0."""
+        yesterday = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
+        mock = self._make_usage_store(
+            [
+                {"date": yesterday, "cost_usd": 0.50, "calls": 50, "by_provider": {}},
+            ]
+        )
+        app.dependency_overrides[get_usage_store] = lambda: mock
+
+        resp = client.get("/api/v1/admin/stats")
+        data = resp.json()
+        assert data["today_cost"] == 0.0
+        assert data["today_calls"] == 0
+        assert data["cost_alert"] is None
+
+    def test_empty_data_returns_zero(self, client: TestClient):
+        """When no daily data at all, today_cost should be 0."""
+        mock = self._make_usage_store([])
+        app.dependency_overrides[get_usage_store] = lambda: mock
+
+        resp = client.get("/api/v1/admin/stats")
+        data = resp.json()
+        assert data["today_cost"] == 0.0
+        assert data["today_calls"] == 0
+
+
+class TestCostAlert:
+    def test_high_cost_triggers_alert(self, client: TestClient):
+        """Cost above threshold triggers an alert in stats response."""
+        today = datetime.now(UTC).strftime("%Y-%m-%d")
+        mock_usage_store = MagicMock()
+        mock_usage_store.get_summary.return_value = {
+            "total_cost": 5.00,
+            "total_calls": 500,
+            "by_provider": {},
+            "by_usage_type": {},
+        }
+        mock_usage_store.get_daily_costs.return_value = [
+            {
+                "date": today,
+                "cost_usd": 2.50,
+                "calls": 200,
+                "by_provider": {"anthropic": 2.50},
+            },
+        ]
+        app.dependency_overrides[get_usage_store] = lambda: mock_usage_store
+
+        resp = client.get("/api/v1/admin/stats")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["today_cost"] == 2.50
+        assert data["today_calls"] == 200
+        assert data["cost_alert"] is not None
+        assert "$2.50" in data["cost_alert"]
+        assert "$1.00" in data["cost_alert"]
+
+    def test_alert_uses_today_not_yesterday(self, client: TestClient):
+        """Cost alert is based on today's cost, not yesterday's high cost."""
+        today = datetime.now(UTC).strftime("%Y-%m-%d")
+        yesterday = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
+        mock_usage_store = MagicMock()
+        mock_usage_store.get_summary.return_value = {
+            "total_cost": 5.00,
+            "total_calls": 500,
+            "by_provider": {},
+            "by_usage_type": {},
+        }
+        mock_usage_store.get_daily_costs.return_value = [
+            {"date": yesterday, "cost_usd": 5.00, "calls": 500, "by_provider": {}},
+            {"date": today, "cost_usd": 0.10, "calls": 5, "by_provider": {}},
+        ]
+        app.dependency_overrides[get_usage_store] = lambda: mock_usage_store
+
+        resp = client.get("/api/v1/admin/stats")
+        data = resp.json()
+        # Yesterday was $5.00 (above threshold) but today is $0.10 — no alert
+        assert data["today_cost"] == 0.10
+        assert data["cost_alert"] is None
+
+    def test_normal_cost_no_alert(self, client: TestClient):
+        """Cost below threshold shows no alert."""
+        resp = client.get("/api/v1/admin/stats")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["cost_alert"] is None

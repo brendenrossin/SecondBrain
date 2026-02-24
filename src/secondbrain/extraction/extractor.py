@@ -1,6 +1,5 @@
 """LLM-based metadata extractor for vault notes."""
 
-import hashlib
 import logging
 import re
 from collections.abc import Callable
@@ -58,11 +57,6 @@ def _build_user_prompt(note: Note, max_chars: int = 12000) -> str:
         frontmatter_str = "Frontmatter:\n" + "\n".join(fm_parts) + "\n\n"
 
     return f"Title: {note.title}\nPath: {note.path}\n\n{frontmatter_str}Content:\n{content}"
-
-
-def _content_hash(content: str) -> str:
-    """Compute SHA-1 hash of note content."""
-    return hashlib.sha1(content.encode()).hexdigest()
 
 
 _DATE_PATTERN = re.compile(
@@ -137,7 +131,7 @@ def _parse_result(raw: dict[str, Any], note: Note, model_used: str) -> NoteMetad
         dates=dates,
         action_items=action_items,
         extracted_at=datetime.now(UTC).isoformat(),
-        content_hash=_content_hash(note.content),
+        content_hash="",  # Callers must override with raw-bytes hash
         model_used=model_used,
     )
 

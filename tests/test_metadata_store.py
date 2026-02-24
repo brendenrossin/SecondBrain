@@ -120,6 +120,28 @@ class TestGetStale:
         assert stale == []
         store.close()
 
+    def test_hash_consistency_regression(self, tmp_path: Path) -> None:
+        """Regression: stored hash must match the hash passed to get_stale().
+
+        The bug was that extractor used _content_hash(note.content) (frontmatter stripped)
+        while connector.get_file_metadata() hashed raw bytes (including frontmatter).
+        The fix overrides the stored hash to use the connector's raw-bytes hash.
+        """
+        store = MetadataStore(tmp_path / "meta.db")
+        raw_bytes_hash = "raw_bytes_hash_abc123"
+
+        # Simulate storing metadata with the raw-bytes hash (as the fix does)
+        store.upsert(_make_metadata("a.md", content_hash=raw_bytes_hash))
+
+        # Same hash from get_file_metadata() → not stale
+        stale = store.get_stale({"a.md": raw_bytes_hash})
+        assert stale == []
+
+        # Different hash (file changed) → stale
+        stale = store.get_stale({"a.md": "different_hash"})
+        assert stale == ["a.md"]
+        store.close()
+
 
 class TestCountAndClear:
     def test_count(self, tmp_path: Path) -> None:

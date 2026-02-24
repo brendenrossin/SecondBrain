@@ -1,6 +1,7 @@
 """API endpoints for metadata extraction and suggestions."""
 
 import asyncio
+import hashlib
 import logging
 from pathlib import Path
 from typing import Annotated
@@ -89,6 +90,10 @@ async def extract_metadata(
             raise HTTPException(status_code=404, detail=f"Note not found: {e}") from e
 
         metadata = await asyncio.to_thread(extractor.extract, note)
+        # Override extractor's content hash with raw-bytes hash to match
+        # VaultConnector.get_file_metadata() used for staleness checks.
+        full_path = vault_path / note_path
+        metadata.content_hash = hashlib.sha1(full_path.read_bytes()).hexdigest()
         metadata_store.upsert(metadata)
         return ExtractResponse(
             status="success",
@@ -121,6 +126,7 @@ async def extract_metadata(
             try:
                 note = connector.read_note(Path(path))
                 metadata = extractor.extract(note)
+                metadata.content_hash = current_hashes[path]  # Match get_file_metadata() hash
                 metadata_store.upsert(metadata)
                 _extracted += 1
             except Exception:

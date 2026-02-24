@@ -283,6 +283,9 @@ class AdminStatsResponse(BaseModel):
     index_file_count: int
     total_llm_calls: int
     total_llm_cost: float
+    today_cost: float = 0.0
+    today_calls: int = 0
+    cost_alert: str | None = None
 
 
 # --- Phase 6.5: Quick Capture ---

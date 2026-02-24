@@ -8,6 +8,7 @@ import {
   Database,
   RefreshCw,
   Clock,
+  AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -102,6 +103,7 @@ function UsageTypeRow({
     chat_rerank: "Reranking",
     chat_answer: "Answers",
     inbox: "Inbox Processing",
+    extraction: "Metadata Extraction",
   };
   return (
     <div className="flex items-center justify-between py-3 border-b border-border last:border-b-0">
@@ -428,6 +430,19 @@ export function AdminDashboard() {
         </div>
       )}
 
+      {/* Cost alert banner */}
+      {stats?.cost_alert && (
+        <div className="glass-card p-4 flex items-center gap-3 border-red-500/50 bg-red-500/10">
+          <AlertTriangle className="w-5 h-5 text-red-400 shrink-0" />
+          <div className="text-sm">
+            <span className="text-red-400 font-medium">{stats.cost_alert}</span>
+            <span className="text-text-muted ml-2">
+              ({stats.today_calls} calls today)
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Row 1: Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
@@ -439,9 +454,9 @@ export function AdminDashboard() {
         />
         <StatCard
           icon={Zap}
-          label="LLM Calls (Total)"
-          value={stats ? String(stats.total_llm_calls) : "--"}
-          subValue={stats ? `${formatCost(stats.total_llm_cost)} total spend` : undefined}
+          label="Today's Cost"
+          value={stats ? formatCost(stats.today_cost) : "--"}
+          subValue={stats ? `${stats.today_calls} calls today` : undefined}
           color="bg-warning/15 text-warning"
         />
         <StatCard

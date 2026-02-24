@@ -21,13 +21,14 @@ logger = logging.getLogger(__name__)
 class LLMClient:
     """LLM client that tries Anthropic first, falls back to Ollama then OpenAI."""
 
-    def __init__(self, usage_store: UsageStore | None = None) -> None:
+    def __init__(self, usage_store: UsageStore | None = None, usage_type: str = "inbox") -> None:
         self._anthropic_client: Anthropic | None = None
         self._ollama_client: OpenAI | None = None
         self._openai_client: OpenAI | None = None
         self._settings = get_settings()
         self.model_name: str = self._settings.inbox_model
         self._usage_store = usage_store
+        self._usage_type = usage_type
 
     @property
     def anthropic_client(self) -> Anthropic | None:
@@ -75,7 +76,6 @@ class LLMClient:
                     self._settings.inbox_model,
                     response.usage.input_tokens,
                     response.usage.output_tokens,
-                    "inbox",
                 )
                 return content
             except Exception:
@@ -102,7 +102,6 @@ class LLMClient:
                     self._settings.ollama_model,
                     oai_response.usage.prompt_tokens,
                     oai_response.usage.completion_tokens,
-                    "inbox",
                 )
             return content
         except Exception:
@@ -125,7 +124,6 @@ class LLMClient:
                         "gpt-4o-mini",
                         oai_response.usage.prompt_tokens,
                         oai_response.usage.completion_tokens,
-                        "inbox",
                     )
                 return content
             except Exception:
@@ -133,15 +131,13 @@ class LLMClient:
 
         raise RuntimeError("All LLM providers failed (Anthropic, Ollama, OpenAI)")
 
-    def _log_usage(
-        self, provider: str, model: str, input_tokens: int, output_tokens: int, usage_type: str
-    ) -> None:
+    def _log_usage(self, provider: str, model: str, input_tokens: int, output_tokens: int) -> None:
         if self._usage_store:
             from secondbrain.stores.usage import calculate_cost
 
             cost = calculate_cost(provider, model, input_tokens, output_tokens)
             self._usage_store.log_usage(
-                provider, model, usage_type, input_tokens, output_tokens, cost
+                provider, model, self._usage_type, input_tokens, output_tokens, cost
             )
 
     def chat_json(self, system_prompt: str, user_prompt: str) -> dict[str, Any]:

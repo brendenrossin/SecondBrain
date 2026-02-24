@@ -81,3 +81,64 @@ class TestLLMClientAnthropicProvider:
         client = LLMClient()
         # anthropic_client property should return None
         assert client.anthropic_client is None
+
+
+class TestUsageType:
+    @patch("secondbrain.scripts.llm_client.get_settings")
+    @patch("secondbrain.scripts.llm_client.Anthropic")
+    def test_custom_usage_type_passed_to_log(self, mock_anthropic_cls, mock_settings):
+        """Test that custom usage_type is passed through to _log_usage()."""
+        settings = MagicMock()
+        settings.anthropic_api_key = "test-key"
+        settings.inbox_model = "claude-sonnet-4-5"
+        settings.openai_api_key = None
+        mock_settings.return_value = settings
+
+        mock_client = MagicMock()
+        mock_anthropic_cls.return_value = mock_client
+        mock_response = MagicMock()
+        mock_response.content = [MagicMock(text="response")]
+        mock_response.usage.input_tokens = 100
+        mock_response.usage.output_tokens = 50
+        mock_client.messages.create.return_value = mock_response
+
+        mock_usage_store = MagicMock()
+
+        from secondbrain.scripts.llm_client import LLMClient
+
+        client = LLMClient(usage_store=mock_usage_store, usage_type="extraction")
+        client.chat("system", "user")
+
+        # Verify usage_store.log_usage was called with extraction type
+        mock_usage_store.log_usage.assert_called_once()
+        call_args = mock_usage_store.log_usage.call_args
+        assert call_args[0][2] == "extraction"  # usage_type is 3rd positional arg
+
+    @patch("secondbrain.scripts.llm_client.get_settings")
+    @patch("secondbrain.scripts.llm_client.Anthropic")
+    def test_default_usage_type_is_inbox(self, mock_anthropic_cls, mock_settings):
+        """Test that default usage_type is 'inbox' for backwards compatibility."""
+        settings = MagicMock()
+        settings.anthropic_api_key = "test-key"
+        settings.inbox_model = "claude-sonnet-4-5"
+        settings.openai_api_key = None
+        mock_settings.return_value = settings
+
+        mock_client = MagicMock()
+        mock_anthropic_cls.return_value = mock_client
+        mock_response = MagicMock()
+        mock_response.content = [MagicMock(text="response")]
+        mock_response.usage.input_tokens = 100
+        mock_response.usage.output_tokens = 50
+        mock_client.messages.create.return_value = mock_response
+
+        mock_usage_store = MagicMock()
+
+        from secondbrain.scripts.llm_client import LLMClient
+
+        client = LLMClient(usage_store=mock_usage_store)
+        client.chat("system", "user")
+
+        mock_usage_store.log_usage.assert_called_once()
+        call_args = mock_usage_store.log_usage.call_args
+        assert call_args[0][2] == "inbox"

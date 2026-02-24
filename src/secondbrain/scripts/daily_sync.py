@@ -81,11 +81,13 @@ def extract_metadata(vault_path: Path, data_path: Path | None = None) -> str:
     from secondbrain.extraction.extractor import MetadataExtractor
     from secondbrain.scripts.llm_client import LLMClient
     from secondbrain.stores.metadata import MetadataStore
+    from secondbrain.stores.usage import UsageStore
     from secondbrain.vault.connector import VaultConnector
 
     connector = VaultConnector(vault_path)
     metadata_store = MetadataStore(data_path / settings.metadata_db_name)
-    extractor = MetadataExtractor(LLMClient())
+    usage_store = UsageStore(data_path / "usage.db")
+    extractor = MetadataExtractor(LLMClient(usage_store=usage_store, usage_type="extraction"))
 
     vault_files = connector.get_file_metadata()
     current_hashes = {path: h for path, (_mtime, h) in vault_files.items()}
@@ -101,6 +103,7 @@ def extract_metadata(vault_path: Path, data_path: Path | None = None) -> str:
         try:
             note = connector.read_note(Path(path))
             metadata = extractor.extract(note)
+            metadata.content_hash = current_hashes[path]  # Match get_file_metadata() hash
             metadata_store.upsert(metadata)
             extracted += 1
         except Exception:

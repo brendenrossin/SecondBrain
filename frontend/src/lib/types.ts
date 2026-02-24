@@ -217,6 +217,9 @@ export interface AdminStatsResponse {
   index_file_count: number;
   total_llm_calls: number;
   total_llm_cost: number;
+  today_cost: number;
+  today_calls: number;
+  cost_alert: string | null;
 }
 
 // --- Calendar Events ---
