@@ -6,6 +6,8 @@ import hashlib
 import json
 import logging
 import re
+import time
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -249,6 +251,7 @@ def process_inbox(vault_path: Path) -> list[str]:
     usage_store = UsageStore(data_path / "usage.db")
     llm = LLMClient(usage_store=usage_store)
     actions = []
+    inbox_start = time.time()
 
     for md_file in md_files:
         try:
@@ -262,6 +265,23 @@ def process_inbox(vault_path: Path) -> list[str]:
             logger.error("Failed to process %s", md_file.name, exc_info=True)
             actions.append(f"FAILED: {md_file.name}")
             _move_to_subfolder(md_file, "_failed")
+
+    # Log batch summary for observability
+    failed_count = sum(1 for a in actions if a.startswith("FAILED"))
+    processed = len(actions) - failed_count
+    usage_store.log_usage(
+        provider="system",
+        model="batch",
+        usage_type="inbox_batch",
+        input_tokens=0,
+        output_tokens=0,
+        cost_usd=0.0,
+        metadata={
+            "processed": processed,
+            "failed": failed_count,
+            "duration_ms": int((time.time() - inbox_start) * 1000),
+        },
+    )
 
     return actions
 
@@ -345,7 +365,9 @@ def _validate_segments(data: Any) -> bool:
     return True
 
 
-def _segment_content(raw_text: str, llm: LLMClient) -> list[dict[str, Any]]:
+def _segment_content(
+    raw_text: str, llm: LLMClient, trace_id: str | None = None
+) -> list[dict[str, Any]]:
     """Split raw text into logical segments using LLM.
 
     Returns a list of segment dicts. Falls back to a single segment
@@ -361,7 +383,7 @@ def _segment_content(raw_text: str, llm: LLMClient) -> list[dict[str, Any]]:
     user_prompt = f"Today's date: {today}\n\nRaw dictated text:\n{raw_text}"
 
     try:
-        raw = llm.chat(SEGMENTATION_PROMPT, user_prompt)
+        raw = llm.chat(SEGMENTATION_PROMPT, user_prompt, trace_id=trace_id)
         # Strip markdown code fences if present
         cleaned = raw.strip()
         if cleaned.startswith("```"):
@@ -386,6 +408,7 @@ def _classify_with_retry(
     data_path: Path,
     vault_path: Path | None = None,
     max_retries: int = 1,
+    trace_id: str | None = None,
 ) -> dict[str, Any] | None:
     """Classify text with validation and retry on failure."""
     today = datetime.now().strftime("%Y-%m-%d")
@@ -401,7 +424,7 @@ def _classify_with_retry(
 
     for attempt in range(1 + max_retries):
         try:
-            classification = llm.chat_json(classification_prompt, user_prompt)
+            classification = llm.chat_json(classification_prompt, user_prompt, trace_id=trace_id)
             if _validate_classification(classification):
                 _normalize_subcategory(classification, data_path)
                 logger.debug("Classification result: %s", json.dumps(classification, indent=2))
@@ -431,14 +454,19 @@ def _process_single_file(
         logger.info("Skipping duplicate: %s", md_file.name)
         return [f"SKIPPED (duplicate): {md_file.name}"]
 
+    # Generate a trace_id for this file's LLM calls
+    trace_id = uuid.uuid4().hex
+
     # Pass 1: Segmentation
-    segments = _segment_content(raw_text, llm)
+    segments = _segment_content(raw_text, llm, trace_id=trace_id)
 
     # Pass 2: Classify and route each segment
     actions: list[str] = []
     for segment in segments:
         segment_text = segment.get("content", raw_text)
-        classification = _classify_with_retry(segment_text, llm, data_path, vault_path=vault_path)
+        classification = _classify_with_retry(
+            segment_text, llm, data_path, vault_path=vault_path, trace_id=trace_id
+        )
         if classification is None:
             topic = segment.get("topic", "unknown")
             raise ValueError(f"Classification failed for segment: {topic}")
