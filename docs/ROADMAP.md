@@ -27,7 +27,7 @@ Captured 2026-02-07 after roadmap review session. The original brainstorm (with 
 | **Voice chat: resolve open questions for v1** | Single voice default (alloy, no UI picker). Fresh sessions (no text history injection). Error on offline (no Whisper STT fallback). Server VAD only (no push-to-talk). Keep reranker enabled but monitor latency. See resolved decisions in `docs/features/voice-chat-realtime-api.md`. |
 | **Reprioritized roadmap based on real-world usage (2026-02-08)** | Tasks/scheduling is the most-used feature. Vault has ~16 notes — RAG infrastructure is solid but the bottleneck is capture volume, not retrieval quality. Reordered phases to maximize daily value: morning briefing → inbox/model upgrade → quick capture → weekly review → voice chat. Moved retrieval transparency and full proactive signals to deferred (morning briefing absorbs the core escalation value). |
 | **Email ingestion: Gmail API direct, no MCP (2026-02-14)** | All existing Gmail MCP servers require write scopes; documented supply-chain attacks on MCP registries. Direct Gmail API with `gmail.readonly` is safer and simpler. Server-side query exclusions + Haiku `skip` classification control volume (replaces strict allowlist — too restrictive for new recruiters and unknown senders). Summary notes (not raw email) enter vault. Sandboxed LLM classification with spotlighting mitigates prompt injection. Cost: ~$1/month. See `docs/features/email-ingestion.md`. |
-| **Email ingestion deprioritized to Phase 10 (2026-02-15)** | Quick capture already covers the "email → SecondBrain" workflow manually. Phases 8.5–9.5 deliver more tangible daily value. Email integration is a nice-to-have, not a daily pain point. Spec is ready to build whenever the signal is there ("I keep wishing that email had been in SecondBrain"). |
+| **Email ingestion deprioritized to Phase 11 (2026-02-15)** | Quick capture already covers the "email → SecondBrain" workflow manually. Phases 8.5–9.5 deliver more tangible daily value. Email integration is a nice-to-have, not a daily pain point. Spec is ready to build whenever the signal is there ("I keep wishing that email had been in SecondBrain"). |
 | **Deferred vault health checks** | Premature with ~16 notes. Note matching during inbox processing prevents the duplication that would make health checks necessary. Revisit at 100+ notes. |
 | **Inbox upgrade: resolve open questions** | Note matching restricted to `10_Notes/` and `30_Concepts/` only (not projects). Frontend toggle labeled "Claude" (specific, recognizable). See `docs/features/inbox-upgrade-anthropic-migration.md`. |
 | **Configurable categories over hardcoded constants (2026-02-15)** | Categories (AT&T, PwC, Personal) and subcategories are hardcoded Python constants. New users must edit source code. Moving to `data/settings.json` + Settings API + Settings UI makes SecondBrain adoptable by anyone. No automatic recategorization on change — users can already reassign per-task in the TaskDetailPanel. Defaults: "Work" + "Personal". See `docs/features/configurable-categories-ui.md`. |
@@ -335,7 +335,23 @@ See `docs/features/configurable-categories-ui.md` for full spec.
 
 ---
 
-## Phase 8.9 — Public Demo Instance (~4-5 days, ~$10-15/month)
+## Phase 8.9 — Log Persistence & Data Retention (~1 day)
+Goal: application logs survive restarts and usage data doesn't grow unbounded.
+
+- [ ] Launchd `StandardOutPath`/`StandardErrorPath` for all 3 services (api, ui, daily-sync)
+- [ ] `newsyslog` rotation config (3 rotated copies, 5MB cap for API, 1MB for others)
+- [ ] `UsageStore.prune_old_usage()` method with 90-day default TTL
+- [ ] Pruning runs automatically at the start of each daily sync
+- [ ] `make prune-usage` command for manual pruning
+- [ ] `data/logs/` directory added to `.gitignore`
+
+Deliverable: crash at 3am, restart, and the error logs are still there. Usage.db stays bounded forever.
+
+See `docs/features/log-persistence-retention.md` for full spec.
+
+---
+
+## Phase 9.5 — Public Demo Instance (~4-5 days, ~$10-15/month)
 Goal: interactive demo with sample data that anyone can try from the README, without exposing personal vault data.
 
 - [ ] Sample vault with fictional persona ("Alex Chen") — daily notes, tasks, projects, concepts
@@ -350,7 +366,7 @@ See `docs/features/public-demo-instance.md` for full spec.
 
 ---
 
-## Phase 9 — Smarter Retrieval (~2-3 days)
+## Phase 10 — Smarter Retrieval (~2-3 days)
 Goal: make the RAG pipeline and capture flow aware of your vault's link structure.
 
 - [ ] Wiki link parser: extract `[[wiki links]]` from markdown text (handles aliases, headings, code block exclusion)
@@ -367,7 +383,7 @@ Implementation prompt: `docs/features/PROMPT-link-retrieval-and-capture-connecti
 
 ---
 
-## Phase 9.5 — Insights Dashboard (~3-5 days)
+## Phase 10.5 — Insights Dashboard (~3-5 days)
 Goal: bring the placeholder Insights page to life using the existing backend APIs.
 
 - [ ] Note explorer: pick a note → see summary, entities, dates, action items, related notes, suggested links
@@ -381,7 +397,7 @@ Note: All backend APIs already exist (`/metadata`, `/suggestions`, `/entities`, 
 
 ---
 
-## Phase 10 — Email Ingestion (Read-Only) (~5-7 days)
+## Phase 11 — Email Ingestion (Read-Only) (~5-7 days)
 Goal: bring email context into SecondBrain without compromising vault signal-to-noise or security.
 
 - [ ] Gmail API client with `gmail.readonly` OAuth scope (direct API, no MCP)
@@ -398,7 +414,7 @@ Implementation prompt: `docs/features/PROMPT-email-ingestion.md`
 
 ---
 
-## Phase 11 — Voice Chat via OpenAI Realtime API (~2-3 weeks)
+## Phase 12 — Voice Chat via OpenAI Realtime API (~2-3 weeks)
 Goal: hands-free voice interaction with the knowledge base using speech-to-speech.
 
 - [ ] Backend WebSocket relay (`/api/v1/voice`) proxying audio to OpenAI Realtime API
@@ -416,7 +432,7 @@ See `docs/features/voice-chat-realtime-api.md` for full spec.
 
 ---
 
-## Phase 12 — Knowledge graph (V2, 4–8+ weeks)
+## Phase 13 — Knowledge graph (V2, 4–8+ weeks)
 - [ ] Choose graph store (Neo4j or Postgres)
 - [ ] Entity resolution + dedupe
 - [ ] Relationship extraction (LLM-assisted, human-reviewed)
@@ -426,7 +442,7 @@ Deliverable: true navigable concept graph, beyond similarity search.
 
 ---
 
-## Phase 13 — Write-back workflow (V2+)
+## Phase 14 — Write-back workflow (V2+)
 - [ ] PR-style changesets
 - [ ] Apply suggested links/tags to Markdown files
 - [ ] Versioning + rollback
