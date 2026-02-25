@@ -263,3 +263,140 @@ class TestCostAlert:
         assert resp.status_code == 200
         data = resp.json()
         assert data["cost_alert"] is None
+
+
+class TestGetStatsAnomalies:
+    def test_stats_includes_anomalies(self, client: TestClient):
+        resp = client.get("/api/v1/admin/stats")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "anomalies" in data
+        assert isinstance(data["anomalies"], list)
+
+    def test_anomalies_from_usage_store(self, client: TestClient):
+        mock_usage_store = MagicMock()
+        mock_usage_store.get_summary.return_value = {
+            "total_cost": 1.00,
+            "total_calls": 100,
+            "by_provider": {},
+            "by_usage_type": {},
+        }
+        mock_usage_store.get_daily_costs.return_value = []
+        mock_usage_store.get_anomalies.return_value = [
+            {
+                "type": "cost_spike",
+                "severity": "critical",
+                "message": "Today's cost is 5x the average",
+                "details": {"today_cost": 0.50, "avg_daily_cost": 0.10},
+            }
+        ]
+        app.dependency_overrides[get_usage_store] = lambda: mock_usage_store
+
+        resp = client.get("/api/v1/admin/stats")
+        data = resp.json()
+        assert len(data["anomalies"]) == 1
+        assert data["anomalies"][0]["type"] == "cost_spike"
+        assert data["anomalies"][0]["severity"] == "critical"
+
+
+class TestGetTraces:
+    def test_traces_endpoint(self, client: TestClient):
+        mock_usage_store = MagicMock()
+        mock_usage_store.get_traces.return_value = [
+            {
+                "id": 1,
+                "timestamp": "2026-02-24T10:00:00",
+                "provider": "anthropic",
+                "model": "claude-haiku-4-5",
+                "usage_type": "chat_rerank",
+                "input_tokens": 100,
+                "output_tokens": 50,
+                "cost_usd": 0.01,
+                "trace_id": "abc123",
+                "latency_ms": 42.5,
+                "status": "ok",
+                "error_message": None,
+            }
+        ]
+        app.dependency_overrides[get_usage_store] = lambda: mock_usage_store
+
+        resp = client.get("/api/v1/admin/traces")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 1
+        assert data[0]["trace_id"] == "abc123"
+        assert data[0]["latency_ms"] == 42.5
+
+    def test_traces_with_filters(self, client: TestClient):
+        mock_usage_store = MagicMock()
+        mock_usage_store.get_traces.return_value = []
+        app.dependency_overrides[get_usage_store] = lambda: mock_usage_store
+
+        resp = client.get("/api/v1/admin/traces?usage_type=chat_rerank&status=error&limit=10")
+        assert resp.status_code == 200
+        mock_usage_store.get_traces.assert_called_once_with(
+            limit=10,
+            usage_type="chat_rerank",
+            status="error",
+            since=None,
+        )
+
+    def test_traces_limit_validation(self, client: TestClient):
+        resp = client.get("/api/v1/admin/traces?limit=0")
+        assert resp.status_code == 422
+
+        resp = client.get("/api/v1/admin/traces?limit=201")
+        assert resp.status_code == 422
+
+
+class TestGetTraceGroup:
+    def test_trace_group_endpoint(self, client: TestClient):
+        mock_usage_store = MagicMock()
+        mock_usage_store.get_trace_group.return_value = [
+            {
+                "id": 1,
+                "timestamp": "2026-02-24T10:00:00",
+                "provider": "anthropic",
+                "model": "claude-haiku-4-5",
+                "usage_type": "chat_rerank",
+                "input_tokens": 100,
+                "output_tokens": 50,
+                "cost_usd": 0.01,
+                "trace_id": "shared-trace",
+                "latency_ms": 40.0,
+                "status": "ok",
+                "error_message": None,
+            },
+            {
+                "id": 2,
+                "timestamp": "2026-02-24T10:00:01",
+                "provider": "anthropic",
+                "model": "claude-haiku-4-5",
+                "usage_type": "chat_answer",
+                "input_tokens": 200,
+                "output_tokens": 100,
+                "cost_usd": 0.005,
+                "trace_id": "shared-trace",
+                "latency_ms": 1200.0,
+                "status": "ok",
+                "error_message": None,
+            },
+        ]
+        app.dependency_overrides[get_usage_store] = lambda: mock_usage_store
+
+        resp = client.get("/api/v1/admin/traces/shared-trace")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 2
+        assert data[0]["usage_type"] == "chat_rerank"
+        assert data[1]["usage_type"] == "chat_answer"
+        mock_usage_store.get_trace_group.assert_called_once_with("shared-trace")
+
+    def test_nonexistent_trace_returns_empty(self, client: TestClient):
+        mock_usage_store = MagicMock()
+        mock_usage_store.get_trace_group.return_value = []
+        app.dependency_overrides[get_usage_store] = lambda: mock_usage_store
+
+        resp = client.get("/api/v1/admin/traces/does-not-exist")
+        assert resp.status_code == 200
+        assert resp.json() == []

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from typing import TYPE_CHECKING, Any
 
 from anthropic import Anthropic
@@ -54,13 +55,14 @@ class LLMClient:
             self._openai_client = OpenAI(api_key=self._settings.openai_api_key)
         return self._openai_client
 
-    def chat(self, system_prompt: str, user_prompt: str) -> str:
+    def chat(self, system_prompt: str, user_prompt: str, trace_id: str | None = None) -> str:
         """Send a chat completion, trying Anthropic first then Ollama then OpenAI.
 
         Returns the assistant's response text.
         """
         # Try Anthropic first
         if self.anthropic_client:
+            start = time.perf_counter()
             try:
                 logger.info("Trying Anthropic (%s)...", self._settings.inbox_model)
                 response = self.anthropic_client.messages.create(
@@ -76,16 +78,30 @@ class LLMClient:
                     self._settings.inbox_model,
                     response.usage.input_tokens,
                     response.usage.output_tokens,
+                    trace_id=trace_id,
+                    latency_ms=(time.perf_counter() - start) * 1000,
                 )
                 return content
-            except Exception:
+            except Exception as e:
+                latency_ms = (time.perf_counter() - start) * 1000
                 logger.warning("Anthropic failed, trying Ollama fallback...", exc_info=True)
+                self._log_usage(
+                    "anthropic",
+                    self._settings.inbox_model,
+                    0,
+                    0,
+                    trace_id=trace_id,
+                    latency_ms=latency_ms,
+                    status="error",
+                    error_message=str(e)[:500],
+                )
 
         # Try Ollama
         messages: list[ChatCompletionMessageParam] = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
+        start = time.perf_counter()
         try:
             logger.info("Trying Ollama (%s)...", self._settings.ollama_model)
             oai_response = self.ollama_client.chat.completions.create(
@@ -96,19 +112,34 @@ class LLMClient:
             )
             content = oai_response.choices[0].message.content or ""
             logger.info("Ollama responded successfully")
-            if oai_response.usage:
-                self._log_usage(
-                    "ollama",
-                    self._settings.ollama_model,
-                    oai_response.usage.prompt_tokens,
-                    oai_response.usage.completion_tokens,
-                )
+            input_tok = oai_response.usage.prompt_tokens if oai_response.usage else 0
+            output_tok = oai_response.usage.completion_tokens if oai_response.usage else 0
+            self._log_usage(
+                "ollama",
+                self._settings.ollama_model,
+                input_tok,
+                output_tok,
+                trace_id=trace_id,
+                latency_ms=(time.perf_counter() - start) * 1000,
+            )
             return content
-        except Exception:
+        except Exception as e:
+            latency_ms = (time.perf_counter() - start) * 1000
             logger.warning("Ollama failed, trying OpenAI fallback...", exc_info=True)
+            self._log_usage(
+                "ollama",
+                self._settings.ollama_model,
+                0,
+                0,
+                trace_id=trace_id,
+                latency_ms=latency_ms,
+                status="error",
+                error_message=str(e)[:500],
+            )
 
         # Fallback to OpenAI
         if self.openai_client:
+            start = time.perf_counter()
             try:
                 oai_response = self.openai_client.chat.completions.create(
                     model="gpt-4o-mini",
@@ -118,34 +149,69 @@ class LLMClient:
                 )
                 content = oai_response.choices[0].message.content or ""
                 logger.info("OpenAI responded successfully")
-                if oai_response.usage:
-                    self._log_usage(
-                        "openai",
-                        "gpt-4o-mini",
-                        oai_response.usage.prompt_tokens,
-                        oai_response.usage.completion_tokens,
-                    )
+                input_tok = oai_response.usage.prompt_tokens if oai_response.usage else 0
+                output_tok = oai_response.usage.completion_tokens if oai_response.usage else 0
+                self._log_usage(
+                    "openai",
+                    "gpt-4o-mini",
+                    input_tok,
+                    output_tok,
+                    trace_id=trace_id,
+                    latency_ms=(time.perf_counter() - start) * 1000,
+                )
                 return content
-            except Exception:
+            except Exception as e:
+                latency_ms = (time.perf_counter() - start) * 1000
                 logger.error("OpenAI also failed", exc_info=True)
+                self._log_usage(
+                    "openai",
+                    "gpt-4o-mini",
+                    0,
+                    0,
+                    trace_id=trace_id,
+                    latency_ms=latency_ms,
+                    status="error",
+                    error_message=str(e)[:500],
+                )
 
         raise RuntimeError("All LLM providers failed (Anthropic, Ollama, OpenAI)")
 
-    def _log_usage(self, provider: str, model: str, input_tokens: int, output_tokens: int) -> None:
+    def _log_usage(
+        self,
+        provider: str,
+        model: str,
+        input_tokens: int,
+        output_tokens: int,
+        trace_id: str | None = None,
+        latency_ms: float | None = None,
+        status: str = "ok",
+        error_message: str | None = None,
+    ) -> None:
         if self._usage_store:
             from secondbrain.stores.usage import calculate_cost
 
             cost = calculate_cost(provider, model, input_tokens, output_tokens)
             self._usage_store.log_usage(
-                provider, model, self._usage_type, input_tokens, output_tokens, cost
+                provider,
+                model,
+                self._usage_type,
+                input_tokens,
+                output_tokens,
+                cost,
+                trace_id=trace_id,
+                latency_ms=latency_ms,
+                status=status,
+                error_message=error_message,
             )
 
-    def chat_json(self, system_prompt: str, user_prompt: str) -> dict[str, Any]:
+    def chat_json(
+        self, system_prompt: str, user_prompt: str, trace_id: str | None = None
+    ) -> dict[str, Any]:
         """Send a chat completion and parse the response as JSON.
 
         The system prompt should instruct the model to return valid JSON.
         """
-        raw = self.chat(system_prompt, user_prompt)
+        raw = self.chat(system_prompt, user_prompt, trace_id=trace_id)
 
         # Strip markdown code fences if present
         cleaned = raw.strip()

@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import time
+import uuid
 from collections.abc import AsyncIterator
 from typing import Annotated
 
@@ -65,6 +66,7 @@ async def ask(
 ) -> AskResponse:
     """Ask a question and get an answer with citations."""
     start_time = time.time()
+    trace_id = uuid.uuid4().hex
 
     # Select provider (3-way dispatch)
     if request.provider == "local":
@@ -88,7 +90,7 @@ async def ask(
 
     # Rerank candidates (blocking LLM call — run in thread)
     ranked_candidates, retrieval_label = await asyncio.to_thread(
-        reranker.rerank, request.query, candidates, request.top_n
+        reranker.rerank, request.query, candidates, request.top_n, trace_id
     )
 
     # Expand wiki links from top candidates
@@ -102,6 +104,7 @@ async def ask(
         retrieval_label,
         history,
         linked_context,
+        trace_id=trace_id,
     )
 
     # Build citations
@@ -139,6 +142,7 @@ async def ask_stream(
 ) -> EventSourceResponse:
     """Stream an answer with Server-Sent Events."""
     start_time = time.time()
+    trace_id = uuid.uuid4().hex
 
     # Select provider (3-way dispatch)
     if request.provider == "local":
@@ -160,7 +164,7 @@ async def ask_stream(
     # Retrieve and rerank (blocking I/O — run in thread)
     candidates = await asyncio.to_thread(retriever.retrieve, request.query, 10)
     ranked_candidates, retrieval_label = await asyncio.to_thread(
-        reranker.rerank, request.query, candidates, request.top_n
+        reranker.rerank, request.query, candidates, request.top_n, trace_id
     )
 
     # Expand wiki links from top candidates
@@ -185,6 +189,7 @@ async def ask_stream(
                 retrieval_label,
                 conversation_history=history,
                 linked_context=linked_context,
+                trace_id=trace_id,
             ):
                 answer_parts.append(token)
                 yield {"event": "token", "data": token}
