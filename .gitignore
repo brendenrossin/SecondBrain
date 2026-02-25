@@ -73,5 +73,8 @@ dmypy.json
 *.sqlite
 *.sqlite3
 
+# Claude Code — personal settings (skills/ are committed)
+.claude/settings.local.json
+
 # Local data directories
 data/

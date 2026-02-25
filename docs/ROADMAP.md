@@ -32,6 +32,7 @@ Captured 2026-02-07 after roadmap review session. The original brainstorm (with 
 | **Inbox upgrade: resolve open questions** | Note matching restricted to `10_Notes/` and `30_Concepts/` only (not projects). Frontend toggle labeled "Claude" (specific, recognizable). See `docs/features/inbox-upgrade-anthropic-migration.md`. |
 | **Configurable categories over hardcoded constants (2026-02-15)** | Categories (AT&T, PwC, Personal) and subcategories are hardcoded Python constants. New users must edit source code. Moving to `data/settings.json` + Settings API + Settings UI makes SecondBrain adoptable by anyone. No automatic recategorization on change — users can already reassign per-task in the TaskDetailPanel. Defaults: "Work" + "Personal". See `docs/features/configurable-categories-ui.md`. |
 | **Public demo instance for portfolio (2026-02-15)** | No way to showcase SecondBrain without exposing personal vault data. Deploy to Fly.io with fictional sample vault, rate limiting, and auto-deploy from main. ~$10-15/month. See `docs/features/public-demo-instance.md`. |
+| **LLM observability: extend SQLite, defer Langfuse (2026-02-24)** | Built custom tracing (4 new columns on `llm_usage`, trace correlation, anomaly detection, Traces tab in admin dashboard). Chose this over LangSmith (cloud = privacy violation), OpenTelemetry (needs collector + backend), and Langfuse self-hosted (Docker + Postgres + second UI — overkill for v1). Langfuse is the documented upgrade path if the custom UI proves insufficient to maintain. See `docs/features/llm-observability-tracing.md`. |
 
 ---
 
@@ -204,6 +205,26 @@ Deliverable: any thought → into the system in under 10 seconds from your phone
 
 ---
 
+## Phase 6.7 — LLM Observability & Tracing ✅
+Goal: full visibility into what every LLM call does, how long it takes, how much it costs, and whether that's normal.
+
+- [x] Enhanced schema: `trace_id`, `latency_ms`, `status`, `error_message` columns on `llm_usage`
+- [x] All 4 LLM call sites instrumented with per-call timing, trace correlation, error/fallback tracking
+- [x] Critical fix: LLMClient logs every provider attempt (failed Anthropic + successful Ollama = 2 rows)
+- [x] Pricing guardrails: `calculate_cost()` warns on unknown paid models instead of silently returning $0
+- [x] Anomaly detection: cost spike, call count spike, high error rate, high fallback rate (SQL-based, 3x multiplier)
+- [x] API: `GET /admin/traces` (filtered list), `GET /admin/traces/{trace_id}` (correlated calls)
+- [x] Frontend: Traces tab with filter dropdowns, expandable rows, trace group detail view, anomaly alert banners
+- [x] Background batch health: `extraction_batch` and `inbox_batch` summary records in usage.db
+
+Deliverable: the $300/month invisible extraction bug would have been caught in < 1 day with this in place.
+
+See `docs/features/llm-observability-tracing.md` for full spec.
+
+**Upgrade path:** If the custom tracing UI proves insufficient, migrate to self-hosted Langfuse (Docker + Postgres). Langfuse provides a mature trace waterfall, prompt versioning, eval scoring, and a dedicated UI — but adds infrastructure. Exhaust the simple approach first.
+
+---
+
 ## Phase 7 — Weekly Review Generation ✅
 Goal: automatic logbook that compounds value over time.
 
@@ -299,14 +320,14 @@ See `docs/features/operational-hardening.md` for full spec.
 
 ---
 
-## Phase 8.8 — Configurable Categories UI (~3-4 days)
+## Phase 8.8 — Configurable Categories UI ✅
 Goal: make task categories and subcategories user-configurable via the UI instead of hardcoded Python constants.
 
-- [ ] Settings file (`data/settings.json`) with reader/writer and sensible defaults ("Work" + "Personal")
-- [ ] Settings API: `GET/PUT /api/v1/settings/categories`
-- [ ] Inbox processor reads categories from settings file (dynamic prompt building)
-- [ ] Settings UI page with category/subcategory CRUD (add, edit, delete)
-- [ ] Update frontend branding defaults to generic ("SecondBrain" instead of "Brent OS")
+- [x] Settings file (`data/settings.json`) with reader/writer and sensible defaults ("Work" + "Personal")
+- [x] Settings API: `GET/PUT /api/v1/settings/categories`
+- [x] Inbox processor reads categories from settings file (dynamic prompt building)
+- [x] Settings UI page with category/subcategory CRUD (add, edit, delete)
+- [x] Update frontend branding defaults to generic ("SecondBrain" instead of "Brent OS")
 
 Deliverable: new user clones repo, opens settings page, configures their categories — no code editing required.
 
@@ -421,6 +442,7 @@ Features that were planned but deprioritized based on current usage patterns and
 - **Retrieval transparency** — Score breakdowns and "why this result" UI. Context-aware recency is already partially implemented (note dates passed to reranker/answerer). Full spec in `docs/features/retrieval-transparency.md`. Revisit when users report confusion about search results.
 - **Proactive signals v1 (full version)** — Recurrence signals, signal schema, dismiss/snooze, full pipeline. Morning briefing (Phase 5) absorbs the core escalation value. Full spec in `docs/features/proactive-signals-v1.md`. Revisit after morning briefing ships and we learn what patterns actually surface.
 - **Vault health checks** — Duplicate detection, folder size warnings, consolidation suggestions. Premature with ~16 notes. See deferred item in `docs/features/inbox-upgrade-anthropic-migration.md`.
+- **Langfuse migration (self-hosted)** — Replace custom tracing UI with Langfuse (`docker compose up`, Python SDK `@observe` decorator on 4 call sites). Provides mature trace waterfall, prompt versioning, eval scoring, session tracking. Trade-off: adds Docker + Postgres infrastructure. Revisit if: (1) the built-in Traces tab is too limited for debugging, (2) we want prompt versioning or LLM evals, or (3) maintaining the custom tracing code becomes a burden vs. using an actively developed OSS tool. See `docs/features/llm-observability-tracing.md` architecture decision table.
 
 ---
 
