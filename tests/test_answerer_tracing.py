@@ -229,9 +229,7 @@ class TestAnswerStreamPartialSuccess:
         candidates = [_make_candidate()]
         with pytest.raises(ConnectionError, match="network down"):
             list(
-                answerer.answer_stream(
-                    "test", candidates, RetrievalLabel.PASS, trace_id="stream-3"
-                )
+                answerer.answer_stream("test", candidates, RetrievalLabel.PASS, trace_id="stream-3")
             )
 
         call = mock_usage_store.log_usage.call_args
