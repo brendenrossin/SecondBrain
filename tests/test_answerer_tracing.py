@@ -159,6 +159,86 @@ class TestAnswerErrorLogging:
         assert mock_usage_store.log_usage.call_count == 1
 
 
+class TestAnswerStreamPartialSuccess:
+    def test_stream_ok_but_get_final_message_fails_logs_ok_status(self):
+        mock_usage_store = MagicMock()
+        answerer = Answerer(
+            model="claude-haiku-4-5", provider="anthropic", usage_store=mock_usage_store
+        )
+        answerer._anthropic_client = MagicMock()
+
+        # Simulate: stream yields tokens, then get_final_message raises
+        mock_stream = MagicMock()
+        mock_stream.__enter__ = MagicMock(return_value=mock_stream)
+        mock_stream.__exit__ = MagicMock(return_value=False)
+        mock_stream.text_stream = iter(["Hello", " world"])
+        mock_stream.get_final_message.side_effect = RuntimeError("stream closed")
+        answerer._anthropic_client.messages.stream.return_value = mock_stream
+
+        candidates = [_make_candidate()]
+        tokens = list(
+            answerer.answer_stream("test", candidates, RetrievalLabel.PASS, trace_id="stream-1")
+        )
+
+        assert tokens == ["Hello", " world"]
+        mock_usage_store.log_usage.assert_called_once()
+        kwargs = mock_usage_store.log_usage.call_args.kwargs
+        # Should NOT be "error" — stream completed successfully
+        assert kwargs["status"] == "ok"
+        assert kwargs["trace_id"] == "stream-1"
+        assert "get_final_message() failed" in kwargs["error_message"]
+        assert kwargs["latency_ms"] > 0
+
+    def test_stream_ok_and_get_final_message_ok_logs_tokens(self):
+        mock_usage_store = MagicMock()
+        answerer = Answerer(
+            model="claude-haiku-4-5", provider="anthropic", usage_store=mock_usage_store
+        )
+        answerer._anthropic_client = MagicMock()
+
+        mock_stream = MagicMock()
+        mock_stream.__enter__ = MagicMock(return_value=mock_stream)
+        mock_stream.__exit__ = MagicMock(return_value=False)
+        mock_stream.text_stream = iter(["Good", " answer"])
+        mock_final = MagicMock()
+        mock_final.usage.input_tokens = 300
+        mock_final.usage.output_tokens = 50
+        mock_stream.get_final_message.return_value = mock_final
+        answerer._anthropic_client.messages.stream.return_value = mock_stream
+
+        candidates = [_make_candidate()]
+        tokens = list(
+            answerer.answer_stream("test", candidates, RetrievalLabel.PASS, trace_id="stream-2")
+        )
+
+        assert tokens == ["Good", " answer"]
+        call = mock_usage_store.log_usage.call_args
+        assert call[0][3] == 300  # input_tokens (pos 3 after provider, model, usage_type)
+        assert call[0][4] == 50  # output_tokens
+        assert call.kwargs["status"] == "ok"
+        assert call.kwargs.get("error_message") is None
+
+    def test_stream_fails_entirely_logs_error_and_reraises(self):
+        mock_usage_store = MagicMock()
+        answerer = Answerer(
+            model="claude-haiku-4-5", provider="anthropic", usage_store=mock_usage_store
+        )
+        answerer._anthropic_client = MagicMock()
+        answerer._anthropic_client.messages.stream.side_effect = ConnectionError("network down")
+
+        candidates = [_make_candidate()]
+        with pytest.raises(ConnectionError, match="network down"):
+            list(
+                answerer.answer_stream(
+                    "test", candidates, RetrievalLabel.PASS, trace_id="stream-3"
+                )
+            )
+
+        call = mock_usage_store.log_usage.call_args
+        assert call.kwargs["status"] == "error"
+        assert "network down" in call.kwargs["error_message"]
+
+
 class TestNoResultsSkipsLLM:
     def test_no_results_label_returns_early(self):
         mock_usage_store = MagicMock()

@@ -22,6 +22,8 @@ logger = logging.getLogger(__name__)
 class LLMClient:
     """LLM client that tries Anthropic first, falls back to Ollama then OpenAI."""
 
+    OPENAI_FALLBACK_MODEL = "gpt-4o-mini"
+
     def __init__(self, usage_store: UsageStore | None = None, usage_type: str = "inbox") -> None:
         self._anthropic_client: Anthropic | None = None
         self._ollama_client: OpenAI | None = None
@@ -142,7 +144,7 @@ class LLMClient:
             start = time.perf_counter()
             try:
                 oai_response = self.openai_client.chat.completions.create(
-                    model="gpt-4o-mini",
+                    model=self.OPENAI_FALLBACK_MODEL,
                     messages=messages,
                     temperature=0.2,
                     max_tokens=2000,
@@ -153,7 +155,7 @@ class LLMClient:
                 output_tok = oai_response.usage.completion_tokens if oai_response.usage else 0
                 self._log_usage(
                     "openai",
-                    "gpt-4o-mini",
+                    self.OPENAI_FALLBACK_MODEL,
                     input_tok,
                     output_tok,
                     trace_id=trace_id,
@@ -165,7 +167,7 @@ class LLMClient:
                 logger.error("OpenAI also failed", exc_info=True)
                 self._log_usage(
                     "openai",
-                    "gpt-4o-mini",
+                    self.OPENAI_FALLBACK_MODEL,
                     0,
                     0,
                     trace_id=trace_id,
