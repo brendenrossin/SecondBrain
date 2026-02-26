@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -55,18 +56,6 @@ The array MUST have exactly the same number of elements as chunks provided."""
         hallucination_threshold: float = 3.0,
         usage_store: UsageStore | None = None,
     ) -> None:
-        """Initialize the reranker.
-
-        Args:
-            model: Model to use for reranking.
-            api_key: API key.
-            base_url: Custom API base URL (e.g. Ollama's OpenAI-compatible endpoint).
-            provider: "anthropic" or "openai" (Ollama uses "openai" with base_url).
-            rerank_threshold: Minimum rerank score to consider relevant.
-            hallucination_threshold: If similarity is high but rerank is below this,
-                flag as potential hallucination.
-            usage_store: Optional usage store for cost tracking.
-        """
         self.model = model
         self.api_key = api_key
         self.base_url = base_url
@@ -106,6 +95,7 @@ The array MUST have exactly the same number of elements as chunks provided."""
         query: str,
         candidates: list[RetrievalCandidate],
         top_n: int = 5,
+        trace_id: str | None = None,
     ) -> tuple[list[RankedCandidate], RetrievalLabel]:
         """Rerank candidates using LLM scoring.
 
@@ -113,6 +103,7 @@ The array MUST have exactly the same number of elements as chunks provided."""
             query: The search query.
             candidates: List of candidates from retrieval.
             top_n: Number of top candidates to return.
+            trace_id: Optional trace ID for correlating related LLM calls.
 
         Returns:
             Tuple of (ranked_candidates, retrieval_label).
@@ -121,7 +112,7 @@ The array MUST have exactly the same number of elements as chunks provided."""
             return [], RetrievalLabel.NO_RESULTS
 
         # Score all candidates in a single batch API call
-        scores = self._score_candidates_batch(query, candidates)
+        scores = self._score_candidates_batch(query, candidates, trace_id=trace_id)
 
         # Build ranked list
         ranked: list[RankedCandidate] = []
@@ -153,7 +144,10 @@ The array MUST have exactly the same number of elements as chunks provided."""
         return top_ranked, label
 
     def _score_candidates_batch(
-        self, query: str, candidates: list[RetrievalCandidate]
+        self,
+        query: str,
+        candidates: list[RetrievalCandidate],
+        trace_id: str | None = None,
     ) -> list[float]:
         """Score all candidates in a single API call."""
         # Build chunks text
@@ -173,6 +167,13 @@ The array MUST have exactly the same number of elements as chunks provided."""
         all_chunks = "\n\n---\n\n".join(chunks_text)
         user_content = f"Query: {query}\n\nChunks:\n\n{all_chunks}"
 
+        start = time.perf_counter()
+        status = "ok"
+        error_msg = None
+        input_tokens = 0
+        output_tokens = 0
+        provider_name = ""
+
         try:
             if self.provider == "anthropic":
                 response = self.anthropic_client.messages.create(
@@ -182,12 +183,9 @@ The array MUST have exactly the same number of elements as chunks provided."""
                     messages=[{"role": "user", "content": user_content}],
                 )
                 content = response.content[0].text  # type: ignore[union-attr]
-                self._log_usage(
-                    "anthropic",
-                    self.model,
-                    response.usage.input_tokens,
-                    response.usage.output_tokens,
-                )
+                provider_name = "anthropic"
+                input_tokens = response.usage.input_tokens
+                output_tokens = response.usage.output_tokens
             else:
                 oai_response = self.openai_client.chat.completions.create(
                     model=self.model,
@@ -199,14 +197,10 @@ The array MUST have exactly the same number of elements as chunks provided."""
                     max_tokens=200,
                 )
                 content = oai_response.choices[0].message.content or "[]"
+                provider_name = "ollama" if self.base_url else "openai"
                 if oai_response.usage:
-                    provider_name = "ollama" if self.base_url else "openai"
-                    self._log_usage(
-                        provider_name,
-                        self.model,
-                        oai_response.usage.prompt_tokens,
-                        oai_response.usage.completion_tokens,
-                    )
+                    input_tokens = oai_response.usage.prompt_tokens
+                    output_tokens = oai_response.usage.completion_tokens
 
             # Parse scores from JSON array
             try:
@@ -222,18 +216,53 @@ The array MUST have exactly the same number of elements as chunks provided."""
                 return [float(n) for n in numbers[: len(candidates)]]
 
             # Fall back to similarity scores
+            status = "fallback"
+            error_msg = "LLM response could not be parsed into valid scores"
             return [c.similarity_score * 10 for c in candidates]
 
         except Exception as e:
             logger.warning("Batch reranking error: %s", e)
-            # Fall back to similarity scores
+            status = "fallback"
+            error_msg = str(e)[:500]
             return [c.similarity_score * 10 for c in candidates]
+        finally:
+            latency_ms = (time.perf_counter() - start) * 1000
+            if input_tokens or status != "ok":
+                self._log_usage(
+                    provider_name or self.provider,
+                    self.model,
+                    input_tokens,
+                    output_tokens,
+                    trace_id=trace_id,
+                    latency_ms=latency_ms,
+                    status=status,
+                    error_message=error_msg,
+                )
 
-    def _log_usage(self, provider: str, model: str, input_tokens: int, output_tokens: int) -> None:
+    def _log_usage(
+        self,
+        provider: str,
+        model: str,
+        input_tokens: int,
+        output_tokens: int,
+        trace_id: str | None = None,
+        latency_ms: float | None = None,
+        status: str = "ok",
+        error_message: str | None = None,
+    ) -> None:
         if self._usage_store:
             from secondbrain.stores.usage import calculate_cost
 
             cost = calculate_cost(provider, model, input_tokens, output_tokens)
             self._usage_store.log_usage(
-                provider, model, "chat_rerank", input_tokens, output_tokens, cost
+                provider,
+                model,
+                "chat_rerank",
+                input_tokens,
+                output_tokens,
+                cost,
+                trace_id=trace_id,
+                latency_ms=latency_ms,
+                status=status,
+                error_message=error_message,
             )

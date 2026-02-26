@@ -16,6 +16,7 @@ import type {
   CostSummaryResponse,
   DailyCostsResponse,
   AdminStatsResponse,
+  TraceEntry,
 } from "./types";
 
 const BASE = "/api/v1";
@@ -245,6 +246,25 @@ export interface SyncStatusResponse {
 
 export async function getSyncStatus(): Promise<SyncStatusResponse> {
   return fetchJSON(`${BASE}/admin/sync-status`);
+}
+
+export async function getTraces(params?: {
+  limit?: number;
+  usage_type?: string;
+  status?: string;
+  since?: string;
+}): Promise<TraceEntry[]> {
+  const qs = new URLSearchParams();
+  if (params?.limit) qs.set("limit", String(params.limit));
+  if (params?.usage_type) qs.set("usage_type", params.usage_type);
+  if (params?.status) qs.set("status", params.status);
+  if (params?.since) qs.set("since", params.since);
+  const q = qs.toString();
+  return fetchJSON(`${BASE}/admin/traces${q ? `?${q}` : ""}`);
+}
+
+export async function getTraceGroup(traceId: string): Promise<TraceEntry[]> {
+  return fetchJSON(`${BASE}/admin/traces/${traceId}`);
 }
 
 // --- Events ---

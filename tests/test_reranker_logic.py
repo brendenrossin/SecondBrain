@@ -169,3 +169,63 @@ class TestOpenAIProvider:
         candidates = [_make_candidate("a")]
         scores = reranker._score_candidates_batch("query", candidates)
         assert scores == [8.0]
+
+
+class TestTraceIdAndStatusLogging:
+    """Tests for trace_id propagation and status logging in the reranker."""
+
+    def test_trace_id_passed_to_usage_store(self):
+        mock_usage_store = MagicMock()
+        reranker, _ = _make_anthropic_reranker("[8.0]")
+        reranker._usage_store = mock_usage_store
+
+        candidates = [_make_candidate("a")]
+        reranker._score_candidates_batch("query", candidates, trace_id="rerank-trace-1")
+
+        mock_usage_store.log_usage.assert_called_once()
+        kwargs = mock_usage_store.log_usage.call_args.kwargs
+        assert kwargs["trace_id"] == "rerank-trace-1"
+        assert kwargs["latency_ms"] is not None
+        assert kwargs["latency_ms"] > 0
+        assert kwargs["status"] == "ok"
+
+    def test_fallback_status_logged_on_parse_failure(self):
+        mock_usage_store = MagicMock()
+        reranker, _ = _make_anthropic_reranker("I cannot score these chunks.")
+        reranker._usage_store = mock_usage_store
+
+        candidates = [_make_candidate("a", similarity=0.5)]
+        reranker._score_candidates_batch("query", candidates, trace_id="fb-trace")
+
+        mock_usage_store.log_usage.assert_called_once()
+        kwargs = mock_usage_store.log_usage.call_args.kwargs
+        assert kwargs["status"] == "fallback"
+        assert kwargs["error_message"] is not None
+        assert "parsed" in kwargs["error_message"]
+
+    def test_fallback_status_logged_on_exception(self):
+        mock_usage_store = MagicMock()
+        reranker = LLMReranker(provider="anthropic", usage_store=mock_usage_store)
+        mock_client = MagicMock()
+        mock_client.messages.create.side_effect = Exception("API timeout")
+        reranker._anthropic_client = mock_client
+
+        candidates = [_make_candidate("a", similarity=0.6)]
+        scores = reranker._score_candidates_batch("query", candidates, trace_id="err-trace")
+
+        assert scores == [6.0]  # similarity * 10
+        mock_usage_store.log_usage.assert_called_once()
+        kwargs = mock_usage_store.log_usage.call_args.kwargs
+        assert kwargs["status"] == "fallback"
+        assert "API timeout" in kwargs["error_message"]
+        assert kwargs["trace_id"] == "err-trace"
+
+    def test_rerank_passes_trace_id_to_batch_scorer(self):
+        mock_usage_store = MagicMock()
+        reranker = LLMReranker(rerank_threshold=5.0, usage_store=mock_usage_store)
+        candidates = [_make_candidate("a", similarity=0.5)]
+
+        with patch.object(reranker, "_score_candidates_batch", return_value=[7.0]) as mock_score:
+            reranker.rerank("query", candidates, top_n=5, trace_id="rerank-trace-2")
+
+        mock_score.assert_called_once_with("query", candidates, trace_id="rerank-trace-2")

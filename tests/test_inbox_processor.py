@@ -295,6 +295,38 @@ class TestDuplicateDetection:
         assert not _is_duplicate("new content", tmp_path)
 
 
+class TestDuplicateDetectionEdgeCases:
+    def test_whitespace_differences_are_ignored(self, tmp_path):
+        inbox = tmp_path / "Inbox"
+        processed = inbox / "_processed"
+        processed.mkdir(parents=True)
+        (processed / "old.md").write_text("  same content  \n")
+        assert _is_duplicate("same content", tmp_path)
+
+    def test_empty_processed_dir_returns_false(self, tmp_path):
+        inbox = tmp_path / "Inbox"
+        processed = inbox / "_processed"
+        processed.mkdir(parents=True)
+        assert not _is_duplicate("new content", tmp_path)
+
+    def test_unreadable_file_skipped(self, tmp_path):
+        inbox = tmp_path / "Inbox"
+        processed = inbox / "_processed"
+        processed.mkdir(parents=True)
+        # Create a subdirectory with .md extension (will cause OSError on read_text)
+        (processed / "bad.md").mkdir()
+        (processed / "good.md").write_text("good content")
+        assert not _is_duplicate("different content", tmp_path)
+        assert _is_duplicate("good content", tmp_path)
+
+    def test_only_checks_md_files(self, tmp_path):
+        inbox = tmp_path / "Inbox"
+        processed = inbox / "_processed"
+        processed.mkdir(parents=True)
+        (processed / "data.txt").write_text("matching content")
+        assert not _is_duplicate("matching content", tmp_path)
+
+
 class TestRouteLivingDocument:
     def test_creates_new_living_doc(self, tmp_path):
         notes_dir = tmp_path / "10_Notes"

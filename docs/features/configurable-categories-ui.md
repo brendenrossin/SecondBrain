@@ -1,6 +1,6 @@
 # Configurable Categories UI — User-Defined Task Categories & Subcategories
 
-> **Status:** Planned (Phase 8.8)
+> **Status:** Complete (Phase 8.8)
 > **Estimated effort:** 3-4 days
 > **Depends on:** Phase 8 (task management UI, subcategory support)
 

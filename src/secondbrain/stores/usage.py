@@ -1,4 +1,4 @@
-"""LLM usage tracking store for cost monitoring."""
+"""LLM usage tracking store for cost monitoring and observability."""
 
 import contextlib
 import json
@@ -26,13 +26,19 @@ PRICING: dict[str, dict[str, tuple[float, float]]] = {
 def calculate_cost(provider: str, model: str, input_tokens: int, output_tokens: int) -> float:
     """Calculate USD cost for a given LLM call.
 
-    Returns 0.0 for Ollama or unknown models.
+    Returns 0.0 for Ollama. Logs a warning for unknown paid models.
     """
     if provider == "ollama":
         return 0.0
     provider_pricing = PRICING.get(provider, {})
     rates = provider_pricing.get(model)
     if not rates:
+        logger.warning(
+            "Unknown model '%s/%s' — cost recorded as $0.00. "
+            "Update PRICING dict in stores/usage.py.",
+            provider,
+            model,
+        )
         return 0.0
     input_rate, output_rate = rates
     return (input_tokens * input_rate + output_tokens * output_rate) / 1_000_000
@@ -86,6 +92,22 @@ class UsageStore:
         """)
         self.conn.commit()
 
+        # Migrate: add observability columns if they don't exist
+        for _col, sql in [
+            ("trace_id", "ALTER TABLE llm_usage ADD COLUMN trace_id TEXT"),
+            ("latency_ms", "ALTER TABLE llm_usage ADD COLUMN latency_ms REAL"),
+            ("status", "ALTER TABLE llm_usage ADD COLUMN status TEXT DEFAULT 'ok'"),
+            ("error_message", "ALTER TABLE llm_usage ADD COLUMN error_message TEXT"),
+        ]:
+            with contextlib.suppress(sqlite3.OperationalError):
+                self.conn.execute(sql)
+        self.conn.executescript("""
+            CREATE INDEX IF NOT EXISTS idx_usage_trace ON llm_usage(trace_id);
+            CREATE INDEX IF NOT EXISTS idx_usage_status ON llm_usage(status);
+            CREATE INDEX IF NOT EXISTS idx_usage_type_ts ON llm_usage(usage_type, timestamp);
+        """)
+        self.conn.commit()
+
     def log_usage(
         self,
         provider: str,
@@ -96,9 +118,13 @@ class UsageStore:
         cost_usd: float,
         conversation_id: str | None = None,
         metadata: dict[str, Any] | None = None,
+        trace_id: str | None = None,
+        latency_ms: float | None = None,
+        status: str = "ok",
+        error_message: str | None = None,
     ) -> None:
         """Log a single LLM API call."""
-        now = datetime.now().astimezone().isoformat()
+        now = datetime.now(UTC).isoformat()
         meta_json = json.dumps(metadata) if metadata else None
         params = (
             now,
@@ -110,11 +136,16 @@ class UsageStore:
             cost_usd,
             conversation_id,
             meta_json,
+            trace_id,
+            latency_ms,
+            status,
+            error_message,
         )
         sql = """
             INSERT INTO llm_usage
-                (timestamp, provider, model, usage_type, input_tokens, output_tokens, cost_usd, conversation_id, metadata)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (timestamp, provider, model, usage_type, input_tokens, output_tokens,
+                 cost_usd, conversation_id, metadata, trace_id, latency_ms, status, error_message)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         try:
             self.conn.execute(sql, params)
@@ -266,6 +297,209 @@ class UsageStore:
             rows = self.conn.execute(sql, (limit,)).fetchall()
 
         return [dict(row) for row in rows]
+
+    def get_traces(
+        self,
+        limit: int = 50,
+        usage_type: str | None = None,
+        status: str | None = None,
+        since: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Get recent individual usage entries with full trace data."""
+        conditions: list[str] = []
+        params: list[Any] = []
+        if usage_type:
+            conditions.append("usage_type = ?")
+            params.append(usage_type)
+        if status:
+            conditions.append("status = ?")
+            params.append(status)
+        if since:
+            conditions.append("timestamp >= ?")
+            params.append(since)
+
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        sql = f"""
+            SELECT id, timestamp, provider, model, usage_type,
+                   input_tokens, output_tokens, cost_usd,
+                   trace_id, latency_ms, status, error_message
+            FROM llm_usage {where}
+            ORDER BY id DESC
+            LIMIT ?
+        """
+        params.append(limit)
+        try:
+            rows = self.conn.execute(sql, params).fetchall()
+        except sqlite3.DatabaseError:
+            logger.warning("UsageStore: DatabaseError on get_traces, reconnecting")
+            self._reconnect()
+            rows = self.conn.execute(sql, params).fetchall()
+
+        return [dict(row) for row in rows]
+
+    def get_trace_group(self, trace_id: str) -> list[dict[str, Any]]:
+        """Get all calls sharing a trace_id, ordered by timestamp."""
+        sql = """
+            SELECT id, timestamp, provider, model, usage_type,
+                   input_tokens, output_tokens, cost_usd,
+                   trace_id, latency_ms, status, error_message
+            FROM llm_usage
+            WHERE trace_id = ?
+            ORDER BY timestamp ASC
+        """
+        try:
+            rows = self.conn.execute(sql, (trace_id,)).fetchall()
+        except sqlite3.DatabaseError:
+            logger.warning("UsageStore: DatabaseError on get_trace_group, reconnecting")
+            self._reconnect()
+            rows = self.conn.execute(sql, (trace_id,)).fetchall()
+
+        return [dict(row) for row in rows]
+
+    def get_anomalies(self) -> list[dict[str, Any]]:
+        """Check for anomalous usage patterns. Returns list of anomaly dicts."""
+        anomalies: list[dict[str, Any]] = []
+
+        # 1. Cost spike: today > 3x 7-day daily average
+        try:
+            row = self.conn.execute("""
+                SELECT
+                    COALESCE(SUM(CASE WHEN DATE(timestamp) = DATE('now') THEN cost_usd ELSE 0 END), 0) as today_cost,
+                    COALESCE(sub.avg_daily_cost, 0) as avg_daily_cost,
+                    COALESCE(sub.day_count, 0) as day_count
+                FROM llm_usage
+                LEFT JOIN (
+                    SELECT AVG(daily_cost) as avg_daily_cost, COUNT(*) as day_count
+                    FROM (
+                        SELECT DATE(timestamp) as d, SUM(cost_usd) as daily_cost
+                        FROM llm_usage
+                        WHERE DATE(timestamp) >= DATE('now', '-7 days')
+                          AND DATE(timestamp) < DATE('now')
+                        GROUP BY DATE(timestamp)
+                    )
+                ) sub ON 1=1
+            """).fetchone()
+            if (
+                row
+                and row["day_count"] >= 3
+                and row["avg_daily_cost"] > 0
+                and row["today_cost"] > 3 * row["avg_daily_cost"]
+            ):
+                anomalies.append(
+                    {
+                        "type": "cost_spike",
+                        "severity": "critical",
+                        "message": f"Today's cost (${row['today_cost']:.2f}) is {row['today_cost'] / row['avg_daily_cost']:.1f}x the 7-day average (${row['avg_daily_cost']:.2f}/day)",
+                        "details": {
+                            "today_cost": round(row["today_cost"], 4),
+                            "avg_daily_cost": round(row["avg_daily_cost"], 4),
+                        },
+                    }
+                )
+        except sqlite3.DatabaseError:
+            logger.warning("Anomaly detection: cost spike check failed")
+
+        # 2. Call count spike per usage_type
+        try:
+            rows = self.conn.execute("""
+                SELECT usage_type,
+                    SUM(CASE WHEN DATE(timestamp) = DATE('now') THEN 1 ELSE 0 END) as today_calls,
+                    sub.avg_daily_calls,
+                    sub.day_count
+                FROM llm_usage
+                LEFT JOIN (
+                    SELECT usage_type as ut, AVG(daily_calls) as avg_daily_calls, COUNT(*) as day_count
+                    FROM (
+                        SELECT usage_type, DATE(timestamp) as d, COUNT(*) as daily_calls
+                        FROM llm_usage
+                        WHERE DATE(timestamp) >= DATE('now', '-7 days')
+                          AND DATE(timestamp) < DATE('now')
+                        GROUP BY usage_type, DATE(timestamp)
+                    )
+                    GROUP BY usage_type
+                ) sub ON sub.ut = llm_usage.usage_type
+                WHERE DATE(timestamp) >= DATE('now', '-7 days')
+                GROUP BY usage_type
+            """).fetchall()
+            for r in rows:
+                if (
+                    r["day_count"]
+                    and r["day_count"] >= 3
+                    and r["avg_daily_calls"]
+                    and r["avg_daily_calls"] > 0
+                    and r["today_calls"] > 3 * r["avg_daily_calls"]
+                ):
+                    anomalies.append(
+                        {
+                            "type": "call_spike",
+                            "severity": "critical",
+                            "message": f"'{r['usage_type']}' has {r['today_calls']} calls today — {r['today_calls'] / r['avg_daily_calls']:.1f}x the 7-day average ({r['avg_daily_calls']:.0f}/day)",
+                            "details": {
+                                "usage_type": r["usage_type"],
+                                "today_calls": r["today_calls"],
+                                "avg_daily_calls": round(r["avg_daily_calls"], 1),
+                            },
+                        }
+                    )
+        except sqlite3.DatabaseError:
+            logger.warning("Anomaly detection: call spike check failed")
+
+        # 3. High error rate: >20% of calls in last hour have status != 'ok'
+        try:
+            row = self.conn.execute("""
+                SELECT
+                    COUNT(*) as total,
+                    SUM(CASE WHEN status IS NOT NULL AND status != 'ok' THEN 1 ELSE 0 END) as errors
+                FROM llm_usage
+                WHERE timestamp >= datetime('now', '-1 hour')
+            """).fetchone()
+            if row and row["total"] >= 5:
+                error_rate = row["errors"] / row["total"]
+                if error_rate > 0.20:
+                    anomalies.append(
+                        {
+                            "type": "high_error_rate",
+                            "severity": "warning",
+                            "message": f"{row['errors']}/{row['total']} calls ({error_rate:.0%}) failed in the last hour",
+                            "details": {
+                                "total": row["total"],
+                                "errors": row["errors"],
+                                "error_rate": round(error_rate, 3),
+                            },
+                        }
+                    )
+        except sqlite3.DatabaseError:
+            logger.warning("Anomaly detection: error rate check failed")
+
+        # 4. High fallback rate: >50% of reranker calls falling back today
+        try:
+            row = self.conn.execute("""
+                SELECT
+                    COUNT(*) as total,
+                    SUM(CASE WHEN status = 'fallback' THEN 1 ELSE 0 END) as fallbacks
+                FROM llm_usage
+                WHERE usage_type = 'chat_rerank'
+                  AND DATE(timestamp) = DATE('now')
+            """).fetchone()
+            if row and row["total"] >= 3:
+                fallback_rate = row["fallbacks"] / row["total"]
+                if fallback_rate > 0.50:
+                    anomalies.append(
+                        {
+                            "type": "high_fallback_rate",
+                            "severity": "warning",
+                            "message": f"Reranker falling back to similarity scores on {row['fallbacks']}/{row['total']} calls today ({fallback_rate:.0%})",
+                            "details": {
+                                "total": row["total"],
+                                "fallbacks": row["fallbacks"],
+                                "fallback_rate": round(fallback_rate, 3),
+                            },
+                        }
+                    )
+        except sqlite3.DatabaseError:
+            logger.warning("Anomaly detection: fallback rate check failed")
+
+        return anomalies
 
     def close(self) -> None:
         """Close the database connection."""

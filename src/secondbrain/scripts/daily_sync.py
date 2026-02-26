@@ -7,6 +7,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -97,18 +98,36 @@ def extract_metadata(vault_path: Path, data_path: Path | None = None) -> str:
         metadata_store.close()
         return "All notes up to date"
 
+    extract_start = time.time()
     extracted = 0
     failed = 0
     for path in stale_paths:
+        trace_id = uuid.uuid4().hex
         try:
             note = connector.read_note(Path(path))
-            metadata = extractor.extract(note)
+            metadata = extractor.extract(note, trace_id=trace_id)
             metadata.content_hash = current_hashes[path]  # Match get_file_metadata() hash
             metadata_store.upsert(metadata)
             extracted += 1
         except Exception:
             logger.warning("Failed to extract %s", path, exc_info=True)
             failed += 1
+
+    # Log batch summary for observability
+    usage_store.log_usage(
+        provider="system",
+        model="batch",
+        usage_type="extraction_batch",
+        input_tokens=0,
+        output_tokens=0,
+        cost_usd=0.0,
+        metadata={
+            "extracted": extracted,
+            "failed": failed,
+            "skipped": len(vault_files) - extracted - failed,
+            "duration_ms": int((time.time() - extract_start) * 1000),
+        },
+    )
 
     metadata_store.close()
     return (
