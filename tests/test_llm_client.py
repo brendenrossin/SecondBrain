@@ -2,6 +2,8 @@
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 
 def _make_settings(**overrides):
     settings = MagicMock()
@@ -218,3 +220,91 @@ class TestPerProviderFailureLogging:
         call = mock_usage_store.log_usage.call_args
         assert call.kwargs["status"] == "ok"
         assert call.kwargs["latency_ms"] > 0
+
+
+class TestAllProvidersFail:
+    @patch("secondbrain.scripts.llm_client.get_settings")
+    @patch("secondbrain.scripts.llm_client.Anthropic")
+    @patch("secondbrain.scripts.llm_client.OpenAI")
+    def test_raises_runtime_error_when_all_fail(
+        self, mock_openai_cls, mock_anthropic_cls, mock_settings
+    ):
+        mock_settings.return_value = _make_settings(openai_api_key="test-openai-key")
+
+        mock_anthropic = MagicMock()
+        mock_anthropic_cls.return_value = mock_anthropic
+        mock_anthropic.messages.create.side_effect = Exception("Anthropic down")
+
+        mock_ollama = MagicMock()
+        mock_openai = MagicMock()
+        # OpenAI constructor is called twice: once for Ollama, once for OpenAI
+        mock_openai_cls.side_effect = [mock_ollama, mock_openai]
+        mock_ollama.chat.completions.create.side_effect = Exception("Ollama down")
+        mock_openai.chat.completions.create.side_effect = Exception("OpenAI down")
+
+        mock_usage_store = MagicMock()
+
+        from secondbrain.scripts.llm_client import LLMClient
+
+        client = LLMClient(usage_store=mock_usage_store)
+
+        with pytest.raises(RuntimeError, match="All LLM providers failed"):
+            client.chat("system", "user", trace_id="fail-all")
+
+        # Should have 3 error logs: anthropic, ollama, openai
+        assert mock_usage_store.log_usage.call_count == 3
+        providers = [c[0][0] for c in mock_usage_store.log_usage.call_args_list]
+        assert providers == ["anthropic", "ollama", "openai"]
+        for c in mock_usage_store.log_usage.call_args_list:
+            assert c.kwargs["status"] == "error"
+            assert c.kwargs["trace_id"] == "fail-all"
+
+    @patch("secondbrain.scripts.llm_client.get_settings")
+    @patch("secondbrain.scripts.llm_client.Anthropic")
+    @patch("secondbrain.scripts.llm_client.OpenAI")
+    def test_raises_when_no_openai_key_and_others_fail(
+        self, mock_openai_cls, mock_anthropic_cls, mock_settings
+    ):
+        mock_settings.return_value = _make_settings(openai_api_key=None)
+
+        mock_anthropic = MagicMock()
+        mock_anthropic_cls.return_value = mock_anthropic
+        mock_anthropic.messages.create.side_effect = Exception("Anthropic down")
+
+        mock_ollama = MagicMock()
+        mock_openai_cls.return_value = mock_ollama
+        mock_ollama.chat.completions.create.side_effect = Exception("Ollama down")
+
+        from secondbrain.scripts.llm_client import LLMClient
+
+        client = LLMClient()
+
+        with pytest.raises(RuntimeError, match="All LLM providers failed"):
+            client.chat("system", "user")
+
+    @patch("secondbrain.scripts.llm_client.get_settings")
+    @patch("secondbrain.scripts.llm_client.Anthropic")
+    @patch("secondbrain.scripts.llm_client.OpenAI")
+    def test_openai_fallback_uses_class_constant_model(
+        self, mock_openai_cls, mock_anthropic_cls, mock_settings
+    ):
+        mock_settings.return_value = _make_settings(openai_api_key="test-key")
+
+        mock_anthropic = MagicMock()
+        mock_anthropic_cls.return_value = mock_anthropic
+        mock_anthropic.messages.create.side_effect = Exception("fail")
+
+        mock_ollama = MagicMock()
+        mock_openai = MagicMock()
+        mock_openai_cls.side_effect = [mock_ollama, mock_openai]
+        mock_ollama.chat.completions.create.side_effect = Exception("fail")
+        mock_openai.chat.completions.create.return_value = _make_openai_response("OK")
+
+        from secondbrain.scripts.llm_client import LLMClient
+
+        client = LLMClient()
+        client.chat("system", "user")
+
+        # Verify the OpenAI fallback used the class constant
+        call_kwargs = mock_openai.chat.completions.create.call_args
+        assert call_kwargs.kwargs["model"] == LLMClient.OPENAI_FALLBACK_MODEL

@@ -55,9 +55,9 @@ const CHART_TITLES: Record<Period, string> = {
   all: "Weekly Cost (All Time)",
 };
 
-function formatCost(cents: number): string {
-  if (cents < 0.01) return "$0.00";
-  return `$${cents.toFixed(2)}`;
+function formatCost(usd: number): string {
+  if (usd < 0.01) return "$0.00";
+  return `$${usd.toFixed(2)}`;
 }
 
 function formatTokens(n: number): string {
@@ -430,9 +430,11 @@ function TracesTab() {
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [traceGroup, setTraceGroup] = useState<TraceEntry[] | null>(null);
   const [traceGroupId, setTraceGroupId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const loadTraces = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const data = await getTraces({
         limit: 100,
@@ -442,6 +444,7 @@ function TracesTab() {
       setTraces(data);
     } catch (err) {
       console.error("Failed to load traces:", err);
+      setError("Failed to load traces. Check backend connection.");
     } finally {
       setLoading(false);
     }
@@ -468,6 +471,14 @@ function TracesTab() {
 
   return (
     <div className="space-y-4">
+      {/* Error banner */}
+      {error && (
+        <div className="glass-card p-3 flex items-center gap-2 border-red-500/50 bg-red-500/10">
+          <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+          <span className="text-sm text-red-400">{error}</span>
+        </div>
+      )}
+
       {/* Filters */}
       <div className="flex gap-3">
         <select

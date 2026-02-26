@@ -22,6 +22,7 @@ from secondbrain.models import (
     CostSummaryResponse,
     DailyCost,
     DailyCostsResponse,
+    TraceEntry,
     UsageCostBreakdown,
 )
 from secondbrain.stores.conversation import ConversationStore
@@ -117,7 +118,7 @@ async def get_stats(
     )
 
 
-@router.get("/traces")
+@router.get("/traces", response_model=list[TraceEntry])
 async def get_traces(
     usage_store: Annotated[UsageStore, Depends(get_usage_store)],
     limit: int = Query(default=50, ge=1, le=200),
@@ -126,16 +127,16 @@ async def get_traces(
     since: str | None = Query(default=None),
 ) -> list[dict[str, Any]]:
     """Get recent LLM call traces with full details."""
-    return usage_store.get_traces(limit=limit, usage_type=usage_type, status=status, since=since)
+    return usage_store.get_traces(limit=limit, usage_type=usage_type, status=status, since=since)  # type: ignore[return-value]
 
 
-@router.get("/traces/{trace_id}")
+@router.get("/traces/{trace_id}", response_model=list[TraceEntry])
 async def get_trace_group(
     trace_id: str,
     usage_store: Annotated[UsageStore, Depends(get_usage_store)],
 ) -> list[dict[str, Any]]:
     """Get all calls sharing a trace_id."""
-    return usage_store.get_trace_group(trace_id)
+    return usage_store.get_trace_group(trace_id)  # type: ignore[return-value]
 
 
 @router.get("/sync-status")

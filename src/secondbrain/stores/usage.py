@@ -104,6 +104,7 @@ class UsageStore:
         self.conn.executescript("""
             CREATE INDEX IF NOT EXISTS idx_usage_trace ON llm_usage(trace_id);
             CREATE INDEX IF NOT EXISTS idx_usage_status ON llm_usage(status);
+            CREATE INDEX IF NOT EXISTS idx_usage_type_ts ON llm_usage(usage_type, timestamp);
         """)
         self.conn.commit()
 
@@ -123,7 +124,7 @@ class UsageStore:
         error_message: str | None = None,
     ) -> None:
         """Log a single LLM API call."""
-        now = datetime.now().astimezone().isoformat()
+        now = datetime.now(UTC).isoformat()
         meta_json = json.dumps(metadata) if metadata else None
         params = (
             now,

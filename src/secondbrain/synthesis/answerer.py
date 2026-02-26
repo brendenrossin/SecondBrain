@@ -233,15 +233,27 @@ You might want to:
                     messages=messages,  # type: ignore[arg-type]
                 ) as stream:
                     yield from stream.text_stream
-                    final = stream.get_final_message()
-                    self._log_usage(
-                        "anthropic",
-                        self.model,
-                        final.usage.input_tokens,
-                        final.usage.output_tokens,
-                        trace_id=trace_id,
-                        latency_ms=(time.perf_counter() - start) * 1000,
-                    )
+                    try:
+                        final = stream.get_final_message()
+                        self._log_usage(
+                            "anthropic",
+                            self.model,
+                            final.usage.input_tokens,
+                            final.usage.output_tokens,
+                            trace_id=trace_id,
+                            latency_ms=(time.perf_counter() - start) * 1000,
+                        )
+                    except Exception:
+                        # Stream completed but couldn't get token counts
+                        self._log_usage(
+                            "anthropic",
+                            self.model,
+                            0,
+                            0,
+                            trace_id=trace_id,
+                            latency_ms=(time.perf_counter() - start) * 1000,
+                            error_message="Stream completed but get_final_message() failed",
+                        )
             else:
                 oai_messages: list[dict[str, Any]] = [
                     {"role": "system", "content": self.SYSTEM_PROMPT},

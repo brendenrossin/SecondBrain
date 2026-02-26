@@ -249,41 +249,44 @@ def process_inbox(vault_path: Path) -> list[str]:
     settings = get_settings()
     data_path = Path(settings.data_path) if settings.data_path else Path("data")
     usage_store = UsageStore(data_path / "usage.db")
-    llm = LLMClient(usage_store=usage_store)
-    actions = []
-    inbox_start = time.time()
+    try:
+        llm = LLMClient(usage_store=usage_store)
+        actions = []
+        inbox_start = time.time()
 
-    for md_file in md_files:
-        try:
-            file_actions = _process_single_file(md_file, vault_path, llm, data_path)
-            actions.extend(file_actions)
-            for action in file_actions:
-                logger.info("Processed: %s -> %s", md_file.name, action)
-            # Move to _processed/ on success
-            _move_to_subfolder(md_file, "_processed")
-        except Exception:
-            logger.error("Failed to process %s", md_file.name, exc_info=True)
-            actions.append(f"FAILED: {md_file.name}")
-            _move_to_subfolder(md_file, "_failed")
+        for md_file in md_files:
+            try:
+                file_actions = _process_single_file(md_file, vault_path, llm, data_path)
+                actions.extend(file_actions)
+                for action in file_actions:
+                    logger.info("Processed: %s -> %s", md_file.name, action)
+                # Move to _processed/ on success
+                _move_to_subfolder(md_file, "_processed")
+            except Exception:
+                logger.error("Failed to process %s", md_file.name, exc_info=True)
+                actions.append(f"FAILED: {md_file.name}")
+                _move_to_subfolder(md_file, "_failed")
 
-    # Log batch summary for observability
-    failed_count = sum(1 for a in actions if a.startswith("FAILED"))
-    processed = len(actions) - failed_count
-    usage_store.log_usage(
-        provider="system",
-        model="batch",
-        usage_type="inbox_batch",
-        input_tokens=0,
-        output_tokens=0,
-        cost_usd=0.0,
-        metadata={
-            "processed": processed,
-            "failed": failed_count,
-            "duration_ms": int((time.time() - inbox_start) * 1000),
-        },
-    )
+        # Log batch summary for observability
+        failed_count = sum(1 for a in actions if a.startswith("FAILED"))
+        processed = len(actions) - failed_count
+        usage_store.log_usage(
+            provider="system",
+            model="batch",
+            usage_type="inbox_batch",
+            input_tokens=0,
+            output_tokens=0,
+            cost_usd=0.0,
+            metadata={
+                "processed": processed,
+                "failed": failed_count,
+                "duration_ms": int((time.time() - inbox_start) * 1000),
+            },
+        )
 
-    return actions
+        return actions
+    finally:
+        usage_store.close()
 
 
 def _move_to_subfolder(md_file: Path, subfolder: str) -> None:
