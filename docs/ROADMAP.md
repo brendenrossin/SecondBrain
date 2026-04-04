@@ -373,6 +373,31 @@ See `docs/features/rag-quality-performance.md` for full spec.
 
 ---
 
+## Phase 9.8 — LLM Tracing + TraceEval Integration (~1-2 days)
+Goal: instrument all LLM calls with OpenTelemetry tracing and export spans as local JSONL files for TraceEval analysis.
+
+TraceEval (`~/TraceEval`) is a trace-to-eval compiler that auto-generates pytest eval suites from LLM traces. This phase gets SecondBrain producing the OTel traces TraceEval needs, using the cheapest possible approach (no hosted services, no new infrastructure).
+
+**Phase 9.8a — OpenLLMetry + Local File Export (this phase):**
+- [ ] OpenLLMetry auto-instrumentation for OpenAI + Anthropic SDKs
+- [ ] Custom `FileSpanExporter` writing spans to `data/traces/YYYY-MM-DD.jsonl`
+- [ ] Config: `SECONDBRAIN_TRACING_ENABLED` flag (opt-in, off by default)
+- [ ] Single init module (`src/secondbrain/tracing.py`) — zero changes to existing LLM call sites
+- [ ] Accumulate traces from normal usage for TraceEval analysis
+
+**Phase 9.8b — Langfuse Free Tier (future):**
+- [ ] Swap/augment file exporter with Langfuse OTel exporter for trace viewer UI
+- [ ] Parent/child span grouping, search, and visualization
+
+**Phase 9.8c — Full Platform (future, only if warranted):**
+- [ ] LangSmith, Arize, or similar — once TraceEval-generated evals prove their value
+
+Deliverable: every LLM call in SecondBrain produces an OTel trace. Run `traceeval analyze --input ~/SecondBrain/data/traces/` to generate evals that catch regressions on model swaps or prompt changes.
+
+See `docs/traceeval-integration/phase-9.8a-openllmetry-file-export.md` for full spec.
+
+---
+
 ## Phase 10 — Email Ingestion (Read-Only) (~5-7 days)
 Goal: bring email context into SecondBrain without compromising vault signal-to-noise or security.
 

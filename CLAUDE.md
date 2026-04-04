@@ -108,6 +108,7 @@ Read docs in this order for full context:
 9. `docs/UI_DESIGN_SPEC.md` - Frontend redesign spec ("Mission Control" dashboard overhaul)
 10. `docs/ENGINEERING_REVIEW.md` - System health assessment, improvement priorities, and review criteria for changes
 11. `docs/features/*.md` - Individual feature specs, explorations, and deferred proposals
+12. `docs/traceeval-integration/` - TraceEval integration specs and configuration
 
 ## Implementation Phases
 
@@ -127,6 +128,7 @@ Read docs in this order for full context:
 - **Phase 8:** Voice chat via OpenAI Realtime API
 - **Phase 9:** Smarter retrieval (wiki links, capture connections) *(partially done — wiki link expansion complete)*
 - **Phase 9.7:** RAG quality & performance (contextual retrieval, topic manifests, caching)
+- **Phase 9.8:** LLM tracing + TraceEval integration (OpenLLMetry → local JSONL → TraceEval evals)
 - **Phase 10:** Email ingestion (read-only)
 - **Phase 11:** Voice chat via OpenAI Realtime API
 - **Phase 12:** Knowledge graph (V2)
