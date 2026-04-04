@@ -360,6 +360,19 @@ Note: All backend APIs already exist (`/metadata`, `/suggestions`, `/entities`, 
 
 ---
 
+## Phase 9.7 — RAG Quality & Performance (~3-5 days)
+Goal: improve retrieval accuracy and reduce query latency, especially for local models.
+
+- [ ] **Contextual retrieval** — At indexing time, use a cheap LLM (Haiku-class) to prepend a 50-100 token context blurb to each chunk before embedding and BM25 indexing. The blurb situates the chunk within the full document (e.g., "This chunk is from Brent's recipe ideas, specifically the Valentine's Day dinner section"). Based on Anthropic's published technique that reduces retrieval errors by 67% when combined with hybrid search + reranking.
+- [ ] **Topic manifest / knowledge-base summary** — Generate per-document summaries and a vault-level knowledge summary. Enables the answerer to know what's in the knowledge base and answer "I don't have info on that" confidently. Could also enable a tool-use pattern where the LLM decides when to call RAG.
+- [ ] **Caching layer** — Embedding cache (content hash → vector) to skip re-computation during incremental re-indexing. Reranker result cache (TTL-based) for repeated query patterns. LLM context cache for contextual retrieval indexing.
+
+Deliverable: measurably better retrieval precision (fewer irrelevant results, fewer missed results), faster re-indexing via caching, and foundation for tool-use RAG pattern.
+
+See `docs/features/rag-quality-performance.md` for full spec.
+
+---
+
 ## Phase 10 — Email Ingestion (Read-Only) (~5-7 days)
 Goal: bring email context into SecondBrain without compromising vault signal-to-noise or security.
 

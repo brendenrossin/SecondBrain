@@ -25,7 +25,7 @@ class TestCalculateCost:
         assert abs(cost - expected) < 1e-10
 
     def test_ollama_always_free(self):
-        cost = calculate_cost("ollama", "gpt-oss:20b", 100_000, 50_000)
+        cost = calculate_cost("ollama", "gemma4", 100_000, 50_000)
         assert cost == 0.0
 
     def test_unknown_model_returns_zero(self):

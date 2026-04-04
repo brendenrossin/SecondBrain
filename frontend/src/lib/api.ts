@@ -79,6 +79,8 @@ export async function askStream(
   let buffer = "";
   let currentEvent = "";
 
+  let receivedDone = false;
+
   function processLines(lines: string[]) {
     for (const rawLine of lines) {
       // Strip \r from CRLF line endings (sse_starlette uses \r\n)
@@ -93,7 +95,12 @@ export async function askStream(
           } else if (currentEvent === "token") {
             callbacks.onToken(JSON.parse(data));
           } else if (currentEvent === "done") {
+            receivedDone = true;
             callbacks.onDone(JSON.parse(data));
+          } else if (currentEvent === "error") {
+            const err = JSON.parse(data);
+            callbacks.onError(new Error(err.message || "Stream error"));
+            return;
           }
         } catch {
           // non-JSON data for token events
@@ -119,6 +126,13 @@ export async function askStream(
   buffer += decoder.decode();
   if (buffer) {
     processLines(buffer.split("\n"));
+  }
+
+  // Stream ended without a done event — something went wrong
+  if (!receivedDone) {
+    callbacks.onError(
+      new Error("Connection lost — the response was interrupted before completing")
+    );
   }
 }
 
@@ -283,4 +297,10 @@ export async function captureText(text: string): Promise<CaptureResponse> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text }),
   });
+}
+
+// --- Warmup ---
+
+export function warmupOllama(): void {
+  fetch(`${BASE}/warmup`, { method: "POST" }).catch(() => {});
 }

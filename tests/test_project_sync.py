@@ -1,5 +1,7 @@
 """Tests for the project sync module."""
 
+from datetime import datetime, timedelta
+
 from secondbrain.scripts.project_sync import (
     AUTO_END,
     AUTO_START,
@@ -11,6 +13,11 @@ from secondbrain.scripts.project_sync import (
     sync_projects,
 )
 from secondbrain.scripts.task_aggregator import AggregatedTask, Task
+
+
+def _recent_date_str(days_ago: int = 1) -> str:
+    """Return a YYYY-MM-DD string for a recent date."""
+    return (datetime.now() - timedelta(days=days_ago)).strftime("%Y-%m-%d")
 
 
 class TestNormalizeProjectName:
@@ -51,7 +58,8 @@ class TestExtractDailyNotesMentions:
     def test_finds_mentions_in_notes_section(self, tmp_path):
         daily_dir = tmp_path / "00_Daily"
         daily_dir.mkdir()
-        (daily_dir / "2026-02-05.md").write_text(
+        recent = _recent_date_str(2)
+        (daily_dir / f"{recent}.md").write_text(
             "## Notes\n"
             "- Worked on SecondBrain indexing today\n"
             "- Had lunch\n"
@@ -60,13 +68,14 @@ class TestExtractDailyNotesMentions:
         )
         mentions = _extract_daily_notes_mentions(daily_dir, "SecondBrain")
         assert len(mentions) == 1
-        assert mentions[0][0] == "2026-02-05"
+        assert mentions[0][0] == recent
         assert "SecondBrain" in mentions[0][1]
 
     def test_ignores_non_bullet_lines(self, tmp_path):
         daily_dir = tmp_path / "00_Daily"
         daily_dir.mkdir()
-        (daily_dir / "2026-02-05.md").write_text("## Notes\nSecondBrain stuff (not a bullet)\n")
+        recent = _recent_date_str(2)
+        (daily_dir / f"{recent}.md").write_text("## Notes\nSecondBrain stuff (not a bullet)\n")
         mentions = _extract_daily_notes_mentions(daily_dir, "SecondBrain")
         assert len(mentions) == 0
 
@@ -141,7 +150,8 @@ class TestSyncProjects:
         tasks_dir = tmp_path / "Tasks"
         tasks_dir.mkdir()
 
-        (daily_dir / "2026-02-05.md").write_text(
+        recent = _recent_date_str(2)
+        (daily_dir / f"{recent}.md").write_text(
             "## Tasks\n"
             "### PwC\n"
             "#### SecondBrain\n"

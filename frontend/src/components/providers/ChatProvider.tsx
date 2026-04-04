@@ -4,11 +4,12 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useRef,
   useState,
 } from "react";
 import type { Citation, ConversationMessage } from "@/lib/types";
-import { askStream } from "@/lib/api";
+import { askStream, warmupOllama } from "@/lib/api";
 
 type Provider = "anthropic" | "openai" | "local";
 
@@ -54,7 +55,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }): React
   const setProvider = useCallback((p: Provider) => {
     setProviderState(p);
     localStorage.setItem(PROVIDER_KEY, p);
+    if (p === "local") warmupOllama();
   }, []);
+
+  // Warm up Ollama when chat page loads with Local selected
+  useEffect(() => {
+    if (provider === "local") warmupOllama();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const newConversation = useCallback(() => {
     if (abortRef.current) abortRef.current.abort();

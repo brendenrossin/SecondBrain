@@ -42,7 +42,7 @@ class Settings(BaseSettings):
 
     # Ollama settings (local LLM)
     ollama_base_url: str = "http://127.0.0.1:11434/v1"
-    ollama_model: str = "gpt-oss:20b"
+    ollama_model: str = "gemma4"
 
     # API keys (loaded from env or .env file)
     openai_api_key: str | None = None

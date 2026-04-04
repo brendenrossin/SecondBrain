@@ -189,6 +189,10 @@ The array MUST have exactly the same number of elements as chunks provided."""
                     response.usage.output_tokens,
                 )
             else:
+                # Local models (e.g. Gemma 4) may use internal reasoning that
+                # consumes tokens before producing the final JSON array, so we
+                # allow a larger budget than cloud models need.
+                rerank_max_tokens = 2000 if self.base_url else 200
                 oai_response = self.openai_client.chat.completions.create(
                     model=self.model,
                     messages=[
@@ -196,7 +200,7 @@ The array MUST have exactly the same number of elements as chunks provided."""
                         {"role": "user", "content": user_content},
                     ],
                     temperature=0,
-                    max_tokens=200,
+                    max_tokens=rerank_max_tokens,
                 )
                 content = oai_response.choices[0].message.content or "[]"
                 if oai_response.usage:
