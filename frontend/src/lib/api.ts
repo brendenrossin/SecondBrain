@@ -85,7 +85,10 @@ export async function askStream(
     for (const rawLine of lines) {
       // Strip \r from CRLF line endings (sse_starlette uses \r\n)
       const line = rawLine.replace(/\r$/, "");
-      if (line.startsWith("event: ")) {
+      if (line === "") {
+        // Blank line signals end of event per SSE spec — reset event type
+        currentEvent = "";
+      } else if (line.startsWith("event: ")) {
         currentEvent = line.slice(7).trim();
       } else if (line.startsWith("data: ")) {
         const data = line.slice(6);

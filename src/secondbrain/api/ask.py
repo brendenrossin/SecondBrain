@@ -24,6 +24,7 @@ from secondbrain.api.dependencies import (
     get_retriever,
     get_settings,
 )
+from secondbrain.config import Settings
 from secondbrain.logging.query_logger import QueryLogger
 from secondbrain.models import AskRequest, AskResponse, Citation
 from secondbrain.retrieval.hybrid import HybridRetriever
@@ -188,10 +189,11 @@ async def ask_stream(
                 answer_parts.append(token)
                 yield {"event": "token", "data": token}
 
-            # Save full answer to conversation
+            # Save full answer to conversation (skip if stream errored before any tokens)
             full_answer = "".join(answer_parts)
-            conversation_store.add_message(conversation_id, "user", request.query)
-            conversation_store.add_message(conversation_id, "assistant", full_answer)
+            if full_answer:
+                conversation_store.add_message(conversation_id, "user", request.query)
+                conversation_store.add_message(conversation_id, "assistant", full_answer)
 
             # Log query
             latency_ms = (time.time() - start_time) * 1000
@@ -214,22 +216,24 @@ async def ask_stream(
                 ),
             }
         except Exception as e:
+            logger.exception("Stream generation error: %s", e)
             yield {
                 "event": "error",
-                "data": json.dumps({"message": str(e)[:500]}),
+                "data": json.dumps({"message": "An error occurred while generating the response."}),
             }
 
     return EventSourceResponse(generate())
 
 
 @router.post("/warmup")
-async def warmup_ollama() -> dict[str, str]:
+async def warmup_ollama(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, str]:
     """Send a minimal request to Ollama to preload the model into memory.
 
     Called by the frontend when the user opens the chat page or switches to
     the Local provider, so the model is warm by the time they submit a query.
     """
-    settings = get_settings()
 
     async def _warmup() -> None:
         try:
@@ -238,7 +242,8 @@ async def warmup_ollama() -> dict[str, str]:
                 base_url=settings.ollama_base_url,
                 timeout=30.0,
             )
-            client.chat.completions.create(
+            await asyncio.to_thread(
+                client.chat.completions.create,
                 model=settings.ollama_model,
                 messages=[{"role": "user", "content": "hi"}],
                 max_tokens=1,
@@ -247,6 +252,6 @@ async def warmup_ollama() -> dict[str, str]:
         except Exception as e:
             logger.warning("Ollama warmup failed: %s", e)
 
-    # Fire and forget — don't block the response
-    asyncio.create_task(_warmup())
+    # Fire and forget — don't block the response. Store ref to avoid GC warning.
+    _task = asyncio.create_task(_warmup())  # noqa: F841
     return {"status": "warming"}
