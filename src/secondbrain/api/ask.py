@@ -243,10 +243,11 @@ async def warmup_ollama(
                 timeout=30.0,
             )
             await asyncio.to_thread(
-                client.chat.completions.create,
-                model=settings.ollama_model,
-                messages=[{"role": "user", "content": "hi"}],
-                max_tokens=1,
+                lambda: client.chat.completions.create(
+                    model=settings.ollama_model,
+                    messages=[{"role": "user", "content": "hi"}],
+                    max_tokens=1,
+                )
             )
             logger.info("Ollama model %s warmed up", settings.ollama_model)
         except Exception as e:
