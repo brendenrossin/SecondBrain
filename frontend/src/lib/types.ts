@@ -210,6 +210,13 @@ export interface DailyCostsResponse {
   daily: DailyCost[];
 }
 
+export interface AnomalyAlert {
+  type: string;
+  severity: "critical" | "warning" | "info";
+  message: string;
+  details: Record<string, unknown>;
+}
+
 export interface AdminStatsResponse {
   total_queries: number;
   avg_latency_ms: number;
@@ -220,6 +227,22 @@ export interface AdminStatsResponse {
   today_cost: number;
   today_calls: number;
   cost_alert: string | null;
+  anomalies: AnomalyAlert[];
+}
+
+export interface TraceEntry {
+  id: number;
+  timestamp: string;
+  provider: string;
+  model: string;
+  usage_type: string;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: number;
+  trace_id: string | null;
+  latency_ms: number | null;
+  status: "ok" | "error" | "fallback" | "timeout";
+  error_message: string | null;
 }
 
 // --- Calendar Events ---

@@ -1,4 +1,4 @@
-"""Admin endpoints for cost tracking and system stats."""
+"""Admin endpoints for cost tracking, traces, and system stats."""
 
 import time
 from datetime import UTC, datetime, timedelta
@@ -18,9 +18,11 @@ from secondbrain.config import Settings
 from secondbrain.logging.query_logger import QueryLogger
 from secondbrain.models import (
     AdminStatsResponse,
+    AnomalyAlert,
     CostSummaryResponse,
     DailyCost,
     DailyCostsResponse,
+    TraceEntry,
     UsageCostBreakdown,
 )
 from secondbrain.stores.conversation import ConversationStore
@@ -98,6 +100,10 @@ async def get_stats(
     if today_cost >= threshold:
         cost_alert = f"Today's LLM cost (${today_cost:.2f}) exceeds ${threshold:.2f} threshold"
 
+    # Anomaly detection
+    anomalies_raw = usage_store.get_anomalies()
+    anomalies = [AnomalyAlert(**a) for a in anomalies_raw]
+
     return AdminStatsResponse(
         total_queries=total_queries if isinstance(total_queries, int) else 0,
         avg_latency_ms=float(avg_latency) if isinstance(avg_latency, (int, float)) else 0.0,
@@ -108,7 +114,29 @@ async def get_stats(
         today_cost=today_cost,
         today_calls=today_calls,
         cost_alert=cost_alert,
+        anomalies=anomalies,
     )
+
+
+@router.get("/traces", response_model=list[TraceEntry])
+async def get_traces(
+    usage_store: Annotated[UsageStore, Depends(get_usage_store)],
+    limit: int = Query(default=50, ge=1, le=200),
+    usage_type: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    since: str | None = Query(default=None),
+) -> list[dict[str, Any]]:
+    """Get recent LLM call traces with full details."""
+    return usage_store.get_traces(limit=limit, usage_type=usage_type, status=status, since=since)
+
+
+@router.get("/traces/{trace_id}", response_model=list[TraceEntry])
+async def get_trace_group(
+    trace_id: str,
+    usage_store: Annotated[UsageStore, Depends(get_usage_store)],
+) -> list[dict[str, Any]]:
+    """Get all calls sharing a trace_id."""
+    return usage_store.get_trace_group(trace_id)
 
 
 @router.get("/sync-status")

@@ -142,10 +142,10 @@ class MetadataExtractor:
     def __init__(self, llm_client: LLMClient) -> None:
         self.llm_client = llm_client
 
-    def extract(self, note: Note) -> NoteMetadata:
+    def extract(self, note: Note, trace_id: str | None = None) -> NoteMetadata:
         """Extract metadata from a single note via one LLM call."""
         user_prompt = _build_user_prompt(note)
-        result = self.llm_client.chat_json(SYSTEM_PROMPT, user_prompt)
+        result = self.llm_client.chat_json(SYSTEM_PROMPT, user_prompt, trace_id=trace_id)
         return _parse_result(result, note, self.llm_client.model_name)
 
     def extract_batch(

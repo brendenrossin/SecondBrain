@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any
 
@@ -51,15 +52,6 @@ You might want to:
         provider: str = "anthropic",
         usage_store: UsageStore | None = None,
     ) -> None:
-        """Initialize the answerer.
-
-        Args:
-            model: Model to use for generation.
-            api_key: API key.
-            base_url: Custom API base URL (e.g. Ollama's OpenAI-compatible endpoint).
-            provider: "anthropic" or "openai" (Ollama uses "openai" with base_url).
-            usage_store: Optional usage store for cost tracking.
-        """
         self.model = model
         self.api_key = api_key
         self.base_url = base_url
@@ -67,6 +59,13 @@ You might want to:
         self._usage_store = usage_store
         self._openai_client: OpenAI | None = None
         self._anthropic_client: Anthropic | None = None
+
+    @property
+    def _resolved_provider(self) -> str:
+        """Resolve the provider name for usage logging (anthropic, openai, or ollama)."""
+        if self.provider == "anthropic":
+            return "anthropic"
+        return "ollama" if self.base_url else "openai"
 
     @property
     def openai_client(self) -> OpenAI:
@@ -99,6 +98,7 @@ You might want to:
         retrieval_label: RetrievalLabel,
         conversation_history: list[ConversationMessage] | None = None,
         linked_context: list[LinkedContext] | None = None,
+        trace_id: str | None = None,
     ) -> str:
         """Generate an answer based on retrieved chunks.
 
@@ -108,6 +108,7 @@ You might want to:
             retrieval_label: The retrieval evaluation label.
             conversation_history: Optional conversation history.
             linked_context: Optional linked notes from wiki link expansion.
+            trace_id: Optional trace ID for correlating related LLM calls.
 
         Returns:
             The generated answer.
@@ -119,54 +120,70 @@ You might want to:
         # Build context from candidates
         context = self._build_context(ranked_candidates, linked_context)
 
-        if self.provider == "anthropic":
-            # Anthropic: system is a separate param, not a message
-            system_text = self.SYSTEM_PROMPT + f"\n\nSOURCES FROM USER'S NOTES:\n\n{context}"
-            messages: list[dict[str, Any]] = []
-            if conversation_history:
-                for msg in conversation_history[-10:]:
-                    messages.append({"role": msg.role, "content": msg.content})
-            messages.append({"role": "user", "content": query})
+        start = time.perf_counter()
 
-            response = self.anthropic_client.messages.create(
-                model=self.model,
-                max_tokens=1000,
-                system=system_text,
-                messages=messages,  # type: ignore[arg-type]
-            )
-            self._log_usage(
-                "anthropic",
-                self.model,
-                response.usage.input_tokens,
-                response.usage.output_tokens,
-            )
-            return response.content[0].text  # type: ignore[union-attr]
-        else:
-            # OpenAI / Ollama path
-            oai_messages: list[dict[str, Any]] = [
-                {"role": "system", "content": self.SYSTEM_PROMPT},
-                {"role": "system", "content": f"SOURCES FROM USER'S NOTES:\n\n{context}"},
-            ]
-            if conversation_history:
-                for msg in conversation_history[-10:]:
-                    oai_messages.append({"role": msg.role, "content": msg.content})
-            oai_messages.append({"role": "user", "content": query})
+        try:
+            if self.provider == "anthropic":
+                system_text = self.SYSTEM_PROMPT + f"\n\nSOURCES FROM USER'S NOTES:\n\n{context}"
+                messages: list[dict[str, Any]] = []
+                if conversation_history:
+                    for msg in conversation_history[-10:]:
+                        messages.append({"role": msg.role, "content": msg.content})
+                messages.append({"role": "user", "content": query})
 
-            oai_response = self.openai_client.chat.completions.create(
-                model=self.model,
-                messages=oai_messages,  # type: ignore[arg-type]
-                temperature=0.3,
-                max_tokens=1000,
-            )
-            if oai_response.usage:
-                provider_name = "ollama" if self.base_url else "openai"
-                self._log_usage(
-                    provider_name,
-                    self.model,
-                    oai_response.usage.prompt_tokens,
-                    oai_response.usage.completion_tokens,
+                response = self.anthropic_client.messages.create(
+                    model=self.model,
+                    max_tokens=1000,
+                    system=system_text,
+                    messages=messages,  # type: ignore[arg-type]
                 )
-            return oai_response.choices[0].message.content or ""
+                self._log_usage(
+                    "anthropic",
+                    self.model,
+                    response.usage.input_tokens,
+                    response.usage.output_tokens,
+                    trace_id=trace_id,
+                    latency_ms=(time.perf_counter() - start) * 1000,
+                )
+                return response.content[0].text  # type: ignore[union-attr]
+            else:
+                oai_messages: list[dict[str, Any]] = [
+                    {"role": "system", "content": self.SYSTEM_PROMPT},
+                    {"role": "system", "content": f"SOURCES FROM USER'S NOTES:\n\n{context}"},
+                ]
+                if conversation_history:
+                    for msg in conversation_history[-10:]:
+                        oai_messages.append({"role": msg.role, "content": msg.content})
+                oai_messages.append({"role": "user", "content": query})
+
+                oai_response = self.openai_client.chat.completions.create(
+                    model=self.model,
+                    messages=oai_messages,  # type: ignore[arg-type]
+                    temperature=0.3,
+                    max_tokens=1000,
+                )
+                if oai_response.usage:
+                    self._log_usage(
+                        self._resolved_provider,
+                        self.model,
+                        oai_response.usage.prompt_tokens,
+                        oai_response.usage.completion_tokens,
+                        trace_id=trace_id,
+                        latency_ms=(time.perf_counter() - start) * 1000,
+                    )
+                return oai_response.choices[0].message.content or ""
+        except Exception as e:
+            self._log_usage(
+                self._resolved_provider,
+                self.model,
+                0,
+                0,
+                trace_id=trace_id,
+                latency_ms=(time.perf_counter() - start) * 1000,
+                status="error",
+                error_message=str(e)[:500],
+            )
+            raise
 
     def answer_stream(
         self,
@@ -175,6 +192,7 @@ You might want to:
         retrieval_label: RetrievalLabel,
         conversation_history: list[ConversationMessage] | None = None,
         linked_context: list[LinkedContext] | None = None,
+        trace_id: str | None = None,
     ) -> Iterator[str]:
         """Generate a streaming answer based on retrieved chunks.
 
@@ -184,6 +202,7 @@ You might want to:
             retrieval_label: The retrieval evaluation label.
             conversation_history: Optional conversation history.
             linked_context: Optional linked notes from wiki link expansion.
+            trace_id: Optional trace ID for correlating related LLM calls.
 
         Yields:
             Answer tokens as they're generated.
@@ -196,80 +215,124 @@ You might want to:
         # Build context from candidates
         context = self._build_context(ranked_candidates, linked_context)
 
-        if self.provider == "anthropic":
-            system_text = self.SYSTEM_PROMPT + f"\n\nSOURCES FROM USER'S NOTES:\n\n{context}"
-            messages: list[dict[str, Any]] = []
-            if conversation_history:
-                for msg in conversation_history[-10:]:
-                    messages.append({"role": msg.role, "content": msg.content})
-            messages.append({"role": "user", "content": query})
+        start = time.perf_counter()
 
-            with self.anthropic_client.messages.stream(
-                model=self.model,
-                max_tokens=1000,
-                system=system_text,
-                messages=messages,  # type: ignore[arg-type]
-            ) as stream:
-                yield from stream.text_stream
-                # After stream completes, log usage from the final message
-                final = stream.get_final_message()
-                self._log_usage(
-                    "anthropic",
-                    self.model,
-                    final.usage.input_tokens,
-                    final.usage.output_tokens,
-                )
-        else:
-            # OpenAI / Ollama path
-            oai_messages: list[dict[str, Any]] = [
-                {"role": "system", "content": self.SYSTEM_PROMPT},
-                {"role": "system", "content": f"SOURCES FROM USER'S NOTES:\n\n{context}"},
-            ]
-            if conversation_history:
-                for msg in conversation_history[-10:]:
-                    oai_messages.append({"role": msg.role, "content": msg.content})
-            oai_messages.append({"role": "user", "content": query})
+        try:
+            if self.provider == "anthropic":
+                system_text = self.SYSTEM_PROMPT + f"\n\nSOURCES FROM USER'S NOTES:\n\n{context}"
+                messages: list[dict[str, Any]] = []
+                if conversation_history:
+                    for msg in conversation_history[-10:]:
+                        messages.append({"role": msg.role, "content": msg.content})
+                messages.append({"role": "user", "content": query})
 
-            # Request usage stats in the final stream chunk (OpenAI supports this;
-            # Ollama may ignore it, which is fine)
-            stream_kwargs: dict[str, Any] = {
-                "model": self.model,
-                "messages": oai_messages,
-                "temperature": 0.3,
-                "max_tokens": 1000,
-                "stream": True,
-            }
-            if not self.base_url:
-                stream_kwargs["stream_options"] = {"include_usage": True}
+                with self.anthropic_client.messages.stream(
+                    model=self.model,
+                    max_tokens=1000,
+                    system=system_text,
+                    messages=messages,  # type: ignore[arg-type]
+                ) as stream:
+                    yield from stream.text_stream
+                    try:
+                        final = stream.get_final_message()
+                        self._log_usage(
+                            "anthropic",
+                            self.model,
+                            final.usage.input_tokens,
+                            final.usage.output_tokens,
+                            trace_id=trace_id,
+                            latency_ms=(time.perf_counter() - start) * 1000,
+                        )
+                    except Exception:
+                        # Stream completed but couldn't get token counts
+                        self._log_usage(
+                            "anthropic",
+                            self.model,
+                            0,
+                            0,
+                            trace_id=trace_id,
+                            latency_ms=(time.perf_counter() - start) * 1000,
+                            error_message="Stream completed but get_final_message() failed",
+                        )
+            else:
+                oai_messages: list[dict[str, Any]] = [
+                    {"role": "system", "content": self.SYSTEM_PROMPT},
+                    {"role": "system", "content": f"SOURCES FROM USER'S NOTES:\n\n{context}"},
+                ]
+                if conversation_history:
+                    for msg in conversation_history[-10:]:
+                        oai_messages.append({"role": msg.role, "content": msg.content})
+                oai_messages.append({"role": "user", "content": query})
 
-            oai_stream = self.openai_client.chat.completions.create(**stream_kwargs)
+                stream_kwargs: dict[str, Any] = {
+                    "model": self.model,
+                    "messages": oai_messages,
+                    "temperature": 0.3,
+                    "max_tokens": 1000,
+                    "stream": True,
+                }
+                if not self.base_url:
+                    stream_kwargs["stream_options"] = {"include_usage": True}
 
-            stream_usage = None
-            for chunk in oai_stream:
-                if hasattr(chunk, "choices") and chunk.choices:
-                    delta_content = chunk.choices[0].delta.content
-                    if delta_content:
-                        yield delta_content
-                # Capture usage from the final chunk (OpenAI includes it there)
-                if hasattr(chunk, "usage") and chunk.usage:
-                    stream_usage = chunk.usage
+                oai_stream = self.openai_client.chat.completions.create(**stream_kwargs)
 
-            if stream_usage:
-                provider_name = "ollama" if self.base_url else "openai"
-                self._log_usage(
-                    provider_name,
-                    self.model,
-                    stream_usage.prompt_tokens,
-                    stream_usage.completion_tokens,
-                )
+                stream_usage = None
+                for chunk in oai_stream:
+                    if hasattr(chunk, "choices") and chunk.choices:
+                        delta_content = chunk.choices[0].delta.content
+                        if delta_content:
+                            yield delta_content
+                    if hasattr(chunk, "usage") and chunk.usage:
+                        stream_usage = chunk.usage
 
-    def _log_usage(self, provider: str, model: str, input_tokens: int, output_tokens: int) -> None:
+                if stream_usage:
+                    self._log_usage(
+                        self._resolved_provider,
+                        self.model,
+                        stream_usage.prompt_tokens,
+                        stream_usage.completion_tokens,
+                        trace_id=trace_id,
+                        latency_ms=(time.perf_counter() - start) * 1000,
+                    )
+        except Exception as e:
+            self._log_usage(
+                self._resolved_provider,
+                self.model,
+                0,
+                0,
+                trace_id=trace_id,
+                latency_ms=(time.perf_counter() - start) * 1000,
+                status="error",
+                error_message=str(e)[:500],
+            )
+            raise
+
+    def _log_usage(
+        self,
+        provider: str,
+        model: str,
+        input_tokens: int,
+        output_tokens: int,
+        trace_id: str | None = None,
+        latency_ms: float | None = None,
+        status: str = "ok",
+        error_message: str | None = None,
+    ) -> None:
         if self._usage_store:
             from secondbrain.stores.usage import calculate_cost
 
             cost = calculate_cost(provider, model, input_tokens, output_tokens)
             self._usage_store.log_usage(
-                provider, model, "chat_answer", input_tokens, output_tokens, cost
+                provider,
+                model,
+                "chat_answer",
+                input_tokens,
+                output_tokens,
+                cost,
+                trace_id=trace_id,
+                latency_ms=latency_ms,
+                status=status,
+                error_message=error_message,
             )
 
     def _build_context(
@@ -298,7 +361,6 @@ You might want to:
         if linked_context:
             linked_parts = []
             for i, lc in enumerate(linked_context, 1):
-                # Extract folder from note_path
                 folder = lc.note_path.split("/")[0] if "/" in lc.note_path else ""
                 header = f"[C{i}]"
                 if folder:

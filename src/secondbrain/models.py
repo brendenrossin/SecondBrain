@@ -274,6 +274,32 @@ class DailyCostsResponse(BaseModel):
     daily: list[DailyCost]
 
 
+class AnomalyAlert(BaseModel):
+    """An anomalous usage pattern detected."""
+
+    type: str
+    severity: str
+    message: str
+    details: dict[str, object] = {}
+
+
+class TraceEntry(BaseModel):
+    """A single LLM call trace entry."""
+
+    id: int
+    timestamp: str
+    provider: str
+    model: str
+    usage_type: str
+    input_tokens: int
+    output_tokens: int
+    cost_usd: float
+    trace_id: str | None = None
+    latency_ms: float | None = None
+    status: str = "ok"
+    error_message: str | None = None
+
+
 class AdminStatsResponse(BaseModel):
     """System-wide admin statistics."""
 
@@ -286,6 +312,7 @@ class AdminStatsResponse(BaseModel):
     today_cost: float = 0.0
     today_calls: int = 0
     cost_alert: str | None = None
+    anomalies: list[AnomalyAlert] = []
 
 
 # --- Phase 6.5: Quick Capture ---
