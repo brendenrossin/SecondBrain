@@ -80,6 +80,7 @@ export async function askStream(
   let currentEvent = "";
 
   let receivedDone = false;
+  let receivedError = false;
 
   function processLines(lines: string[]) {
     for (const rawLine of lines) {
@@ -101,6 +102,7 @@ export async function askStream(
             receivedDone = true;
             callbacks.onDone(JSON.parse(data));
           } else if (currentEvent === "error") {
+            receivedError = true;
             const err = JSON.parse(data);
             callbacks.onError(new Error(err.message || "Stream error"));
             return;
@@ -132,7 +134,7 @@ export async function askStream(
   }
 
   // Stream ended without a done event — something went wrong
-  if (!receivedDone) {
+  if (!receivedDone && !receivedError) {
     callbacks.onError(
       new Error("Connection lost — the response was interrupted before completing")
     );
@@ -305,5 +307,5 @@ export async function captureText(text: string): Promise<CaptureResponse> {
 // --- Warmup ---
 
 export function warmupOllama(): void {
-  fetch(`${BASE}/warmup`, { method: "POST" }).catch(() => {});
+  fetch(`${BASE}/warmup`, { method: "POST" }).catch((e: unknown) => console.warn("Ollama warmup request failed", e));
 }
