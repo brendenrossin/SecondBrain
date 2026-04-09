@@ -11,7 +11,7 @@ class TestLLMClientAnthropicProvider:
         settings = MagicMock()
         settings.anthropic_api_key = "test-key"
         settings.inbox_model = "claude-sonnet-4-5"
-        settings.ollama_model = "gpt-oss:20b"
+        settings.ollama_model = "gemma4"
         settings.ollama_base_url = "http://127.0.0.1:11434/v1"
         settings.openai_api_key = None
         mock_settings.return_value = settings
@@ -41,7 +41,7 @@ class TestLLMClientAnthropicProvider:
         settings = MagicMock()
         settings.anthropic_api_key = "test-key"
         settings.inbox_model = "claude-sonnet-4-5"
-        settings.ollama_model = "gpt-oss:20b"
+        settings.ollama_model = "gemma4"
         settings.ollama_base_url = "http://127.0.0.1:11434/v1"
         settings.openai_api_key = None
         mock_settings.return_value = settings
@@ -71,7 +71,7 @@ class TestLLMClientAnthropicProvider:
         settings = MagicMock()
         settings.anthropic_api_key = None
         settings.inbox_model = "claude-sonnet-4-5"
-        settings.ollama_model = "gpt-oss:20b"
+        settings.ollama_model = "gemma4"
         settings.ollama_base_url = "http://127.0.0.1:11434/v1"
         settings.openai_api_key = None
         mock_settings.return_value = settings

@@ -189,6 +189,10 @@ The array MUST have exactly the same number of elements as chunks provided."""
                     response.usage.output_tokens,
                 )
             else:
+                # Local models (e.g. Gemma 4) may use internal reasoning that
+                # consumes tokens before producing the final JSON array, so we
+                # allow a larger budget than cloud models need.
+                rerank_max_tokens = 2000 if self.base_url else 200
                 oai_response = self.openai_client.chat.completions.create(
                     model=self.model,
                     messages=[
@@ -196,7 +200,7 @@ The array MUST have exactly the same number of elements as chunks provided."""
                         {"role": "user", "content": user_content},
                     ],
                     temperature=0,
-                    max_tokens=200,
+                    max_tokens=rerank_max_tokens,
                 )
                 content = oai_response.choices[0].message.content or "[]"
                 if oai_response.usage:
@@ -212,14 +216,24 @@ The array MUST have exactly the same number of elements as chunks provided."""
             try:
                 scores = json.loads(content)
                 if isinstance(scores, list) and len(scores) == len(candidates):
-                    return [float(s) for s in scores]
+                    return [max(0.0, min(10.0, float(s))) for s in scores]
             except (json.JSONDecodeError, ValueError):
                 pass
 
-            # Try to extract numbers from response
+            # Try to find a bracketed array first (handles CoT reasoning before JSON)
+            bracket_match = re.search(r"\[[\d\s.,]+\]", content)
+            if bracket_match:
+                try:
+                    arr = json.loads(bracket_match.group())
+                    if isinstance(arr, list) and len(arr) == len(candidates):
+                        return [max(0.0, min(10.0, float(s))) for s in arr]
+                except (json.JSONDecodeError, ValueError):
+                    pass
+
+            # Last resort: extract numbers broadly from response
             numbers = re.findall(r"\b(\d+(?:\.\d+)?)\b", content)
             if len(numbers) >= len(candidates):
-                return [float(n) for n in numbers[: len(candidates)]]
+                return [max(0.0, min(10.0, float(n))) for n in numbers[: len(candidates)]]
 
             # Fall back to similarity scores
             return [c.similarity_score * 10 for c in candidates]

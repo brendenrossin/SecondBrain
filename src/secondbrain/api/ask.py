@@ -2,11 +2,13 @@
 
 import asyncio
 import json
+import logging
 import time
 from collections.abc import AsyncIterator
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
+from openai import OpenAI
 from sse_starlette.sse import EventSourceResponse
 
 from secondbrain.api.dependencies import (
@@ -20,13 +22,17 @@ from secondbrain.api.dependencies import (
     get_query_logger,
     get_reranker,
     get_retriever,
+    get_settings,
 )
+from secondbrain.config import Settings
 from secondbrain.logging.query_logger import QueryLogger
 from secondbrain.models import AskRequest, AskResponse, Citation
 from secondbrain.retrieval.hybrid import HybridRetriever
 from secondbrain.retrieval.link_expander import LinkExpander
 from secondbrain.retrieval.reranker import RankedCandidate
 from secondbrain.stores.conversation import ConversationStore
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["ask"])
 
@@ -164,48 +170,89 @@ async def ask_stream(
     citations = _build_citations(ranked_candidates)
 
     async def generate() -> AsyncIterator[dict[str, object]]:
-        # Send citations first
-        yield {
-            "event": "citations",
-            "data": json.dumps([c.model_dump() for c in citations]),
-        }
+        try:
+            # Send citations first
+            yield {
+                "event": "citations",
+                "data": json.dumps([c.model_dump() for c in citations]),
+            }
 
-        # Stream answer tokens
-        answer_parts = []
-        for token in answerer.answer_stream(
-            request.query,
-            ranked_candidates,
-            retrieval_label,
-            conversation_history=history,
-            linked_context=linked_context,
-        ):
-            answer_parts.append(token)
-            yield {"event": "token", "data": token}
+            # Stream answer tokens
+            answer_parts: list[str] = []
+            for token in answerer.answer_stream(
+                request.query,
+                ranked_candidates,
+                retrieval_label,
+                conversation_history=history,
+                linked_context=linked_context,
+            ):
+                answer_parts.append(token)
+                yield {"event": "token", "data": token}
 
-        # Save full answer to conversation
-        full_answer = "".join(answer_parts)
-        conversation_store.add_message(conversation_id, "user", request.query)
-        conversation_store.add_message(conversation_id, "assistant", full_answer)
+            # Save full answer to conversation (skip if stream errored before any tokens)
+            full_answer = "".join(answer_parts)
+            if full_answer:
+                conversation_store.add_message(conversation_id, "user", request.query)
+                conversation_store.add_message(conversation_id, "assistant", full_answer)
 
-        # Log query
-        latency_ms = (time.time() - start_time) * 1000
-        query_logger.log_query(
-            query=request.query,
-            conversation_id=conversation_id,
-            retrieval_label=retrieval_label,
-            citations=citations,
-            latency_ms=latency_ms,
-        )
+            # Log query
+            latency_ms = (time.time() - start_time) * 1000
+            query_logger.log_query(
+                query=request.query,
+                conversation_id=conversation_id,
+                retrieval_label=retrieval_label,
+                citations=citations,
+                latency_ms=latency_ms,
+            )
 
-        # Send done event
-        yield {
-            "event": "done",
-            "data": json.dumps(
-                {
-                    "conversation_id": conversation_id,
-                    "retrieval_label": retrieval_label.value,
-                }
-            ),
-        }
+            # Send done event
+            yield {
+                "event": "done",
+                "data": json.dumps(
+                    {
+                        "conversation_id": conversation_id,
+                        "retrieval_label": retrieval_label.value,
+                    }
+                ),
+            }
+        except Exception as e:
+            logger.exception("Stream generation error: %s", e)
+            yield {
+                "event": "error",
+                "data": json.dumps({"message": "An error occurred while generating the response."}),
+            }
 
     return EventSourceResponse(generate())
+
+
+@router.post("/warmup")
+async def warmup_ollama(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, str]:
+    """Send a minimal request to Ollama to preload the model into memory.
+
+    Called by the frontend when the user opens the chat page or switches to
+    the Local provider, so the model is warm by the time they submit a query.
+    """
+
+    async def _warmup() -> None:
+        try:
+            client = OpenAI(
+                api_key="ollama",
+                base_url=settings.ollama_base_url,
+                timeout=30.0,
+            )
+            await asyncio.to_thread(
+                lambda: client.chat.completions.create(
+                    model=settings.ollama_model,
+                    messages=[{"role": "user", "content": "hi"}],
+                    max_tokens=1,
+                )
+            )
+            logger.info("Ollama model %s warmed up", settings.ollama_model)
+        except Exception as e:
+            logger.warning("Ollama warmup failed: %s", e)
+
+    # Fire and forget — don't block the response. Store ref to avoid GC warning.
+    _task = asyncio.create_task(_warmup())  # noqa: F841
+    return {"status": "warming"}

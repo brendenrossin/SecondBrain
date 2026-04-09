@@ -360,6 +360,44 @@ Note: All backend APIs already exist (`/metadata`, `/suggestions`, `/entities`, 
 
 ---
 
+## Phase 9.7 — RAG Quality & Performance (~3-5 days)
+Goal: improve retrieval accuracy and reduce query latency, especially for local models.
+
+- [ ] **Contextual retrieval** — At indexing time, use a cheap LLM (Haiku-class) to prepend a 50-100 token context blurb to each chunk before embedding and BM25 indexing. The blurb situates the chunk within the full document (e.g., "This chunk is from Brent's recipe ideas, specifically the Valentine's Day dinner section"). Based on Anthropic's published technique that reduces retrieval errors by 67% when combined with hybrid search + reranking.
+- [ ] **Topic manifest / knowledge-base summary** — Generate per-document summaries and a vault-level knowledge summary. Enables the answerer to know what's in the knowledge base and answer "I don't have info on that" confidently. Could also enable a tool-use pattern where the LLM decides when to call RAG.
+- [ ] **Caching layer** — Embedding cache (content hash → vector) to skip re-computation during incremental re-indexing. Reranker result cache (TTL-based) for repeated query patterns. LLM context cache for contextual retrieval indexing.
+
+Deliverable: measurably better retrieval precision (fewer irrelevant results, fewer missed results), faster re-indexing via caching, and foundation for tool-use RAG pattern.
+
+See `docs/features/rag-quality-performance.md` for full spec.
+
+---
+
+## Phase 9.8 — LLM Tracing + TraceEval Integration (~1-2 days)
+Goal: instrument all LLM calls with OpenTelemetry tracing and export spans as local JSONL files for TraceEval analysis.
+
+TraceEval (`~/TraceEval`) is a trace-to-eval compiler that auto-generates pytest eval suites from LLM traces. This phase gets SecondBrain producing the OTel traces TraceEval needs, using the cheapest possible approach (no hosted services, no new infrastructure).
+
+**Phase 9.8a — OpenLLMetry + Local File Export (this phase):**
+- [ ] OpenLLMetry auto-instrumentation for OpenAI + Anthropic SDKs
+- [ ] Custom `FileSpanExporter` writing spans to `data/traces/YYYY-MM-DD.jsonl`
+- [ ] Config: `SECONDBRAIN_TRACING_ENABLED` flag (opt-in, off by default)
+- [ ] Single init module (`src/secondbrain/tracing.py`) — zero changes to existing LLM call sites
+- [ ] Accumulate traces from normal usage for TraceEval analysis
+
+**Phase 9.8b — Langfuse Free Tier (future):**
+- [ ] Swap/augment file exporter with Langfuse OTel exporter for trace viewer UI
+- [ ] Parent/child span grouping, search, and visualization
+
+**Phase 9.8c — Full Platform (future, only if warranted):**
+- [ ] LangSmith, Arize, or similar — once TraceEval-generated evals prove their value
+
+Deliverable: every LLM call in SecondBrain produces an OTel trace. Run `traceeval analyze --input ~/SecondBrain/data/traces/` to generate evals that catch regressions on model swaps or prompt changes.
+
+See `docs/traceeval-integration/phase-9.8a-openllmetry-file-export.md` for full spec.
+
+---
+
 ## Phase 10 — Email Ingestion (Read-Only) (~5-7 days)
 Goal: bring email context into SecondBrain without compromising vault signal-to-noise or security.
 
