@@ -98,10 +98,8 @@ def _run_indexing(
                 c.note_date = note_date
             # Generate context blurbs if enabled
             if context_generator and chunks:
-                blurbs = context_generator.generate_blurbs(
-                    note.title, note.content, chunks
-                )
-                for c, blurb in zip(chunks, blurbs):
+                blurbs = context_generator.generate_blurbs(note.title, note.content, chunks)
+                for c, blurb in zip(chunks, blurbs, strict=True):
                     c.context_blurb = blurb
             texts = [build_embedding_text(c) for c in chunks]
             embeddings = embedder.embed(texts)

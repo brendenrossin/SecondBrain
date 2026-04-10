@@ -1,7 +1,13 @@
 """Tests for contextual retrieval — context blurb generation and integration."""
 
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
 from secondbrain.config import Settings
+from secondbrain.indexing.context import ContextGenerator
+from secondbrain.indexing.embedder import build_embedding_text
 from secondbrain.models import Chunk
+from secondbrain.stores.lexical import LexicalStore
 
 
 def test_chunk_has_context_blurb_field():
@@ -36,9 +42,6 @@ def test_context_generation_enabled_by_default():
     assert settings.context_generation_enabled is True
 
 
-from secondbrain.indexing.embedder import build_embedding_text
-
-
 def test_build_embedding_text_with_blurb():
     chunk = Chunk(
         chunk_id="abc123",
@@ -69,12 +72,6 @@ def test_build_embedding_text_without_blurb():
     result = build_embedding_text(chunk)
     assert not result.startswith("[Context:")
     assert result == "Recipes\nsome text"
-
-
-import uuid
-from unittest.mock import MagicMock, patch
-
-from secondbrain.indexing.context import ContextGenerator
 
 
 def _make_chunk(text: str, heading: str = "Section") -> Chunk:
@@ -142,9 +139,6 @@ def test_context_generator_multiple_chunks():
     assert blurbs[1] == "Context for chunk 1."
 
 
-from secondbrain.stores.lexical import LexicalStore
-
-
 def test_lexical_store_stores_context_blurb(tmp_path):
     store = LexicalStore(tmp_path / "test.db")
     chunk = Chunk(
@@ -207,8 +201,6 @@ def test_vector_store_metadata_includes_blurb(tmp_path):
 
 def test_indexing_pipeline_calls_context_generator():
     """Verify index.py source code wires ContextGenerator into the pipeline."""
-    from pathlib import Path
-
     source_path = Path(__file__).parent.parent / "src" / "secondbrain" / "api" / "index.py"
     source = source_path.read_text()
     assert "ContextGenerator" in source, "index.py must use ContextGenerator"

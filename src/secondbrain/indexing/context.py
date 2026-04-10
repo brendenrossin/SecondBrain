@@ -92,16 +92,22 @@ class ContextGenerator:
                     }
                 ],
             )
-            blurb = response.content[0].text.strip()
+            content_block = response.content[0]
+            blurb = content_block.text.strip() if hasattr(content_block, "text") else ""
             latency_ms = (time.time() - start) * 1000
+            input_tokens = response.usage.input_tokens
+            output_tokens = response.usage.output_tokens
 
             if self._usage_store:
+                from secondbrain.stores.usage import calculate_cost
+
                 self._usage_store.log_usage(
                     provider="anthropic",
                     model=self._model,
                     usage_type="context_generation",
-                    input_tokens=response.usage.input_tokens,
-                    output_tokens=response.usage.output_tokens,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    cost_usd=calculate_cost("anthropic", self._model, input_tokens, output_tokens),
                     trace_id=trace_id,
                     latency_ms=latency_ms,
                     status="ok",
@@ -124,6 +130,7 @@ class ContextGenerator:
                     usage_type="context_generation",
                     input_tokens=0,
                     output_tokens=0,
+                    cost_usd=0.0,
                     trace_id=trace_id,
                     latency_ms=latency_ms,
                     status="error",
