@@ -248,6 +248,7 @@ def process_inbox(vault_path: Path) -> list[str]:
 
     # Create a UsageStore for standalone inbox runs
     from secondbrain.stores.usage import UsageStore
+
     data_path = Path(settings.data_path) if settings.data_path else Path("data")
     usage_store = UsageStore(data_path / "usage.db")
     try:

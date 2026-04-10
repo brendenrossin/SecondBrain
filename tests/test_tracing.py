@@ -111,14 +111,8 @@ def test_main_calls_init_tracing():
     source = main_path.read_text()
     tree = ast.parse(source)
 
-    imports = [
-        node for node in ast.walk(tree)
-        if isinstance(node, (ast.Import, ast.ImportFrom))
-    ]
-    tracing_imported = any(
-        getattr(node, "module", "") == "secondbrain.tracing"
-        for node in imports
-    )
+    imports = [node for node in ast.walk(tree) if isinstance(node, (ast.Import, ast.ImportFrom))]
+    tracing_imported = any(getattr(node, "module", "") == "secondbrain.tracing" for node in imports)
     assert tracing_imported, "main.py must import from secondbrain.tracing"
     assert "init_tracing" in source, "main.py must call init_tracing"
 
