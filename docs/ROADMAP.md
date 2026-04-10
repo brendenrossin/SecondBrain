@@ -73,8 +73,8 @@ KLIB-3 (Compounding query loop) — independent
 
 | ID | Ticket | Est. | Status | Spec |
 |----|--------|------|--------|------|
-| RAG-2 | Caching layer (embedding cache, reranker cache, LLM context cache) | 1-2d | Backlog | [spec](features/rag-quality-performance.md) |
-| RAG-3 | Topic manifest / knowledge-base summary (vault-level awareness) | 2-3d | Backlog | [spec](features/rag-quality-performance.md) |
+| RAG-2 | Caching layer (embedding cache, reranker cache, LLM context cache) | 1-2d | **Pending** | [spec](features/rag-quality-performance.md) |
+| RAG-3 | Topic manifest / knowledge-base summary (vault-level awareness) | 2-3d | **Pending** | [spec](features/rag-quality-performance.md) |
 
 ---
 
@@ -85,7 +85,7 @@ KLIB-3 (Compounding query loop) — independent
 | ID | Ticket | Est. | Status | Spec |
 |----|--------|------|--------|------|
 | OPS-1 | Log persistence & data retention (launchd logs, usage pruning) | 1d | Backlog | [spec](features/log-persistence-retention.md) |
-| OPS-2 | Public demo instance (Fly.io, sample vault, rate limiting) | 4-5d | Backlog | [spec](features/public-demo-instance.md) |
+| OPS-2 | Public demo instance (Fly.io, sample vault, rate limiting) | 4-5d | **Pending** | [spec](features/public-demo-instance.md) |
 
 ---
 
@@ -146,9 +146,9 @@ KLIB-3 (Compounding query loop) — independent
 
 | ID | Ticket | Est. | Status | Spec |
 |----|--------|------|--------|------|
-| KLIB-1 | External content ingestion (drop URL/file in Quick Capture → safety audit → fetch → LLM compile → wiki page → index) | 3-5d | Backlog | — |
+| KLIB-1 | External content ingestion (drop URL/file in Quick Capture → safety audit → fetch → LLM compile → wiki page → index) | 3-5d | **Pending** | — |
 | KLIB-2 | Vault lint & health checks (contradiction detection, orphan pages, stale content, coverage gaps) | 2-3d | Backlog | — |
-| KLIB-3 | Compounding query loop (save valuable synthesis answers back as wiki pages) | 1-2d | Backlog | — |
+| KLIB-3 | Compounding query loop (save valuable synthesis answers back as wiki pages) | 1-2d | **Pending** | — |
 | KLIB-4 | AI-powered research mode (search topic → compile findings → ingest as wiki pages) | TBD | Backlog | — |
 
 ---
