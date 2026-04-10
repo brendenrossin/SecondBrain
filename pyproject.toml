@@ -17,6 +17,11 @@ dependencies = [
     "anthropic>=0.40.0",
     "traceloop-sdk>=0.53.0",
     "sse-starlette>=2.0.0",
+    # Ingestion dependencies
+    "readability-lxml>=0.8",
+    "markdownify>=0.14",
+    "yt-dlp>=2024.0",
+    "pymupdf4llm>=0.0.17",
     # UI
     "gradio>=5.0.0",
     # File watching
