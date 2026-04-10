@@ -24,6 +24,7 @@ from secondbrain.api.metadata import router as metadata_router
 from secondbrain.api.settings import router as settings_router
 from secondbrain.api.tasks import router as tasks_router
 from secondbrain.config import get_settings
+from secondbrain.tracing import init_tracing
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,7 @@ settings = get_settings()
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """Log resolved configuration at startup for debugging."""
     s = get_settings()
+    init_tracing(s)
     logger.info("SecondBrain starting — vault_path=%s, data_path=%s", s.vault_path, s.data_path)
     if not s.vault_path or not s.vault_path.exists():
         logger.error("VAULT PATH NOT CONFIGURED OR MISSING — APIs will return 503 errors")

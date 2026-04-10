@@ -14,8 +14,10 @@ from typing import Any
 
 import frontmatter
 
+from secondbrain.config import get_settings
 from secondbrain.scripts.llm_client import LLMClient
 from secondbrain.settings import load_settings
+from secondbrain.tracing import init_tracing
 
 logger = logging.getLogger(__name__)
 
@@ -232,6 +234,8 @@ def process_inbox(vault_path: Path) -> list[str]:
 
     Returns list of actions taken (for logging/display).
     """
+    settings = get_settings()
+    init_tracing(settings)
     inbox_dir = vault_path / "Inbox"
     if not inbox_dir.exists():
         logger.info("No Inbox directory found at %s", inbox_dir)
@@ -243,10 +247,8 @@ def process_inbox(vault_path: Path) -> list[str]:
         return []
 
     # Create a UsageStore for standalone inbox runs
-    from secondbrain.config import get_settings
     from secondbrain.stores.usage import UsageStore
 
-    settings = get_settings()
     data_path = Path(settings.data_path) if settings.data_path else Path("data")
     usage_store = UsageStore(data_path / "usage.db")
     try:
