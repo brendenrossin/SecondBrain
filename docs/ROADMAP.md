@@ -48,6 +48,10 @@ VOICE-1 (Realtime API) — independent
 
 KG-1 (Knowledge graph) — independent
 WRITEBACK-1 (Changeset workflow) — depends on KG-1
+
+KLIB-1 (External content ingestion) — independent
+KLIB-2 (Vault lint/health checks) — independent
+KLIB-3 (Compounding query loop) — independent
 ```
 
 ---
@@ -69,7 +73,7 @@ WRITEBACK-1 (Changeset workflow) — depends on KG-1
 
 | ID | Ticket | Est. | Status | Spec |
 |----|--------|------|--------|------|
-| RAG-1 | Contextual retrieval (LLM-generated chunk context blurbs at index time) | 2-3d | Backlog | [spec](features/rag-quality-performance.md) |
+| RAG-1 | Contextual retrieval (LLM-generated chunk context blurbs at index time) | 2-3d | **In Progress** | [spec](features/rag-quality-performance.md) |
 | RAG-2 | Caching layer (embedding cache, reranker cache, LLM context cache) | 1-2d | Backlog | [spec](features/rag-quality-performance.md) |
 | RAG-3 | Topic manifest / knowledge-base summary (vault-level awareness) | 2-3d | Backlog | [spec](features/rag-quality-performance.md) |
 
@@ -137,6 +141,18 @@ WRITEBACK-1 (Changeset workflow) — depends on KG-1
 
 ---
 
+## Epic: Knowledge Library (Karpathy-style)
+
+> LLM-compiled knowledge base from external sources — articles, papers, web clips ingested into structured wiki pages. Inspired by [Karpathy's LLM Wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) pattern (compile-then-query), layered on top of SecondBrain's existing RAG infrastructure.
+
+| ID | Ticket | Est. | Status | Spec |
+|----|--------|------|--------|------|
+| KLIB-1 | External content ingestion (raw/ → wiki/ pipeline, LLM triage + summarization, structured page generation) | 3-5d | Backlog | — |
+| KLIB-2 | Vault lint & health checks (contradiction detection, orphan pages, stale content, coverage gaps) | 2-3d | Backlog | — |
+| KLIB-3 | Compounding query loop (save valuable synthesis answers back as wiki pages) | 1-2d | Backlog | — |
+
+---
+
 ## Deferred (revisit when relevant)
 
 Features deprioritized based on current usage patterns and vault size.
@@ -161,3 +177,4 @@ Features deprioritized based on current usage patterns and vault size.
 | **Voice chat: resolve v1 decisions** | Single voice (alloy), fresh sessions, server VAD only, no Whisper fallback. |
 | **Configurable categories over hardcoded** | New users shouldn't need to edit source code. |
 | **Recency via LLM context, not decay formula** | When two similar notes exist, the LLM contextually prefers the recent one during synthesis. |
+| **Knowledge Library: hybrid with RAG, not replacement** | Karpathy's LLM Wiki (compile-then-query) is complementary to SecondBrain's RAG (index-then-retrieve). Wiki pages become vault content indexed by the existing pipeline. Progressive disclosure pattern: wiki index = metadata layer, RAG = deep retrieval. |
