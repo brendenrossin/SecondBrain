@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from secondbrain.config import get_settings
+from secondbrain.tracing import init_tracing
 from secondbrain.scripts.inbox_processor import process_inbox
 from secondbrain.scripts.project_sync import sync_projects
 from secondbrain.scripts.task_aggregator import sync_tasks
@@ -165,6 +166,7 @@ def main() -> None:
     )
 
     settings = get_settings()
+    init_tracing(settings)
 
     # Rotate logs before doing anything else
     data_path = Path(settings.data_path)

@@ -14,8 +14,10 @@ from typing import Any
 
 import frontmatter
 
+from secondbrain.config import get_settings
 from secondbrain.scripts.llm_client import LLMClient
 from secondbrain.settings import load_settings
+from secondbrain.tracing import init_tracing
 
 logger = logging.getLogger(__name__)
 
@@ -232,6 +234,7 @@ def process_inbox(vault_path: Path) -> list[str]:
 
     Returns list of actions taken (for logging/display).
     """
+    init_tracing(get_settings())
     inbox_dir = vault_path / "Inbox"
     if not inbox_dir.exists():
         logger.info("No Inbox directory found at %s", inbox_dir)
