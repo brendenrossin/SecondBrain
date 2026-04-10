@@ -73,7 +73,7 @@ KLIB-3 (Compounding query loop) — independent
 
 | ID | Ticket | Est. | Status | Spec |
 |----|--------|------|--------|------|
-| RAG-1 | Contextual retrieval (LLM-generated chunk context blurbs at index time) | 2-3d | **In Progress** | [spec](features/rag-quality-performance.md) |
+| RAG-1 | Contextual retrieval (LLM-generated chunk context blurbs at index time) | 2-3d | **Review** | [spec](features/rag-quality-performance.md) |
 | RAG-2 | Caching layer (embedding cache, reranker cache, LLM context cache) | 1-2d | Backlog | [spec](features/rag-quality-performance.md) |
 | RAG-3 | Topic manifest / knowledge-base summary (vault-level awareness) | 2-3d | Backlog | [spec](features/rag-quality-performance.md) |
 

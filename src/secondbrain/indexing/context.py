@@ -22,15 +22,20 @@ _SYSTEM_PROMPT = (
     "context, and any key entities that aren't in the chunk itself. Be concise and factual."
 )
 
-_USER_TEMPLATE = """<document title="{title}">
-{document}
-</document>
+def _build_user_message(title: str, document: str, chunk: str) -> str:
+    """Build user message for context generation.
 
-<chunk>
-{chunk}
-</chunk>
-
-Write a 1-2 sentence context blurb for this chunk."""
+    Uses string concatenation instead of str.format() to avoid KeyError
+    when vault content contains {curly braces} (e.g. code blocks).
+    """
+    return (
+        '<document title="' + title + '">\n'
+        + document
+        + "\n</document>\n\n<chunk>\n"
+        + chunk
+        + "\n</chunk>\n\n"
+        + "Write a 1-2 sentence context blurb for this chunk."
+    )
 
 
 class ContextGenerator:
@@ -84,10 +89,8 @@ class ContextGenerator:
                 messages=[
                     {
                         "role": "user",
-                        "content": _USER_TEMPLATE.format(
-                            title=note_title,
-                            document=note_content,
-                            chunk=chunk.chunk_text,
+                        "content": _build_user_message(
+                            note_title, note_content, chunk.chunk_text
                         ),
                     }
                 ],
