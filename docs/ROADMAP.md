@@ -32,9 +32,6 @@ Arrows mean "must complete before." Items without dependencies can be worked in 
 TRACE-1 (OTel export)
   └─► TRACE-2 (Langfuse) ─► TRACE-3 (Full platform)
 
-RAG-1 (Contextual retrieval) ─► RAG-3 (Topic manifest)
-RAG-2 (Caching layer) — independent
-
 OPS-1 (Log persistence) — independent
 OPS-2 (Public demo) — independent
 
@@ -66,15 +63,6 @@ KLIB-3 (Compounding query loop) — independent
 | TRACE-3 | Full platform (LangSmith/Arize, only if warranted) | TBD | Backlog | — |
 
 ---
-
-## Epic: RAG Quality & Performance
-
-> Improve retrieval accuracy and reduce query latency, especially for local models.
-
-| ID | Ticket | Est. | Status | Spec |
-|----|--------|------|--------|------|
-| RAG-2 | Caching layer (embedding cache, reranker cache, LLM context cache) | 1-2d | **PR** | [spec](features/rag-quality-performance.md) |
-| RAG-3 | Topic manifest / knowledge-base summary (vault-level awareness) | 2-3d | **PR** | [spec](features/rag-quality-performance.md) |
 
 ---
 

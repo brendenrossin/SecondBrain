@@ -17,6 +17,8 @@ Completed work, moved here after PR merge. Grouped by epic, ordered by completio
 
 | ID | Ticket | Completed | PR |
 |----|--------|-----------|----|
+| RAG-3 | Topic manifest / knowledge-base summary — vault-level awareness for answerer grounding | 2026-04-10 | [#6](https://github.com/brendenrossin/SecondBrain/pull/6) |
+| RAG-2 | Caching layer — embedding cache + IndexCache (skip unchanged chunks on reindex) | 2026-04-10 | [#6](https://github.com/brendenrossin/SecondBrain/pull/6) |
 | RAG-1 | Contextual retrieval — LLM-generated chunk context blurbs at index time (Anthropic Haiku, progressive disclosure for RAG) | 2026-04-09 | [#5](https://github.com/brendenrossin/SecondBrain/pull/5) |
 
 ---
