@@ -51,12 +51,14 @@ You might want to:
         base_url: str | None = None,
         provider: str = "anthropic",
         usage_store: UsageStore | None = None,
+        vault_manifest: str | None = None,
     ) -> None:
         self.model = model
         self.api_key = api_key
         self.base_url = base_url
         self.provider = provider
         self._usage_store = usage_store
+        self.vault_manifest = vault_manifest
         self._openai_client: OpenAI | None = None
         self._anthropic_client: Anthropic | None = None
 
@@ -124,7 +126,7 @@ You might want to:
 
         try:
             if self.provider == "anthropic":
-                system_text = self.SYSTEM_PROMPT + f"\n\nSOURCES FROM USER'S NOTES:\n\n{context}"
+                system_text = self._build_system_text(context)
                 messages: list[dict[str, Any]] = []
                 if conversation_history:
                     for msg in conversation_history[-10:]:
@@ -148,8 +150,7 @@ You might want to:
                 return response.content[0].text  # type: ignore[union-attr]
             else:
                 oai_messages: list[dict[str, Any]] = [
-                    {"role": "system", "content": self.SYSTEM_PROMPT},
-                    {"role": "system", "content": f"SOURCES FROM USER'S NOTES:\n\n{context}"},
+                    {"role": "system", "content": self._build_system_text(context)},
                 ]
                 if conversation_history:
                     for msg in conversation_history[-10:]:
@@ -219,7 +220,7 @@ You might want to:
 
         try:
             if self.provider == "anthropic":
-                system_text = self.SYSTEM_PROMPT + f"\n\nSOURCES FROM USER'S NOTES:\n\n{context}"
+                system_text = self._build_system_text(context)
                 messages: list[dict[str, Any]] = []
                 if conversation_history:
                     for msg in conversation_history[-10:]:
@@ -256,8 +257,7 @@ You might want to:
                         )
             else:
                 oai_messages: list[dict[str, Any]] = [
-                    {"role": "system", "content": self.SYSTEM_PROMPT},
-                    {"role": "system", "content": f"SOURCES FROM USER'S NOTES:\n\n{context}"},
+                    {"role": "system", "content": self._build_system_text(context)},
                 ]
                 if conversation_history:
                     for msg in conversation_history[-10:]:
@@ -334,6 +334,14 @@ You might want to:
                 status=status,
                 error_message=error_message,
             )
+
+    def _build_system_text(self, context: str) -> str:
+        """Build the full system prompt, optionally prepending the vault manifest."""
+        parts = [self.SYSTEM_PROMPT]
+        if self.vault_manifest:
+            parts.append(f"\n\n{self.vault_manifest}")
+        parts.append(f"\n\nSOURCES FROM USER'S NOTES:\n\n{context}")
+        return "".join(parts)
 
     def _build_context(
         self,
