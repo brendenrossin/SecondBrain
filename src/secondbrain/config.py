@@ -57,6 +57,9 @@ class Settings(BaseSettings):
     # Cost alerting
     cost_alert_threshold: float = 1.00
 
+    # Tracing
+    tracing_enabled: bool = False
+
 
 def get_settings() -> Settings:
     """Get application settings instance."""
