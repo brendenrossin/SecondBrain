@@ -85,6 +85,8 @@ module = [
     "gradio.*",
     "anthropic",
     "anthropic.*",
+    "traceloop.*",
+    "opentelemetry.*",
 ]
 ignore_missing_imports = true
 
