@@ -92,6 +92,10 @@ module = [
     "anthropic.*",
     "traceloop.*",
     "opentelemetry.*",
+    "yaml",
+    "bs4",
+    "bs4.*",
+    "readability",
 ]
 ignore_missing_imports = true
 
