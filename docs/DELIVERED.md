@@ -8,6 +8,7 @@ Completed work, moved here after PR merge. Grouped by epic, ordered by completio
 
 | ID | Ticket | Completed | PR |
 |----|--------|-----------|----|
+| TRACE-1 | OpenLLMetry auto-instrumentation + JSONL file export (traceloop-sdk, FileSpanExporter, BatchSpanProcessor) | 2026-04-09 | [#4](https://github.com/brendenrossin/SecondBrain/pull/4) |
 | OBS-1 | LLM observability & tracing — trace_id, latency, status, error tracking, anomaly detection, admin Traces tab | 2026-04-09 | [#2](https://github.com/brendenrossin/SecondBrain/pull/2) |
 
 ---

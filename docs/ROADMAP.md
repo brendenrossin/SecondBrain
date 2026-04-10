@@ -58,7 +58,6 @@ WRITEBACK-1 (Changeset workflow) — depends on KG-1
 
 | ID | Ticket | Est. | Status | Spec |
 |----|--------|------|--------|------|
-| TRACE-1 | OpenLLMetry auto-instrumentation + JSONL file export | 1-2d | **PR** | [spec](traceeval-integration/phase-9.8a-openllmetry-file-export.md) |
 | TRACE-2 | Langfuse free tier integration (trace viewer UI) | 2-3d | Backlog | — |
 | TRACE-3 | Full platform (LangSmith/Arize, only if warranted) | TBD | Backlog | — |
 
