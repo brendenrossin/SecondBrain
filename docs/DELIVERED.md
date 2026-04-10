@@ -13,6 +13,15 @@ Completed work, moved here after PR merge. Grouped by epic, ordered by completio
 
 ---
 
+## Epic: Knowledge Library (Karpathy-style)
+
+| ID | Ticket | Completed | PR |
+|----|--------|-----------|----|
+| KLIB-1 | External content ingestion (URL → safety audit → fetch → LLM compile → wiki page → index) | 2026-04-10 | [#7](https://github.com/brendenrossin/SecondBrain/pull/7) |
+| KLIB-3 | Compounding query loop (save valuable synthesis answers back as wiki pages) | 2026-04-10 | [#7](https://github.com/brendenrossin/SecondBrain/pull/7) |
+
+---
+
 ## Epic: RAG Quality & Performance
 
 | ID | Ticket | Completed | PR |

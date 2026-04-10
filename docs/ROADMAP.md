@@ -47,9 +47,9 @@ VOICE-1 (Realtime API) — independent
 KG-1 (Knowledge graph) — independent
 WRITEBACK-1 (Changeset workflow) — depends on KG-1
 
-KLIB-1 (External content ingestion) — independent
+KLIB-1 (External content ingestion) ◄── done
 KLIB-2 (Vault lint/health checks) — independent
-KLIB-3 (Compounding query loop) — independent
+KLIB-3 (Compounding query loop) ◄── done
 ```
 
 ---
@@ -136,9 +136,7 @@ KLIB-3 (Compounding query loop) — independent
 
 | ID | Ticket | Est. | Status | Spec |
 |----|--------|------|--------|------|
-| KLIB-1 | External content ingestion (drop URL/file in Quick Capture → safety audit → fetch → LLM compile → wiki page → index) | 3-5d | **Pending** | — |
 | KLIB-2 | Vault lint & health checks (contradiction detection, orphan pages, stale content, coverage gaps) | 2-3d | Backlog | — |
-| KLIB-3 | Compounding query loop (save valuable synthesis answers back as wiki pages) | 1-2d | **Pending** | — |
 | KLIB-4 | AI-powered research mode (search topic → compile findings → ingest as wiki pages) | TBD | Backlog | — |
 
 ---
