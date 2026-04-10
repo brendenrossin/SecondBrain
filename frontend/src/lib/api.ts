@@ -17,6 +17,10 @@ import type {
   DailyCostsResponse,
   AdminStatsResponse,
   TraceEntry,
+  WikiIngestResponse,
+  WikiJobStatusResponse,
+  WikiSaveResponse,
+  WikiSuggestion,
 } from "./types";
 
 const BASE = "/api/v1";
@@ -48,7 +52,7 @@ async function fetchJSON<T>(
 export interface StreamCallbacks {
   onCitations: (citations: Citation[]) => void;
   onToken: (token: string) => void;
-  onDone: (data: { conversation_id: string; retrieval_label: string }) => void;
+  onDone: (data: { conversation_id: string; retrieval_label: string; wiki_suggestion?: WikiSuggestion | null }) => void;
   onError: (error: Error) => void;
 }
 
@@ -328,4 +332,31 @@ export async function captureText(text: string): Promise<CaptureResponse> {
 
 export function warmupOllama(): void {
   fetch(`${BASE}/warmup`, { method: "POST" }).catch((e: unknown) => console.warn("Ollama warmup request failed", e));
+}
+
+// --- Wiki (Knowledge Library) ---
+
+export async function wikiIngest(url: string): Promise<WikiIngestResponse> {
+  return fetchJSON(`${BASE}/wiki/ingest`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+  });
+}
+
+export async function wikiIngestStatus(jobId: string): Promise<WikiJobStatusResponse> {
+  return fetchJSON(`${BASE}/wiki/ingest/${jobId}`);
+}
+
+export async function wikiSaveAnswer(req: {
+  conversation_id: string;
+  answer_text: string;
+  query: string;
+  citations: string[];
+}): Promise<WikiSaveResponse> {
+  return fetchJSON(`${BASE}/wiki/save`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(req),
+  });
 }

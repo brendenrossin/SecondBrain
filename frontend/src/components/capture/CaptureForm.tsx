@@ -1,13 +1,63 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Send, Check, AlertCircle } from "lucide-react";
-import { captureText } from "@/lib/api";
+import {
+  Send,
+  Check,
+  AlertCircle,
+  Link,
+  Globe,
+  Youtube,
+  FileText,
+  Loader2,
+  ShieldCheck,
+  ShieldX,
+} from "lucide-react";
+import { captureText, wikiIngest, wikiIngestStatus } from "@/lib/api";
 import type { CaptureConnection } from "@/lib/types";
 
 type Status = "idle" | "sending" | "success" | "error";
+type ContentType = "web_article" | "youtube" | "pdf" | null;
+type UrlStatus = "idle" | "loading" | "success" | "error";
+
+const STAGE_LABELS: Record<string, string> = {
+  fetching: "Fetching content...",
+  auditing: "Running safety audit...",
+  compiling: "Compiling wiki page...",
+  indexing: "Indexing...",
+  complete: "Done!",
+  failed: "Failed",
+};
+
+function detectContentType(url: string): ContentType {
+  if (!url.trim()) return null;
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname.includes("youtube.com") || parsed.hostname === "youtu.be") return "youtube";
+    if (parsed.pathname.toLowerCase().endsWith(".pdf")) return "pdf";
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") return "web_article";
+  } catch { /* not a valid URL */ }
+  return null;
+}
+
+function ContentTypeBadge({ type }: { type: ContentType }): React.JSX.Element | null {
+  if (!type) return null;
+  const configs = {
+    web_article: { icon: Globe, label: "Web Article" },
+    youtube: { icon: Youtube, label: "YouTube" },
+    pdf: { icon: FileText, label: "PDF" },
+  };
+  const { icon: Icon, label } = configs[type];
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-accent/15 text-accent">
+      <Icon className="w-3 h-3" />
+      {label}
+    </span>
+  );
+}
 
 export function CaptureForm(): React.JSX.Element {
+  // --- Text capture state ---
   const [text, setText] = useState("");
   const [status, setStatus] = useState<Status>("idle");
   const [message, setMessage] = useState("");
@@ -15,15 +65,23 @@ export function CaptureForm(): React.JSX.Element {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout>>(null);
 
-  // Clean up the success-reset timer on unmount
+  // --- URL ingest state ---
+  const [url, setUrl] = useState("");
+  const [urlStatus, setUrlStatus] = useState<UrlStatus>("idle");
+  const [urlStage, setUrlStage] = useState<string>("");
+  const [urlMessage, setUrlMessage] = useState("");
+  const [auditPassed, setAuditPassed] = useState<boolean | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval>>(null);
+
+  // Clean up timers on unmount
   useEffect(() => {
     return () => {
       if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+      if (pollRef.current) clearInterval(pollRef.current);
     };
   }, []);
 
-  // When the user starts typing a new capture, clear stale feedback from
-  // the previous capture and cancel the auto-reset timer.
+  // Clear stale text feedback when user starts typing
   useEffect(() => {
     if (text.length > 0) {
       setConnections([]);
@@ -36,6 +94,7 @@ export function CaptureForm(): React.JSX.Element {
     }
   }, [text]);
 
+  // --- Text capture ---
   async function handleSubmit(): Promise<void> {
     const trimmed = text.trim();
     if (!trimmed || status === "sending") return;
@@ -50,7 +109,6 @@ export function CaptureForm(): React.JSX.Element {
       setMessage(res.message);
       setConnections(res.connections ?? []);
       setText("");
-      // Reset to idle after 3 seconds so user can capture again
       resetTimerRef.current = setTimeout(() => {
         setStatus("idle");
         setMessage("");
@@ -70,8 +128,165 @@ export function CaptureForm(): React.JSX.Element {
     }
   }
 
+  // --- URL ingest ---
+  const contentType = detectContentType(url);
+
+  async function handleUrlIngest(): Promise<void> {
+    const trimmed = url.trim();
+    if (!trimmed || urlStatus === "loading") return;
+
+    setUrlStatus("loading");
+    setUrlStage("fetching");
+    setUrlMessage("");
+    setAuditPassed(null);
+
+    if (pollRef.current) clearInterval(pollRef.current);
+
+    try {
+      const res = await wikiIngest(trimmed);
+      const jobId = res.job_id;
+
+      pollRef.current = setInterval(async () => {
+        try {
+          const statusRes = await wikiIngestStatus(jobId);
+          setUrlStage(statusRes.status);
+
+          if (statusRes.status === "auditing") {
+            // audit in progress — no verdict yet
+          } else if (statusRes.status === "compiling") {
+            setAuditPassed(true);
+          }
+
+          if (statusRes.status === "complete") {
+            clearInterval(pollRef.current!);
+            pollRef.current = null;
+            setUrlStatus("success");
+            setAuditPassed(true);
+            setUrlMessage(
+              statusRes.result_title
+                ? `Saved: ${statusRes.result_title}`
+                : "Successfully ingested"
+            );
+            setUrl("");
+          } else if (statusRes.status === "failed") {
+            clearInterval(pollRef.current!);
+            pollRef.current = null;
+            setUrlStatus("error");
+            setAuditPassed(statusRes.error?.includes("audit") ? false : null);
+            setUrlMessage(statusRes.error || "Ingestion failed");
+          }
+        } catch (pollErr) {
+          clearInterval(pollRef.current!);
+          pollRef.current = null;
+          setUrlStatus("error");
+          setUrlMessage(pollErr instanceof Error ? pollErr.message : "Failed to check status");
+        }
+      }, 1000);
+    } catch (err) {
+      setUrlStatus("error");
+      setUrlStage("failed");
+      setUrlMessage(err instanceof Error ? err.message : "Failed to start ingestion");
+    }
+  }
+
+  function handleUrlKeyDown(e: React.KeyboardEvent): void {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleUrlIngest();
+    }
+  }
+
+  const isUrlLoading = urlStatus === "loading";
+  const stageLabel = STAGE_LABELS[urlStage] ?? urlStage;
+
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-2xl mx-auto space-y-4">
+      {/* URL Ingest Card */}
+      <div className="glass-card p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Link className="w-4 h-4 text-accent" />
+          <h2 className="text-sm font-semibold text-text">Ingest External Content</h2>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <input
+              type="url"
+              value={url}
+              onChange={(e) => {
+                setUrl(e.target.value);
+                if (urlStatus !== "idle") {
+                  setUrlStatus("idle");
+                  setUrlStage("");
+                  setUrlMessage("");
+                  setAuditPassed(null);
+                }
+              }}
+              onKeyDown={handleUrlKeyDown}
+              placeholder="https://..."
+              className="w-full bg-transparent text-text placeholder:text-text-dim text-sm leading-relaxed focus:outline-none border border-border rounded-lg px-3 py-2 pr-24"
+              disabled={isUrlLoading}
+            />
+            {contentType && (
+              <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                <ContentTypeBadge type={contentType} />
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={handleUrlIngest}
+            disabled={!url.trim() || isUrlLoading}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-accent/15 text-accent hover:bg-accent/25 disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+          >
+            {isUrlLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Globe className="w-4 h-4" />
+            )}
+            {isUrlLoading ? "Ingesting..." : "Ingest"}
+          </button>
+        </div>
+
+        {/* URL status feedback */}
+        {(isUrlLoading || urlMessage) && (
+          <div className="mt-3">
+            {isUrlLoading && (
+              <div className="flex items-center gap-2 text-xs text-accent">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                <span>{stageLabel}</span>
+                {urlStage === "auditing" && (
+                  <span className="text-text-dim">— checking content safety</span>
+                )}
+              </div>
+            )}
+            {!isUrlLoading && urlMessage && (
+              <div
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs ${
+                  urlStatus === "success"
+                    ? "bg-success/10 text-success"
+                    : "bg-red-500/10 text-red-400"
+                }`}
+              >
+                {urlStatus === "success" ? (
+                  auditPassed === false ? (
+                    <ShieldX className="w-3.5 h-3.5 shrink-0" />
+                  ) : (
+                    <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                  )
+                ) : auditPassed === false ? (
+                  <ShieldX className="w-3.5 h-3.5 shrink-0" />
+                ) : (
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                )}
+                {urlMessage}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Text Capture Card */}
       <div className="glass-card p-6">
         <textarea
           ref={textareaRef}
@@ -106,10 +321,10 @@ export function CaptureForm(): React.JSX.Element {
         </div>
       </div>
 
-      {/* Status feedback */}
+      {/* Text capture status feedback */}
       {message && (
         <div
-          className={`mt-4 flex items-center gap-2 px-4 py-3 rounded-lg text-sm ${
+          className={`flex items-center gap-2 px-4 py-3 rounded-lg text-sm ${
             status === "success"
               ? "bg-success/10 text-success"
               : "bg-red-500/10 text-red-400"
@@ -126,7 +341,7 @@ export function CaptureForm(): React.JSX.Element {
 
       {/* Connection cards */}
       {connections.length > 0 && (
-        <div className="mt-4 space-y-2">
+        <div className="space-y-2">
           <p className="text-xs text-text-dim font-medium">
             Related in your vault:
           </p>
@@ -156,11 +371,10 @@ export function CaptureForm(): React.JSX.Element {
         </div>
       )}
 
-      <p className="mt-6 text-xs text-text-dim text-center leading-relaxed">
-        Captured text is saved to your Inbox and processed on the next sync.
+      <p className="text-xs text-text-dim text-center leading-relaxed">
+        Paste a URL above to fetch and index external content into your wiki.
         <br />
-        The inbox processor will classify it, extract tasks, and route it to the
-        right folder.
+        Use the text area to capture quick thoughts — saved to your Inbox and routed on next sync.
       </p>
     </div>
   );
