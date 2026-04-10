@@ -22,6 +22,7 @@ _SYSTEM_PROMPT = (
     "context, and any key entities that aren't in the chunk itself. Be concise and factual."
 )
 
+
 def _build_user_message(title: str, document: str, chunk: str) -> str:
     """Build user message for context generation.
 
@@ -29,7 +30,9 @@ def _build_user_message(title: str, document: str, chunk: str) -> str:
     when vault content contains {curly braces} (e.g. code blocks).
     """
     return (
-        '<document title="' + title + '">\n'
+        '<document title="'
+        + title
+        + '">\n'
         + document
         + "\n</document>\n\n<chunk>\n"
         + chunk
@@ -89,9 +92,7 @@ class ContextGenerator:
                 messages=[
                     {
                         "role": "user",
-                        "content": _build_user_message(
-                            note_title, note_content, chunk.chunk_text
-                        ),
+                        "content": _build_user_message(note_title, note_content, chunk.chunk_text),
                     }
                 ],
             )
