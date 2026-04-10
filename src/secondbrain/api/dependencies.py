@@ -249,6 +249,28 @@ def get_local_answerer() -> Answerer:
     )
 
 
+@lru_cache
+def get_safety_auditor() -> "SafetyAuditor":  # type: ignore[name-defined]  # noqa: F821
+    """Get cached safety auditor instance."""
+    from secondbrain.ingestion.safety import SafetyAuditor
+
+    settings = get_settings()
+    if not settings.anthropic_api_key:
+        raise RuntimeError("Safety auditor requires SECONDBRAIN_ANTHROPIC_API_KEY")
+    return SafetyAuditor(api_key=settings.anthropic_api_key, usage_store=get_usage_store())
+
+
+@lru_cache
+def get_wiki_compiler() -> "WikiCompiler":  # type: ignore[name-defined]  # noqa: F821
+    """Get cached wiki compiler instance."""
+    from secondbrain.ingestion.compiler import WikiCompiler
+
+    settings = get_settings()
+    if not settings.anthropic_api_key:
+        raise RuntimeError("Wiki compiler requires SECONDBRAIN_ANTHROPIC_API_KEY")
+    return WikiCompiler(api_key=settings.anthropic_api_key, usage_store=get_usage_store())
+
+
 def check_and_reindex(full_rebuild: bool = False) -> str | None:
     """Check for a reindex trigger file and reindex if found.
 

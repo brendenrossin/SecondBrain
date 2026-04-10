@@ -36,6 +36,13 @@ class AskRequest(BaseModel):
     provider: str = "anthropic"  # "anthropic", "openai", or "local"
 
 
+class WikiSuggestion(BaseModel):
+    """Suggestion to save an answer as a wiki page."""
+
+    eligible: bool
+    reason: str = ""
+
+
 class AskResponse(BaseModel):
     """Response body for the /ask endpoint."""
 
@@ -43,6 +50,7 @@ class AskResponse(BaseModel):
     conversation_id: str
     citations: list[Citation]
     retrieval_label: RetrievalLabel
+    wiki_suggestion: WikiSuggestion | None = None
 
 
 class Chunk(BaseModel):
@@ -350,3 +358,37 @@ class CaptureResponse(BaseModel):
     filename: str
     message: str
     connections: list[CaptureConnection] = []
+
+
+# --- Knowledge Library (Wiki) ---
+
+
+class WikiIngestRequest(BaseModel):
+    url: str = Field(min_length=1)
+
+
+class WikiIngestResponse(BaseModel):
+    job_id: str
+    status: str
+    message: str
+
+
+class WikiJobStatusResponse(BaseModel):
+    job_id: str
+    status: str
+    error: str = ""
+    result_title: str = ""
+    result_path: str = ""
+
+
+class WikiSaveRequest(BaseModel):
+    conversation_id: str
+    answer_text: str
+    query: str
+    citations: list[str]
+
+
+class WikiSaveResponse(BaseModel):
+    title: str
+    path: str
+    message: str
