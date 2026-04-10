@@ -234,7 +234,8 @@ def process_inbox(vault_path: Path) -> list[str]:
 
     Returns list of actions taken (for logging/display).
     """
-    init_tracing(get_settings())
+    settings = get_settings()
+    init_tracing(settings)
     inbox_dir = vault_path / "Inbox"
     if not inbox_dir.exists():
         logger.info("No Inbox directory found at %s", inbox_dir)
@@ -247,8 +248,6 @@ def process_inbox(vault_path: Path) -> list[str]:
 
     # Create a UsageStore for standalone inbox runs
     from secondbrain.stores.usage import UsageStore
-
-    settings = get_settings()
     data_path = Path(settings.data_path) if settings.data_path else Path("data")
     usage_store = UsageStore(data_path / "usage.db")
     try:

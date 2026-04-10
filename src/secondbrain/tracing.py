@@ -28,7 +28,7 @@ class FileSpanExporter(SpanExporter):
         today = datetime.now(UTC).strftime("%Y-%m-%d")
         path = self._traces_dir / f"{today}.jsonl"
         try:
-            with open(path, "a") as f:
+            with open(path, "a", encoding="utf-8") as f:
                 for span in spans:
                     f.write(json.dumps(json.loads(span.to_json())) + "\n")
             return SpanExportResult.SUCCESS
