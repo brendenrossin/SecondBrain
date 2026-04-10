@@ -33,13 +33,14 @@ TRACE-1 (OTel export)
   └─► TRACE-2 (Langfuse) ─► TRACE-3 (Full platform)
 
 OPS-1 (Log persistence) — independent
-OPS-2 (Public demo) — independent
+OPS-3 (Cloud migration) ─► OPS-2 (Public demo)
+OPS-3 (Cloud migration) ─► EMAIL-1 (Gmail ingestion)
 
 RETRIEVAL-1 (Wiki links) ◄── done
   └─► RETRIEVAL-2 (Capture connections)
 RETRIEVAL-3 (Insights dashboard) — independent
 
-EMAIL-1 (Gmail ingestion) — independent
+EMAIL-1 (Gmail ingestion) — depends on OPS-3
 
 VOICE-1 (Realtime API) — independent
 
@@ -73,6 +74,7 @@ KLIB-3 (Compounding query loop) — independent
 | ID | Ticket | Est. | Status | Spec |
 |----|--------|------|--------|------|
 | OPS-1 | Log persistence & data retention (launchd logs, usage pruning) | 1d | Backlog | [spec](features/log-persistence-retention.md) |
+| OPS-3 | Cloud migration (containerize API + workers, deploy to Railway/Fly.io, isolate content ingestion) | 3-4d | **Pending** | — |
 | OPS-2 | Public demo instance (Fly.io, sample vault, rate limiting) | 4-5d | **Pending** | [spec](features/public-demo-instance.md) |
 
 ---
@@ -166,3 +168,5 @@ Features deprioritized based on current usage patterns and vault size.
 | **Configurable categories over hardcoded** | New users shouldn't need to edit source code. |
 | **Recency via LLM context, not decay formula** | When two similar notes exist, the LLM contextually prefers the recent one during synthesis. |
 | **Knowledge Library: hybrid with RAG, not replacement** | Karpathy's LLM Wiki (compile-then-query) is complementary to SecondBrain's RAG (index-then-retrieve). Wiki pages become vault content indexed by the existing pipeline. Progressive disclosure pattern: wiki index = metadata layer, RAG = deep retrieval. |
+| **Cloud migration before OPS-2 and EMAIL-1** | External content ingestion (KLIB-1) is safe enough locally — text-only extraction, no code execution, safety auditor gates all content. But public demo and email ingestion need proper isolation. OPS-3 added as prerequisite. |
+| **Safety auditor uses Sonnet (latest)** | Stronger model for security-critical classification. Cost is ~$0.01-0.02 per document — negligible for the ingestion volume. Three-layer hardening: XML delimiters, structured output, tool message pattern. |
