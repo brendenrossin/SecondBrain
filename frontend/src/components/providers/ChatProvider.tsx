@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
-import type { Citation, ConversationMessage } from "@/lib/types";
+import type { Citation, ConversationMessage, WikiSuggestion } from "@/lib/types";
 import { askStream, warmupOllama } from "@/lib/api";
 
 type Provider = "anthropic" | "openai" | "local";
@@ -22,6 +22,8 @@ interface ChatContextValue {
   sendMessage: (content: string) => void;
   newConversation: () => void;
   loadConversation: (id: string, msgs: ConversationMessage[]) => void;
+  wikiSuggestion: WikiSuggestion | null;
+  lastQuery: string;
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null);
@@ -50,6 +52,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }): React
     }
     return "anthropic";
   });
+  const [wikiSuggestion, setWikiSuggestion] = useState<WikiSuggestion | null>(null);
+  const [lastQuery, setLastQuery] = useState("");
   const abortRef = useRef<AbortController | null>(null);
 
   const setProvider = useCallback((p: Provider) => {
@@ -68,6 +72,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }): React
     setMessages([]);
     setConversationId(null);
     setIsStreaming(false);
+    setWikiSuggestion(null);
+    setLastQuery("");
   }, []);
 
   const loadConversation = useCallback(
@@ -83,6 +89,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }): React
   const sendMessage = useCallback(
     (content: string) => {
       if (isStreaming || !content.trim()) return;
+
+      setWikiSuggestion(null);
+      setLastQuery(content);
 
       const userMsg: ConversationMessage = { role: "user", content };
       const assistantMsg: ConversationMessage = {
@@ -131,6 +140,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }): React
             setConversationId(data.conversation_id);
             setIsStreaming(false);
             abortRef.current = null;
+            if (data.wiki_suggestion) {
+              setWikiSuggestion(data.wiki_suggestion as WikiSuggestion);
+            }
           },
           onError: (err) => {
             setMessages((prev) => {
@@ -180,6 +192,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }): React
         sendMessage,
         newConversation,
         loadConversation,
+        wikiSuggestion,
+        lastQuery,
       }}
     >
       {children}

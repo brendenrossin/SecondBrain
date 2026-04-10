@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { User, Bot } from "lucide-react";
-import type { ConversationMessage } from "@/lib/types";
+import { User, Bot, BookmarkPlus, Loader2, Check } from "lucide-react";
+import type { ConversationMessage, WikiSuggestion } from "@/lib/types";
+import { wikiSaveAnswer } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { CitationsList } from "./CitationsList";
 import { StreamingIndicator } from "./StreamingIndicator";
@@ -11,7 +13,13 @@ import { StreamingIndicator } from "./StreamingIndicator";
 interface ChatMessageProps {
   message: ConversationMessage;
   isStreaming?: boolean;
+  isLastAssistant?: boolean;
+  wikiSuggestion?: WikiSuggestion | null;
+  conversationId?: string | null;
+  query?: string;
 }
+
+type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 function AssistantContent({
   content,
@@ -35,8 +43,58 @@ function AssistantContent({
   return null;
 }
 
-export function ChatMessage({ message, isStreaming }: ChatMessageProps) {
+export function ChatMessage({
+  message,
+  isStreaming,
+  isLastAssistant,
+  wikiSuggestion,
+  conversationId,
+  query,
+}: ChatMessageProps) {
   const isUser = message.role === "user";
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+
+  const showWikiChip =
+    !isUser &&
+    isLastAssistant &&
+    !isStreaming &&
+    wikiSuggestion?.eligible === true &&
+    !!conversationId &&
+    !!query;
+
+  async function handleSaveAsWiki() {
+    if (saveStatus !== "idle" || !conversationId || !query) return;
+    setSaveStatus("saving");
+    try {
+      await wikiSaveAnswer({
+        conversation_id: conversationId,
+        answer_text: message.content,
+        query,
+        citations: [...new Set(message.citations?.map((c) => c.note_title) ?? [])],
+      });
+      setSaveStatus("saved");
+    } catch {
+      setSaveStatus("error");
+    }
+  }
+
+  const wikiIcon =
+    saveStatus === "saving" ? (
+      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+    ) : saveStatus === "saved" ? (
+      <Check className="w-3.5 h-3.5" />
+    ) : (
+      <BookmarkPlus className="w-3.5 h-3.5" />
+    );
+
+  const wikiLabel =
+    saveStatus === "saving"
+      ? "Saving…"
+      : saveStatus === "saved"
+      ? "Saved to wiki"
+      : saveStatus === "error"
+      ? "Save failed"
+      : "Save as wiki page";
 
   return (
     <div className="flex gap-3">
@@ -76,6 +134,23 @@ export function ChatMessage({ message, isStreaming }: ChatMessageProps) {
           <div className="mt-2 ml-1">
             <CitationsList citations={message.citations} />
           </div>
+        )}
+        {showWikiChip && (
+          <button
+            onClick={handleSaveAsWiki}
+            disabled={saveStatus !== "idle"}
+            className={cn(
+              "mt-2 ml-1 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200",
+              saveStatus === "saved"
+                ? "bg-success/10 text-success"
+                : saveStatus === "error"
+                ? "bg-red-500/10 text-red-400"
+                : "bg-accent/10 text-accent hover:bg-accent/20 cursor-pointer"
+            )}
+          >
+            {wikiIcon}
+            {wikiLabel}
+          </button>
         )}
       </div>
     </div>
