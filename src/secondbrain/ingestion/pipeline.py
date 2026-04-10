@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Callable
 
 from secondbrain.ingestion.compiler import WikiCompiler, slugify_title
 from secondbrain.ingestion.fetcher import FetchedContent

@@ -5,12 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock
 
-import pytest
-
 from secondbrain.ingestion.fetcher import ContentType, FetchedContent
 from secondbrain.ingestion.pipeline import IngestionJob, IngestionPipeline, JobStatus
 from secondbrain.ingestion.safety import AuditResult
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -143,7 +140,7 @@ class TestIngestionPipeline:
     def test_run_pipeline_writes_file_to_wiki_dir(self, tmp_path: Path) -> None:
         pipeline, _, _, _ = _make_pipeline(tmp_path)
 
-        job = pipeline.run("https://example.com/article")
+        pipeline.run("https://example.com/article")
 
         written_files = list(tmp_path.glob("*.md"))
         assert len(written_files) == 1

@@ -90,9 +90,9 @@ def fetch_web_article(url: str) -> FetchedContent:
         ValueError: If the response exceeds MAX_HTML_BYTES.
         httpx.HTTPError: On network errors.
     """
-    from bs4 import BeautifulSoup
+    from bs4 import BeautifulSoup  # type: ignore[import-untyped]
     from markdownify import markdownify
-    from readability import Document
+    from readability import Document  # type: ignore[import-untyped]
 
     response = httpx.get(
         url,
@@ -176,7 +176,7 @@ def fetch_youtube_transcript(url: str) -> FetchedContent:
     Raises:
         ValueError: On download errors or unsupported videos.
     """
-    import yt_dlp
+    import yt_dlp  # type: ignore[import-untyped]
 
     ydl_opts: dict[str, object] = {
         "quiet": True,
@@ -247,7 +247,7 @@ def fetch_pdf(url: str) -> FetchedContent:
         ValueError: If the PDF exceeds MAX_PDF_BYTES.
         httpx.HTTPError: On network errors.
     """
-    import pymupdf4llm
+    import pymupdf4llm  # type: ignore[import-untyped]
 
     response = httpx.get(
         url,
