@@ -90,7 +90,7 @@ def fetch_web_article(url: str) -> FetchedContent:
         ValueError: If the response exceeds MAX_HTML_BYTES.
         httpx.HTTPError: On network errors.
     """
-    from bs4 import BeautifulSoup  # type: ignore[import-untyped]
+    from bs4 import BeautifulSoup
     from markdownify import markdownify
     from readability import Document  # type: ignore[import-untyped]
 
