@@ -1,10 +1,13 @@
 """Index endpoint for triggering vault indexing."""
 
 import asyncio
+import hashlib
 import logging
 from pathlib import Path
 from typing import Annotated
 
+import numpy as np
+from numpy.typing import NDArray
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -19,6 +22,7 @@ from secondbrain.config import Settings
 from secondbrain.indexing.chunker import Chunker
 from secondbrain.indexing.context import ContextGenerator
 from secondbrain.indexing.embedder import Embedder, build_embedding_text, extract_note_metadata
+from secondbrain.stores.index_cache import IndexCache
 from secondbrain.stores.index_tracker import IndexTracker
 from secondbrain.stores.lexical import LexicalStore
 from secondbrain.stores.vector import VectorStore
@@ -53,6 +57,7 @@ def _run_indexing(
     tracker: IndexTracker,
     full_rebuild: bool,
     context_generator: ContextGenerator | None = None,
+    index_cache: IndexCache | None = None,
 ) -> IndexResponse:
     """Run vault indexing synchronously (called via asyncio.to_thread)."""
     connector = VaultConnector(vault_path)
@@ -102,7 +107,30 @@ def _run_indexing(
                 for c, blurb in zip(chunks, blurbs, strict=True):
                     c.context_blurb = blurb
             texts = [build_embedding_text(c) for c in chunks]
-            embeddings = embedder.embed(texts)
+            if index_cache:
+                embeddings_list: list[NDArray[np.float32] | None] = []
+                texts_to_embed: list[tuple[int, str, str]] = []
+
+                for i, text in enumerate(texts):
+                    text_hash = hashlib.sha1(text.encode()).hexdigest()
+                    cached = index_cache.get_embedding(text_hash, embedder.model_name)
+                    if cached is not None:
+                        embeddings_list.append(cached)
+                    else:
+                        embeddings_list.append(None)
+                        texts_to_embed.append((i, text, text_hash))
+
+                if texts_to_embed:
+                    new_embeddings = embedder.embed([t for _, t, _ in texts_to_embed])
+                    for j, (i, _text, text_hash) in enumerate(texts_to_embed):
+                        embeddings_list[i] = new_embeddings[j]
+                        index_cache.set_embedding(
+                            text_hash, embedder.model_name, new_embeddings[j]
+                        )
+
+                embeddings = np.stack([e for e in embeddings_list if e is not None])
+            else:
+                embeddings = embedder.embed(texts)
             vector_store.add_chunks(chunks, embeddings)
             lexical_store.add_chunks(chunks)
 
