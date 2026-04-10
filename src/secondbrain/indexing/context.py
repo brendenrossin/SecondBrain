@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import time
 import uuid
@@ -11,6 +12,7 @@ from anthropic import Anthropic
 
 if TYPE_CHECKING:
     from secondbrain.models import Chunk
+    from secondbrain.stores.index_cache import IndexCache
     from secondbrain.stores.usage import UsageStore
 
 logger = logging.getLogger(__name__)
@@ -49,10 +51,12 @@ class ContextGenerator:
         api_key: str,
         model: str = "claude-haiku-4-5",
         usage_store: UsageStore | None = None,
+        index_cache: IndexCache | None = None,
     ) -> None:
         self._client = Anthropic(api_key=api_key, timeout=60.0)
         self._model = model
         self._usage_store = usage_store
+        self._index_cache = index_cache
 
     def generate_blurbs(
         self,
@@ -83,6 +87,13 @@ class ContextGenerator:
         trace_id: str,
     ) -> str:
         """Generate a single context blurb for one chunk."""
+        # Check blurb cache before making an LLM call
+        if self._index_cache is not None:
+            text_hash = hashlib.sha1(chunk.chunk_text.encode()).hexdigest()
+            cached = self._index_cache.get_blurb(text_hash, self._model)
+            if cached is not None:
+                return cached
+
         start = time.time()
         try:
             response = self._client.messages.create(
@@ -116,6 +127,9 @@ class ContextGenerator:
                     latency_ms=latency_ms,
                     status="ok",
                 )
+
+            if self._index_cache is not None and blurb:
+                self._index_cache.set_blurb(text_hash, self._model, blurb)
 
             return blurb
 

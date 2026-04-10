@@ -1,15 +1,19 @@
 """Index endpoint for triggering vault indexing."""
 
 import asyncio
+import hashlib
 import logging
 from pathlib import Path
 from typing import Annotated
 
+import numpy as np
 from fastapi import APIRouter, Depends, HTTPException
+from numpy.typing import NDArray
 from pydantic import BaseModel
 
 from secondbrain.api.dependencies import (
     get_embedder,
+    get_index_cache,
     get_index_tracker,
     get_lexical_store,
     get_settings,
@@ -19,6 +23,7 @@ from secondbrain.config import Settings
 from secondbrain.indexing.chunker import Chunker
 from secondbrain.indexing.context import ContextGenerator
 from secondbrain.indexing.embedder import Embedder, build_embedding_text, extract_note_metadata
+from secondbrain.stores.index_cache import IndexCache
 from secondbrain.stores.index_tracker import IndexTracker
 from secondbrain.stores.lexical import LexicalStore
 from secondbrain.stores.vector import VectorStore
@@ -53,6 +58,7 @@ def _run_indexing(
     tracker: IndexTracker,
     full_rebuild: bool,
     context_generator: ContextGenerator | None = None,
+    index_cache: IndexCache | None = None,
 ) -> IndexResponse:
     """Run vault indexing synchronously (called via asyncio.to_thread)."""
     connector = VaultConnector(vault_path)
@@ -102,7 +108,28 @@ def _run_indexing(
                 for c, blurb in zip(chunks, blurbs, strict=True):
                     c.context_blurb = blurb
             texts = [build_embedding_text(c) for c in chunks]
-            embeddings = embedder.embed(texts)
+            if index_cache:
+                embeddings_list: list[NDArray[np.float32] | None] = []
+                texts_to_embed: list[tuple[int, str, str]] = []
+
+                for i, text in enumerate(texts):
+                    text_hash = hashlib.sha1(text.encode()).hexdigest()
+                    cached = index_cache.get_embedding(text_hash, embedder.model_name)
+                    if cached is not None:
+                        embeddings_list.append(cached)
+                    else:
+                        embeddings_list.append(None)
+                        texts_to_embed.append((i, text, text_hash))
+
+                if texts_to_embed:
+                    new_embeddings = embedder.embed([t for _, t, _ in texts_to_embed])
+                    for j, (i, _text, text_hash) in enumerate(texts_to_embed):
+                        embeddings_list[i] = new_embeddings[j]
+                        index_cache.set_embedding(text_hash, embedder.model_name, new_embeddings[j])
+
+                embeddings = np.stack([e for e in embeddings_list if e is not None])
+            else:
+                embeddings = embedder.embed(texts)
             vector_store.add_chunks(chunks, embeddings)
             lexical_store.add_chunks(chunks)
 
@@ -151,7 +178,8 @@ async def index_vault(
             detail=f"Vault path does not exist: {vault_path}",
         )
 
-    # Create context generator if enabled and API key available
+    # Create context generator and index cache
+    index_cache = get_index_cache()
     context_generator: ContextGenerator | None = None
     if settings.context_generation_enabled and settings.anthropic_api_key:
         from secondbrain.stores.usage import UsageStore
@@ -161,10 +189,11 @@ async def index_vault(
         context_generator = ContextGenerator(
             api_key=settings.anthropic_api_key,
             usage_store=usage_store,
+            index_cache=index_cache,
         )
 
     # Entire indexing pipeline is blocking I/O — run in thread
-    return await asyncio.to_thread(
+    result = await asyncio.to_thread(
         _run_indexing,
         vault_path,
         vector_store,
@@ -173,7 +202,17 @@ async def index_vault(
         tracker,
         full_rebuild,
         context_generator,
+        index_cache,
     )
+
+    # Generate vault manifest after indexing
+    from secondbrain.indexing.manifest import ManifestGenerator
+
+    manifest = ManifestGenerator().generate(lexical_store)
+    manifest_path = Path(settings.data_path) / "vault_manifest.txt"
+    manifest_path.write_text(manifest, encoding="utf-8")
+
+    return result
 
 
 @router.get("/index/stats", response_model=IndexStatsResponse)

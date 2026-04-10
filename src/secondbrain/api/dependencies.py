@@ -22,6 +22,7 @@ from secondbrain.retrieval.link_expander import LinkExpander
 from secondbrain.retrieval.reranker import LLMReranker
 from secondbrain.scripts.llm_client import LLMClient
 from secondbrain.stores.conversation import ConversationStore
+from secondbrain.stores.index_cache import IndexCache
 from secondbrain.stores.index_tracker import IndexTracker
 from secondbrain.stores.lexical import LexicalStore
 from secondbrain.stores.metadata import MetadataStore
@@ -136,6 +137,13 @@ def get_suggestion_engine() -> SuggestionEngine:
 
 
 @lru_cache
+def get_index_cache() -> IndexCache:
+    """Get cached index cache instance."""
+    data_path = get_data_path()
+    return IndexCache(data_path / "index_cache.db")
+
+
+@lru_cache
 def get_index_tracker() -> IndexTracker:
     """Get cached index tracker instance."""
     data_path = get_data_path()
@@ -194,6 +202,14 @@ def get_local_reranker() -> LLMReranker:
     )
 
 
+def get_vault_manifest() -> str | None:
+    """Load the vault manifest from disk, or generate it if missing."""
+    manifest_path = get_data_path() / "vault_manifest.txt"
+    if manifest_path.exists():
+        return manifest_path.read_text(encoding="utf-8").strip() or None
+    return None
+
+
 @lru_cache
 def get_answerer() -> Answerer:
     """Get cached answerer instance (Anthropic)."""
@@ -203,6 +219,7 @@ def get_answerer() -> Answerer:
         api_key=settings.anthropic_api_key,
         provider="anthropic",
         usage_store=get_usage_store(),
+        vault_manifest=get_vault_manifest(),
     )
 
 
@@ -215,6 +232,7 @@ def get_openai_answerer() -> Answerer:
         api_key=settings.openai_api_key,
         provider="openai",
         usage_store=get_usage_store(),
+        vault_manifest=get_vault_manifest(),
     )
 
 
@@ -227,6 +245,7 @@ def get_local_answerer() -> Answerer:
         base_url=settings.ollama_base_url,
         provider="openai",
         usage_store=get_usage_store(),
+        vault_manifest=get_vault_manifest(),
     )
 
 
@@ -306,7 +325,20 @@ def check_and_reindex(full_rebuild: bool = False) -> str | None:
             if file_path in deleted_files:
                 tracker.remove_file(file_path)
 
-        # Step 4: Re-chunk and embed new + modified files
+        # Step 4: Set up context generator and cache
+        index_cache = get_index_cache()
+        context_generator = None
+        settings = get_settings()
+        if settings.context_generation_enabled and settings.anthropic_api_key:
+            from secondbrain.indexing.context import ContextGenerator
+
+            context_generator = ContextGenerator(
+                api_key=settings.anthropic_api_key,
+                usage_store=get_usage_store(),
+                index_cache=index_cache,
+            )
+
+        # Step 5: Re-chunk and embed new + modified files
         files_to_index = new_files + modified_files
         total_chunks = 0
         for file_path in files_to_index:
@@ -322,18 +354,29 @@ def check_and_reindex(full_rebuild: bool = False) -> str | None:
                 for c in chunks:
                     c.note_folder = note_folder
                     c.note_date = note_date
+                if context_generator:
+                    blurbs = context_generator.generate_blurbs(note.title, note.content, chunks)
+                    for c, blurb in zip(chunks, blurbs, strict=True):
+                        c.context_blurb = blurb
                 texts = [build_embedding_text(c) for c in chunks]
                 embeddings = embedder.embed(texts)
                 vector_store.add_chunks(chunks, embeddings)
                 lexical_store.add_chunks(chunks)
 
-            # Step 5: Update tracker
+            # Step 6: Update tracker
             mtime, content_hash = vault_files[file_path]
             tracker.mark_indexed(file_path, content_hash, mtime, len(chunks))
             total_chunks += len(chunks)
 
-        # Step 6: Store embedding model metadata
+        # Step 7: Store embedding model metadata
         vector_store.set_stored_model(embedder.model_name)
+
+        # Step 8: Generate vault manifest
+        from secondbrain.indexing.manifest import ManifestGenerator
+
+        manifest = ManifestGenerator().generate(lexical_store)
+        manifest_path = data_path / "vault_manifest.txt"
+        manifest_path.write_text(manifest, encoding="utf-8")
 
         # Step 7: Write epoch file for multi-process coordination
         epoch_file = data_path / ".reindex_epoch"
