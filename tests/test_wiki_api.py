@@ -17,9 +17,7 @@ class TestWikiSuggestionScoring:
         assert not suggestion.eligible
 
     def test_ineligible_no_results(self) -> None:
-        suggestion = compute_wiki_suggestion(
-            "NO_RESULTS", "A" * 300, [], "What is X?"
-        )
+        suggestion = compute_wiki_suggestion("NO_RESULTS", "A" * 300, [], "What is X?")
         assert not suggestion.eligible
 
     def test_ineligible_factual_lookup(self) -> None:
@@ -83,9 +81,7 @@ class TestWikiSuggestionScoring:
         assert "4" in suggestion.reason
 
     def test_ineligible_reason_is_set(self) -> None:
-        suggestion = compute_wiki_suggestion(
-            "NO_RESULTS", "A" * 300, [], "What is X?"
-        )
+        suggestion = compute_wiki_suggestion("NO_RESULTS", "A" * 300, [], "What is X?")
         assert not suggestion.eligible
         assert suggestion.reason != ""
 

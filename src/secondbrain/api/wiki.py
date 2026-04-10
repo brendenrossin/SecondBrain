@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 import uuid
 
 from fastapi import APIRouter, HTTPException
@@ -30,7 +31,26 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["wiki"])
 
 # In-memory job tracker (process-local; jobs are ephemeral)
-_jobs: dict[str, IngestionJob] = {}
+_jobs: dict[str, tuple[IngestionJob, float]] = {}  # job_id -> (job, created_at)
+_MAX_JOBS = 100
+_JOB_TTL_SECONDS = 3600  # 1 hour
+
+
+def _evict_stale_jobs() -> None:
+    """Remove completed/failed jobs older than TTL, or oldest if over max."""
+    now = time.monotonic()
+    stale = [
+        jid
+        for jid, (job, created) in _jobs.items()
+        if now - created > _JOB_TTL_SECONDS and job.status in (JobStatus.COMPLETE, JobStatus.FAILED)
+    ]
+    for jid in stale:
+        del _jobs[jid]
+    # Hard cap: evict oldest if still over limit
+    while len(_jobs) > _MAX_JOBS:
+        oldest_id = min(_jobs, key=lambda k: _jobs[k][1])
+        del _jobs[oldest_id]
+
 
 _FACTUAL_PREFIXES = ("when ", "where ", "who ")
 _MIN_ANSWER_CHARS = 200
@@ -95,19 +115,28 @@ def _start_ingestion_job(url: str) -> str:
         vault_manifest=get_vault_manifest(),
     )
 
+    _evict_stale_jobs()
+
     job_id = uuid.uuid4().hex[:12]
     job = IngestionJob(job_id=job_id, url=url, status=JobStatus.FETCHING)
-    _jobs[job_id] = job
+    _jobs[job_id] = (job, time.monotonic())
 
     async def _run() -> None:
-        result = await asyncio.to_thread(pipeline.run, url)
-        # Merge result fields back into the tracked job
-        job.status = result.status
-        job.error = result.error
-        job.result_title = result.result_title
-        job.result_path = result.result_path
+        try:
+            result = await asyncio.to_thread(pipeline.run, url)
+            # Merge result fields back into the tracked job
+            job.status = result.status
+            job.error = result.error
+            job.result_title = result.result_title
+            job.result_path = result.result_path
+        except Exception as exc:
+            logger.exception("Ingestion task failed for %s", url)
+            job.status = JobStatus.FAILED
+            job.error = str(exc)
 
-    asyncio.create_task(_run())
+    # Store task ref to prevent GC and silence "Task was destroyed" warnings
+    task = asyncio.create_task(_run())
+    task.add_done_callback(lambda t: t.result() if not t.cancelled() else None)
     return job_id
 
 
@@ -141,10 +170,11 @@ async def wiki_ingest(request: WikiIngestRequest) -> WikiIngestResponse:
 @router.get("/wiki/ingest/{job_id}", response_model=WikiJobStatusResponse)
 async def wiki_ingest_status(job_id: str) -> WikiJobStatusResponse:
     """Poll the status of an ingestion job."""
-    job = _jobs.get(job_id)
-    if job is None:
+    entry = _jobs.get(job_id)
+    if entry is None:
         raise HTTPException(status_code=404, detail=f"Job {job_id!r} not found")
 
+    job, _created = entry
     return WikiJobStatusResponse(
         job_id=job.job_id,
         status=str(job.status),

@@ -203,7 +203,10 @@ def get_local_reranker() -> LLMReranker:
 
 
 def get_vault_manifest() -> str | None:
-    """Load the vault manifest from disk, or generate it if missing."""
+    """Load the vault manifest from disk, or return None if missing.
+
+    Intentionally not cached — the manifest updates after each reindex.
+    """
     manifest_path = get_data_path() / "vault_manifest.txt"
     if manifest_path.exists():
         return manifest_path.read_text(encoding="utf-8").strip() or None

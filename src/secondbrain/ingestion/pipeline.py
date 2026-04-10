@@ -79,29 +79,29 @@ class IngestionPipeline:
             if not audit_result.is_safe:
                 flags_str = ", ".join(audit_result.flags) if audit_result.flags else ""
                 job.status = JobStatus.FAILED
-                job.error = (
-                    f"Content blocked by safety audit: {audit_result.reason}"
-                    + (f" [flags: {flags_str}]" if flags_str else "")
+                job.error = f"Content blocked by safety audit: {audit_result.reason}" + (
+                    f" [flags: {flags_str}]" if flags_str else ""
                 )
                 return job
 
-            # Step 3: Duplicate check (informational — we overwrite if found)
-            self._compiler.find_existing_by_source(self._wiki_dir, url)
+            # Step 3: Check for existing page with same source URL
+            existing = self._compiler.find_existing_by_source(self._wiki_dir, url)
 
             # Step 4: Compile
             job.status = JobStatus.COMPILING
-            markdown, title = self._compiler.compile(
-                content, vault_manifest=self._vault_manifest
-            )
+            markdown, title = self._compiler.compile(content, vault_manifest=self._vault_manifest)
 
-            # Step 5: Write to disk
-            slug = slugify_title(title) or "untitled"
-            dest = self._wiki_dir / f"{slug}.md"
-            if dest.exists():
-                counter = 1
-                while dest.exists():
-                    dest = self._wiki_dir / f"{slug}-{counter}.md"
-                    counter += 1
+            # Step 5: Write to disk (overwrite if duplicate found)
+            if existing is not None:
+                dest = existing
+            else:
+                slug = slugify_title(title) or "untitled"
+                dest = self._wiki_dir / f"{slug}.md"
+                if dest.exists():
+                    counter = 1
+                    while dest.exists():
+                        dest = self._wiki_dir / f"{slug}-{counter}.md"
+                        counter += 1
 
             dest.write_text(markdown, encoding="utf-8")
 

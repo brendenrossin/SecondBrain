@@ -237,7 +237,9 @@ async def ask_stream(
                     {
                         "conversation_id": conversation_id,
                         "retrieval_label": retrieval_label.value,
-                        "wiki_suggestion": wiki_suggestion.model_dump() if wiki_suggestion else None,
+                        "wiki_suggestion": wiki_suggestion.model_dump()
+                        if wiki_suggestion
+                        else None,
                     }
                 ),
             }

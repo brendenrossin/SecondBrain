@@ -31,7 +31,10 @@ class TestDetectContentType:
         assert detect_content_type("https://example.com/blog/post") == ContentType.WEB_ARTICLE
 
     def test_web_article_no_extension(self) -> None:
-        assert detect_content_type("https://news.ycombinator.com/item?id=12345") == ContentType.WEB_ARTICLE
+        assert (
+            detect_content_type("https://news.ycombinator.com/item?id=12345")
+            == ContentType.WEB_ARTICLE
+        )
 
     def test_invalid_url_raises(self) -> None:
         with pytest.raises(ValueError, match="Invalid URL"):
@@ -46,7 +49,10 @@ class TestDetectContentType:
 
     def test_pdf_query_param_not_matched(self) -> None:
         # PDF detection is based on path, not query params
-        assert detect_content_type("https://example.com/download?file=report.pdf") == ContentType.WEB_ARTICLE
+        assert (
+            detect_content_type("https://example.com/download?file=report.pdf")
+            == ContentType.WEB_ARTICLE
+        )
 
 
 class TestFetchedContent:

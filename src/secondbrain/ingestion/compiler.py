@@ -73,6 +73,11 @@ def _today_iso() -> str:
     return datetime.now(UTC).date().isoformat()
 
 
+def _escape_yaml_str(value: str) -> str:
+    """Escape double quotes inside a YAML double-quoted string."""
+    return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
 def _build_compile_frontmatter(
     title: str,
     source_url: str,
@@ -81,9 +86,9 @@ def _build_compile_frontmatter(
     date = _today_iso()
     return (
         f"---\n"
-        f'title: "{title}"\n'
-        f'source: "{source_url}"\n'
-        f'source_type: "{source_type}"\n'
+        f'title: "{_escape_yaml_str(title)}"\n'
+        f'source: "{_escape_yaml_str(source_url)}"\n'
+        f'source_type: "{_escape_yaml_str(source_type)}"\n'
         f'compiled_date: "{date}"\n'
         f"tags: []\n"
         f"---\n"
@@ -96,13 +101,13 @@ def _build_answer_frontmatter(
     citations: list[str],
 ) -> str:
     date = _today_iso()
-    citations_yaml = "\n".join(f'  - "{c}"' for c in citations)
+    citations_yaml = "\n".join(f'  - "{_escape_yaml_str(c)}"' for c in citations)
     citations_block = f"citations:\n{citations_yaml}" if citations else "citations: []"
     return (
         f"---\n"
-        f'title: "{title}"\n'
+        f'title: "{_escape_yaml_str(title)}"\n'
         f'source_type: "synthesis"\n'
-        f'query: "{query}"\n'
+        f'query: "{_escape_yaml_str(query)}"\n'
         f'compiled_date: "{date}"\n'
         f"{citations_block}\n"
         f"tags: []\n"

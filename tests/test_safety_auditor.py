@@ -107,9 +107,7 @@ class TestSafetyAuditorAudit:
         self.auditor = SafetyAuditor(api_key="fake-key")
 
     def test_safe_content_returns_safe(self) -> None:
-        mock_response = _make_mock_response(
-            is_safe=True, reason="No threats found.", flags=[]
-        )
+        mock_response = _make_mock_response(is_safe=True, reason="No threats found.", flags=[])
         with patch.object(self.auditor, "_client") as mock_client:
             mock_client.messages.create.return_value = mock_response
             result = self.auditor.audit("Normal article text.", ContentType.WEB_ARTICLE)
@@ -144,9 +142,7 @@ class TestSafetyAuditorAudit:
 
     def test_batch_audit_rejects_on_any_failure(self) -> None:
         """If any batch is unsafe, the overall result must be unsafe."""
-        safe_response = _make_mock_response(
-            is_safe=True, reason="Safe batch.", flags=[]
-        )
+        safe_response = _make_mock_response(is_safe=True, reason="Safe batch.", flags=[])
         unsafe_response = _make_mock_response(
             is_safe=False,
             reason="Injection detected.",
@@ -169,9 +165,7 @@ class TestSafetyAuditorAudit:
         mock_store = MagicMock()
         auditor = SafetyAuditor(api_key="fake-key", usage_store=mock_store)
 
-        mock_response = _make_mock_response(
-            is_safe=True, reason="Clean.", flags=[]
-        )
+        mock_response = _make_mock_response(is_safe=True, reason="Clean.", flags=[])
         with patch.object(auditor, "_client") as mock_client:
             mock_client.messages.create.return_value = mock_response
             auditor.audit("Hello.", ContentType.WEB_ARTICLE)

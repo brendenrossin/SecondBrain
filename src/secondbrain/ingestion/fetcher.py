@@ -103,7 +103,9 @@ def fetch_web_article(url: str) -> FetchedContent:
     response.raise_for_status()
 
     if len(response.content) > MAX_HTML_BYTES:
-        raise ValueError(f"Response too large: {len(response.content)} bytes (max {MAX_HTML_BYTES})")
+        raise ValueError(
+            f"Response too large: {len(response.content)} bytes (max {MAX_HTML_BYTES})"
+        )
 
     html = response.text
     doc = Document(html)

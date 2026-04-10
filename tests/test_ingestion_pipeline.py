@@ -172,9 +172,7 @@ class TestIngestionPipeline:
 
         pipeline.run("https://example.com/article")
 
-        mock_auditor.audit.assert_called_once_with(
-            fetched.raw_text, fetched.content_type
-        )
+        mock_auditor.audit.assert_called_once_with(fetched.raw_text, fetched.content_type)
 
     def test_run_pipeline_calls_compiler_compile(self, tmp_path: Path) -> None:
         pipeline, _, _, mock_compiler = _make_pipeline(tmp_path)
@@ -183,12 +181,8 @@ class TestIngestionPipeline:
 
         mock_compiler.compile.assert_called_once()
 
-    def test_run_pipeline_passes_vault_manifest_to_compiler(
-        self, tmp_path: Path
-    ) -> None:
-        pipeline, _, _, mock_compiler = _make_pipeline(
-            tmp_path, vault_manifest="topic: Python, AI"
-        )
+    def test_run_pipeline_passes_vault_manifest_to_compiler(self, tmp_path: Path) -> None:
+        pipeline, _, _, mock_compiler = _make_pipeline(tmp_path, vault_manifest="topic: Python, AI")
 
         pipeline.run("https://example.com/article")
 
@@ -229,9 +223,7 @@ class TestIngestionPipeline:
         assert len(written_files) == 1
         assert written_files[0].name == "my-cool-article.md"
 
-    def test_run_pipeline_handles_filename_collision_with_counter(
-        self, tmp_path: Path
-    ) -> None:
+    def test_run_pipeline_handles_filename_collision_with_counter(self, tmp_path: Path) -> None:
         # Pre-create the slug file to force a collision
         (tmp_path / "test-article.md").write_text("existing", encoding="utf-8")
 
@@ -254,18 +246,14 @@ class TestIngestionPipeline:
     # -------------------------------------------------------------------------
 
     def test_run_pipeline_safety_blocked(self, tmp_path: Path) -> None:
-        pipeline, _, mock_auditor, mock_compiler = _make_pipeline(
-            tmp_path, is_safe=False
-        )
+        pipeline, _, mock_auditor, mock_compiler = _make_pipeline(tmp_path, is_safe=False)
 
         job = pipeline.run("https://example.com/bad-content")
 
         assert job.status == JobStatus.FAILED
         assert "blocked" in job.error.lower()
 
-    def test_run_pipeline_safety_blocked_error_includes_reason(
-        self, tmp_path: Path
-    ) -> None:
+    def test_run_pipeline_safety_blocked_error_includes_reason(self, tmp_path: Path) -> None:
         pipeline, _, mock_auditor, _ = _make_pipeline(tmp_path, is_safe=False)
         mock_auditor.audit.return_value = AuditResult(
             is_safe=False,
@@ -277,18 +265,14 @@ class TestIngestionPipeline:
 
         assert "jailbreak" in job.error.lower() or "Contains jailbreak" in job.error
 
-    def test_run_pipeline_safety_blocked_compiler_never_called(
-        self, tmp_path: Path
-    ) -> None:
+    def test_run_pipeline_safety_blocked_compiler_never_called(self, tmp_path: Path) -> None:
         pipeline, _, _, mock_compiler = _make_pipeline(tmp_path, is_safe=False)
 
         pipeline.run("https://example.com/bad")
 
         mock_compiler.compile.assert_not_called()
 
-    def test_run_pipeline_safety_blocked_no_file_written(
-        self, tmp_path: Path
-    ) -> None:
+    def test_run_pipeline_safety_blocked_no_file_written(self, tmp_path: Path) -> None:
         pipeline, _, _, _ = _make_pipeline(tmp_path, is_safe=False)
 
         pipeline.run("https://example.com/bad")
@@ -317,9 +301,7 @@ class TestIngestionPipeline:
         assert job.status == JobStatus.FAILED
         assert "Connection refused" in job.error
 
-    def test_run_pipeline_fetch_failure_auditor_never_called(
-        self, tmp_path: Path
-    ) -> None:
+    def test_run_pipeline_fetch_failure_auditor_never_called(self, tmp_path: Path) -> None:
         mock_fetcher = MagicMock(side_effect=RuntimeError("Timeout"))
         mock_auditor = MagicMock()
         mock_compiler = MagicMock()
@@ -355,13 +337,9 @@ class TestIngestionPipeline:
 
         assert job.status == JobStatus.COMPLETE
 
-    def test_run_pipeline_index_callback_not_called_on_failure(
-        self, tmp_path: Path
-    ) -> None:
+    def test_run_pipeline_index_callback_not_called_on_failure(self, tmp_path: Path) -> None:
         mock_callback = MagicMock()
-        pipeline, _, _, _ = _make_pipeline(
-            tmp_path, is_safe=False, index_callback=mock_callback
-        )
+        pipeline, _, _, _ = _make_pipeline(tmp_path, is_safe=False, index_callback=mock_callback)
 
         pipeline.run("https://example.com/bad")
 
