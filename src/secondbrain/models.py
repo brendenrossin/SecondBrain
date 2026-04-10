@@ -58,6 +58,7 @@ class Chunk(BaseModel):
     token_count: int | None = None
     note_folder: str | None = None
     note_date: str | None = None
+    context_blurb: str | None = None
 
 
 class Note(BaseModel):

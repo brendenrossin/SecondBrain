@@ -44,16 +44,16 @@ def extract_note_metadata(note_path: str, frontmatter: dict[str, object]) -> tup
 
 
 def build_embedding_text(chunk: "Chunk") -> str:
-    """Build text for embedding by prepending heading context.
+    """Build text for embedding by prepending context blurb and heading path.
 
     Produces text like:
-        Tasks > AT&T > AI Receptionist
-        Review MCP client integration for welcome agent
-
-    This gives the embedding model structural context that would
-    otherwise be invisible in the raw chunk text.
+        [Context: Ingredients for Parsnip Purée, part of a Valentine's Day dinner.]
+        Recipes > Valentine's Day Dinner > Parsnip Purée
+        3 medium parsnips, peeled and chopped
     """
     parts: list[str] = []
+    if chunk.context_blurb:
+        parts.append(f"[Context: {chunk.context_blurb}]")
     if chunk.heading_path:
         parts.append(" > ".join(chunk.heading_path))
     parts.append(chunk.chunk_text)

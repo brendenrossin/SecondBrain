@@ -17,6 +17,7 @@ from secondbrain.api.dependencies import (
 )
 from secondbrain.config import Settings
 from secondbrain.indexing.chunker import Chunker
+from secondbrain.indexing.context import ContextGenerator
 from secondbrain.indexing.embedder import Embedder, build_embedding_text, extract_note_metadata
 from secondbrain.stores.index_tracker import IndexTracker
 from secondbrain.stores.lexical import LexicalStore
@@ -51,6 +52,7 @@ def _run_indexing(
     embedder: Embedder,
     tracker: IndexTracker,
     full_rebuild: bool,
+    context_generator: ContextGenerator | None = None,
 ) -> IndexResponse:
     """Run vault indexing synchronously (called via asyncio.to_thread)."""
     connector = VaultConnector(vault_path)
@@ -94,6 +96,11 @@ def _run_indexing(
             for c in chunks:
                 c.note_folder = note_folder
                 c.note_date = note_date
+            # Generate context blurbs if enabled
+            if context_generator and chunks:
+                blurbs = context_generator.generate_blurbs(note.title, note.content, chunks)
+                for c, blurb in zip(chunks, blurbs, strict=True):
+                    c.context_blurb = blurb
             texts = [build_embedding_text(c) for c in chunks]
             embeddings = embedder.embed(texts)
             vector_store.add_chunks(chunks, embeddings)
@@ -144,9 +151,28 @@ async def index_vault(
             detail=f"Vault path does not exist: {vault_path}",
         )
 
+    # Create context generator if enabled and API key available
+    context_generator: ContextGenerator | None = None
+    if settings.context_generation_enabled and settings.anthropic_api_key:
+        from secondbrain.stores.usage import UsageStore
+
+        data_path = Path(settings.data_path)
+        usage_store = UsageStore(data_path / "usage.db")
+        context_generator = ContextGenerator(
+            api_key=settings.anthropic_api_key,
+            usage_store=usage_store,
+        )
+
     # Entire indexing pipeline is blocking I/O — run in thread
     return await asyncio.to_thread(
-        _run_indexing, vault_path, vector_store, lexical_store, embedder, tracker, full_rebuild
+        _run_indexing,
+        vault_path,
+        vector_store,
+        lexical_store,
+        embedder,
+        tracker,
+        full_rebuild,
+        context_generator,
     )
 
 

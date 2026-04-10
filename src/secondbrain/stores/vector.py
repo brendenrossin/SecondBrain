@@ -140,6 +140,7 @@ class VectorStore:
                 "checksum": c.checksum,
                 "note_folder": c.note_folder or "",
                 "note_date": c.note_date or "",
+                "context_blurb": c.context_blurb or "",
             }
             for c in chunks
         ]

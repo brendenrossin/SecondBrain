@@ -75,7 +75,7 @@ class LexicalStore:
             pass
 
     # Bump this when the FTS5 schema changes to trigger automatic recreation.
-    _FTS_SCHEMA_VERSION = 2  # v2: added heading_path column
+    _FTS_SCHEMA_VERSION = 3  # v3: added context_blurb column
 
     def _init_schema(self) -> None:
         """Initialize the database schema.
@@ -130,6 +130,8 @@ class LexicalStore:
             self.conn.execute("ALTER TABLE chunks ADD COLUMN note_folder TEXT NOT NULL DEFAULT ''")
         if "note_date" not in columns:
             self.conn.execute("ALTER TABLE chunks ADD COLUMN note_date TEXT")
+        if "context_blurb" not in columns:
+            self.conn.execute("ALTER TABLE chunks ADD COLUMN context_blurb TEXT")
         self.conn.commit()
 
     def _ensure_fts_schema(self) -> None:
@@ -155,6 +157,7 @@ class LexicalStore:
                     note_title,
                     heading_path,
                     chunk_text,
+                    context_blurb,
                     content='chunks',
                     content_rowid='rowid'
                 )
@@ -173,6 +176,7 @@ class LexicalStore:
                     note_title,
                     heading_path,
                     chunk_text,
+                    context_blurb,
                     content='chunks',
                     content_rowid='rowid'
                 )
@@ -198,6 +202,7 @@ class LexicalStore:
                 c.checksum,
                 c.note_folder or "",
                 c.note_date,
+                c.context_blurb or "",
             )
             for c in chunks
         ]
@@ -205,8 +210,8 @@ class LexicalStore:
         sql = """
             INSERT OR REPLACE INTO chunks
             (chunk_id, note_path, note_title, heading_path, chunk_index,
-             chunk_text, checksum, note_folder, note_date)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             chunk_text, checksum, note_folder, note_date, context_blurb)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
 
         try:

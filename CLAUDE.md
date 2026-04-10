@@ -113,7 +113,7 @@ Read docs in this order for full context:
 
 ## Active Epics (see `docs/ROADMAP.md` for full details)
 
-- **LLM Tracing & Evaluation** — TRACE-1 through TRACE-3 (OTel instrumentation → Langfuse → full platform)
+- **LLM Tracing & Evaluation** — TRACE-2, TRACE-3 (Langfuse → full platform). TRACE-1 delivered.
 - **RAG Quality & Performance** — RAG-1 through RAG-3 (contextual retrieval, caching, topic manifests)
 - **Operations & Infrastructure** — OPS-1, OPS-2 (log persistence, public demo)
 - **Smarter Retrieval & Discovery** — RETRIEVAL-2, RETRIEVAL-3 (capture connections, insights dashboard)
@@ -121,6 +121,7 @@ Read docs in this order for full context:
 - **Voice Chat** — VOICE-1 (OpenAI Realtime API)
 - **Knowledge Graph** — KG-1 (V2, graph store + entity resolution)
 - **Write-Back Workflow** — WRITEBACK-1 (V2+, changeset workflow)
+- **Knowledge Library** — KLIB-1 through KLIB-3 (Karpathy-style external content ingestion, vault lint, compounding queries)
 
 Completed work is archived in `docs/DELIVERED.md`.
 
