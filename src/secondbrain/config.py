@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     # Tracing
     tracing_enabled: bool = False
 
+    # Contextual retrieval
+    context_generation_enabled: bool = True
+
 
 def get_settings() -> Settings:
     """Get application settings instance."""
