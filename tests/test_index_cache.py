@@ -1,12 +1,15 @@
 """Tests for IndexCache — blurb and embedding caching."""
 
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
 
+from secondbrain.indexing.context import ContextGenerator
+from secondbrain.indexing.manifest import ManifestGenerator
+from secondbrain.models import Chunk
 from secondbrain.stores.index_cache import IndexCache
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -133,12 +136,6 @@ class TestConnectionSettings:
 # ---------------------------------------------------------------------------
 
 
-from unittest.mock import MagicMock, patch
-
-from secondbrain.indexing.context import ContextGenerator
-from secondbrain.models import Chunk
-
-
 def _make_chunk(text: str) -> Chunk:
     return Chunk(
         chunk_id="test123",
@@ -192,9 +189,6 @@ def test_indexing_pipeline_references_embedding_cache():
 # ---------------------------------------------------------------------------
 # ManifestGenerator
 # ---------------------------------------------------------------------------
-
-
-from secondbrain.indexing.manifest import ManifestGenerator
 
 
 def test_manifest_generator_produces_output(tmp_path):
