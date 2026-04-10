@@ -28,7 +28,9 @@ Do NOT generate tests for:
 - Dependency wiring or composition root functions
 - Functions that are trivially correct by inspection (e.g., `return a + b`)
 
-**Decision rule:** "Could a bug in this function go unnoticed and cause real problems?" If yes, write tests. If no, skip it.
+**Decision rule:** "If this function had a subtle bug, would this test catch it?" If yes, the test is worth writing. If no, skip it.
+
+**Skip conditions do NOT apply to new features or enhancements** -- new functionality always gets tests. The skip list above is for evaluating whether *existing* trivial code needs retroactive test coverage.
 
 ## Instructions
 
@@ -69,6 +71,12 @@ class TestParseEvents:
         events = _parse_events_from_file(daily_dir / "2026-02-10.md")
         assert events == []
 ```
+
+## Test Philosophy
+
+- **Test behavior, not implementation** -- verify what the function does (inputs -> outputs, side effects, error conditions), not how it does it internally. Implementation details change; behavioral contracts don't.
+- **Do NOT verify internal implementation logic** -- don't assert on private method calls, internal data structures, or execution order unless it's part of the public contract. Tests coupled to internals break on every refactor.
+- **Functional correctness guarantees always apply** regardless of whether the change is a bugfix, feature, or refactor.
 
 ## Coverage Requirements
 

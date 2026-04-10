@@ -98,7 +98,8 @@ src/secondbrain/
 
 Read docs in this order for full context:
 1. `docs/PRD.md` - Product requirements and vision
-2. `docs/ROADMAP.md` - Phased implementation plan (Phase 0-8) + decisions log
+2. `docs/ROADMAP.md` - Active work organized by epic (Jira-style tickets with statuses)
+2b. `docs/DELIVERED.md` - Completed work archive (tickets moved here after PR merge)
 3. `docs/SOLUTION_ARCHITECTURE.md` - Tech choices and rationale
 4. `docs/DATA_MODEL.md` - Schema, entities, relations
 5. `docs/INDEXING_PIPELINE.md` - Chunking and embedding details
@@ -110,29 +111,18 @@ Read docs in this order for full context:
 11. `docs/features/*.md` - Individual feature specs, explorations, and deferred proposals
 12. `docs/traceeval-integration/` - TraceEval integration specs and configuration
 
-## Implementation Phases
+## Active Epics (see `docs/ROADMAP.md` for full details)
 
-- **Phase 0:** Repo scaffolding, CI/CD, config system, Makefile *(done)*
-- **Phase 1:** POC indexing + retrieval (vault ingestion, chunker, hybrid search) *(done)*
-- **Phase 2:** Quality improvements (incremental re-indexing, reranking, eval framework, embedding upgrade) *(done)*
-- **Phase 3:** Metadata extraction + suggestions *(done)*
-- **Phase 3.5:** Next.js frontend + UI redesign *(done)*
-- **Phase 4:** Secure remote access (Tailscale) *(done)*
-- **Phase 5:** Morning briefing dashboard *(done)*
-- **Phase 5.5:** Inbox upgrade + Anthropic migration *(done)*
-- **Phase 5.7:** User configurability *(done)*
-- **Phase 6:** LLM cost tracking + admin dashboard *(done)*
-- **Phase 6.5:** Quick capture *(done)*
-- **Phase 7:** Weekly review generation *(done)*
-- **Phase 7.5:** Calendar events *(done)*
-- **Phase 8:** Voice chat via OpenAI Realtime API
-- **Phase 9:** Smarter retrieval (wiki links, capture connections) *(partially done — wiki link expansion complete)*
-- **Phase 9.7:** RAG quality & performance (contextual retrieval, topic manifests, caching)
-- **Phase 9.8:** LLM tracing + TraceEval integration (OpenLLMetry → local JSONL → TraceEval evals)
-- **Phase 10:** Email ingestion (read-only)
-- **Phase 11:** Voice chat via OpenAI Realtime API
-- **Phase 12:** Knowledge graph (V2)
-- **Phase 13:** Write-back workflow (V2+)
+- **LLM Tracing & Evaluation** — TRACE-1 through TRACE-3 (OTel instrumentation → Langfuse → full platform)
+- **RAG Quality & Performance** — RAG-1 through RAG-3 (contextual retrieval, caching, topic manifests)
+- **Operations & Infrastructure** — OPS-1, OPS-2 (log persistence, public demo)
+- **Smarter Retrieval & Discovery** — RETRIEVAL-2, RETRIEVAL-3 (capture connections, insights dashboard)
+- **Email Ingestion** — EMAIL-1 (Gmail read-only)
+- **Voice Chat** — VOICE-1 (OpenAI Realtime API)
+- **Knowledge Graph** — KG-1 (V2, graph store + entity resolution)
+- **Write-Back Workflow** — WRITEBACK-1 (V2+, changeset workflow)
+
+Completed work is archived in `docs/DELIVERED.md`.
 
 ## Security Requirements
 
