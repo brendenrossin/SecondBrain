@@ -25,6 +25,7 @@ from secondbrain.api.dependencies import (
     get_retriever,
     get_settings,
 )
+from secondbrain.api.wiki import compute_wiki_suggestion
 from secondbrain.config import Settings
 from secondbrain.logging.query_logger import QueryLogger
 from secondbrain.models import AskRequest, AskResponse, Citation
@@ -110,6 +111,15 @@ async def ask(
     # Build citations
     citations = _build_citations(ranked_candidates)
 
+    # Compute wiki suggestion
+    citation_note_titles = list({c.note_title for c in citations})
+    wiki_suggestion = compute_wiki_suggestion(
+        retrieval_label=retrieval_label.value,
+        answer_text=answer,
+        citation_note_titles=citation_note_titles,
+        query=request.query,
+    )
+
     # Save conversation
     conversation_store.add_message(conversation_id, "user", request.query)
     conversation_store.add_message(conversation_id, "assistant", answer)
@@ -129,6 +139,7 @@ async def ask(
         conversation_id=conversation_id,
         citations=citations,
         retrieval_label=retrieval_label,
+        wiki_suggestion=wiki_suggestion,
     )
 
 
@@ -200,6 +211,15 @@ async def ask_stream(
                 conversation_store.add_message(conversation_id, "user", request.query)
                 conversation_store.add_message(conversation_id, "assistant", full_answer)
 
+            # Compute wiki suggestion
+            citation_note_titles = list({c.note_title for c in citations})
+            wiki_suggestion = compute_wiki_suggestion(
+                retrieval_label=retrieval_label.value,
+                answer_text=full_answer,
+                citation_note_titles=citation_note_titles,
+                query=request.query,
+            )
+
             # Log query
             latency_ms = (time.time() - start_time) * 1000
             query_logger.log_query(
@@ -217,6 +237,7 @@ async def ask_stream(
                     {
                         "conversation_id": conversation_id,
                         "retrieval_label": retrieval_label.value,
+                        "wiki_suggestion": wiki_suggestion.model_dump() if wiki_suggestion else None,
                     }
                 ),
             }
