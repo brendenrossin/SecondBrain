@@ -146,9 +146,10 @@ KLIB-3 (Compounding query loop) — independent
 
 | ID | Ticket | Est. | Status | Spec |
 |----|--------|------|--------|------|
-| KLIB-1 | External content ingestion (raw/ → wiki/ pipeline, LLM triage + summarization, structured page generation) | 3-5d | Backlog | — |
+| KLIB-1 | External content ingestion (drop URL/file in Quick Capture → safety audit → fetch → LLM compile → wiki page → index) | 3-5d | Backlog | — |
 | KLIB-2 | Vault lint & health checks (contradiction detection, orphan pages, stale content, coverage gaps) | 2-3d | Backlog | — |
 | KLIB-3 | Compounding query loop (save valuable synthesis answers back as wiki pages) | 1-2d | Backlog | — |
+| KLIB-4 | AI-powered research mode (search topic → compile findings → ingest as wiki pages) | TBD | Backlog | — |
 
 ---
 
