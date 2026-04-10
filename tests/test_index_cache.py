@@ -126,3 +126,114 @@ class TestConnectionSettings:
     def test_busy_timeout_set(self, cache: IndexCache) -> None:
         cursor = cache.conn.execute("PRAGMA busy_timeout")
         assert cursor.fetchone()[0] == 5000
+
+
+# ---------------------------------------------------------------------------
+# ContextGenerator blurb cache integration
+# ---------------------------------------------------------------------------
+
+
+from unittest.mock import MagicMock, patch
+
+from secondbrain.indexing.context import ContextGenerator
+from secondbrain.models import Chunk
+
+
+def _make_chunk(text: str) -> Chunk:
+    return Chunk(
+        chunk_id="test123",
+        note_path="10_Notes/Test.md",
+        note_title="Test",
+        heading_path=["Section"],
+        chunk_index=0,
+        chunk_text=text,
+        checksum="check123",
+    )
+
+
+def test_blurb_cache_skips_llm_on_hit(tmp_path):
+    """Second call for same chunk text should use cache, not LLM."""
+    cache = IndexCache(tmp_path / "cache.db")
+
+    mock_response = MagicMock()
+    mock_response.content = [MagicMock(text="Cached blurb.")]
+    mock_response.usage.input_tokens = 100
+    mock_response.usage.output_tokens = 20
+
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = mock_response
+
+    with patch("secondbrain.indexing.context.Anthropic", return_value=mock_client):
+        gen = ContextGenerator(api_key="test-key", index_cache=cache)
+        chunks = [_make_chunk("same text")]
+
+        # First call — LLM should be called
+        blurbs1 = gen.generate_blurbs("Note", "doc content", chunks)
+        assert blurbs1[0] == "Cached blurb."
+        assert mock_client.messages.create.call_count == 1
+
+        # Second call — should use cache, LLM NOT called again
+        blurbs2 = gen.generate_blurbs("Note", "doc content", chunks)
+        assert blurbs2[0] == "Cached blurb."
+        assert mock_client.messages.create.call_count == 1  # Still 1, not 2
+
+
+def test_indexing_pipeline_references_embedding_cache():
+    """Verify index.py source code references IndexCache for embedding caching."""
+    from pathlib import Path
+
+    source_path = Path(__file__).parent.parent / "src" / "secondbrain" / "api" / "index.py"
+    source = source_path.read_text()
+    assert "IndexCache" in source, "index.py must reference IndexCache"
+    assert "get_embedding" in source, "index.py must use get_embedding for cache lookups"
+    assert "set_embedding" in source, "index.py must use set_embedding for cache writes"
+
+
+# ---------------------------------------------------------------------------
+# ManifestGenerator
+# ---------------------------------------------------------------------------
+
+
+from secondbrain.indexing.manifest import ManifestGenerator
+
+
+def test_manifest_generator_produces_output(tmp_path):
+    from secondbrain.stores.lexical import LexicalStore
+
+    store = LexicalStore(tmp_path / "test.db")
+    chunk = Chunk(
+        chunk_id="manifest_1",
+        note_path="10_Notes/Recipes.md",
+        note_title="Recipes",
+        heading_path=["Valentine's Day Dinner"],
+        chunk_index=0,
+        chunk_text="parsnip puree",
+        checksum="abc",
+        note_folder="10_Notes",
+    )
+    store.add_chunks([chunk])
+
+    gen = ManifestGenerator()
+    manifest = gen.generate(store)
+    assert "VAULT CONTENTS OVERVIEW" in manifest
+    assert "10_Notes" in manifest
+    assert "Recipes" in manifest
+
+
+def test_manifest_generator_empty_store(tmp_path):
+    from secondbrain.stores.lexical import LexicalStore
+
+    store = LexicalStore(tmp_path / "test.db")
+    gen = ManifestGenerator()
+    manifest = gen.generate(store)
+    assert manifest == ""
+
+
+def test_answerer_includes_vault_manifest():
+    """Verify answerer.py source accepts vault_manifest parameter."""
+    from pathlib import Path
+
+    source_path = Path(__file__).parent.parent / "src" / "secondbrain" / "synthesis" / "answerer.py"
+    source = source_path.read_text()
+    assert "vault_manifest" in source, "answerer.py must accept vault_manifest"
+    assert "VAULT CONTENTS OVERVIEW" not in source  # Manifest is dynamic, not hardcoded
