@@ -81,3 +81,37 @@ def test_file_span_exporter_handles_write_error(tmp_path):
 
     result = exporter.export([span])
     assert result == SpanExportResult.FAILURE
+
+
+from unittest.mock import patch
+
+from secondbrain.tracing import init_tracing, FileSpanExporter
+
+
+def test_init_tracing_noop_when_disabled(tmp_path):
+    settings = Settings(
+        _env_file=None,
+        vault_path="/tmp/fake",
+        tracing_enabled=False,
+        data_path=tmp_path,
+    )
+    with patch("secondbrain.tracing.Traceloop") as mock_traceloop:
+        init_tracing(settings)
+        mock_traceloop.init.assert_not_called()
+
+
+def test_init_tracing_initializes_when_enabled(tmp_path):
+    settings = Settings(
+        _env_file=None,
+        vault_path="/tmp/fake",
+        tracing_enabled=True,
+        data_path=tmp_path,
+    )
+    with patch("secondbrain.tracing.Traceloop") as mock_traceloop:
+        init_tracing(settings)
+        mock_traceloop.init.assert_called_once()
+        call_kwargs = mock_traceloop.init.call_args
+        # Should pass a FileSpanExporter instance
+        assert isinstance(call_kwargs.kwargs.get("exporter"), FileSpanExporter)
+    # Traces directory should be created
+    assert (tmp_path / "traces").exists()

@@ -6,12 +6,13 @@ import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Sequence
+from typing import Sequence
 
+from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
+from traceloop.sdk import Traceloop
 
-if TYPE_CHECKING:
-    from opentelemetry.sdk.trace import ReadableSpan
+from secondbrain.config import Settings
 
 logger = logging.getLogger(__name__)
 
@@ -37,3 +38,19 @@ class FileSpanExporter(SpanExporter):
 
     def shutdown(self) -> None:
         pass
+
+
+def init_tracing(settings: Settings) -> None:
+    """Initialize OTel tracing if enabled. Call once at app startup."""
+    if not settings.tracing_enabled:
+        return
+
+    traces_dir = Path(settings.data_path) / "traces"
+    exporter = FileSpanExporter(traces_dir)
+
+    Traceloop.init(
+        app_name="secondbrain",
+        exporter=exporter,
+    )
+
+    logger.info("OTel tracing enabled — writing spans to %s", traces_dir)
