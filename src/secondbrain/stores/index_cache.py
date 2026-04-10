@@ -54,6 +54,7 @@ class IndexCache:
 
     def _init_schema(self) -> None:
         """Initialize the database schema."""
+        assert self._conn is not None
         self._conn.executescript("""
             CREATE TABLE IF NOT EXISTS blurb_cache (
                 text_hash TEXT NOT NULL,
