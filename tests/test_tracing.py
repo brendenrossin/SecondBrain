@@ -1,12 +1,14 @@
 """Tests for OTel tracing initialization and JSONL span export."""
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from opentelemetry.sdk.trace.export import SpanExportResult
 
 from secondbrain.config import Settings
+from secondbrain.tracing import FileSpanExporter, init_tracing
 
 
 def test_tracing_disabled_by_default():
@@ -18,16 +20,12 @@ def test_tracing_disabled_by_default():
 
 
 def test_file_span_exporter_creates_directory(tmp_path):
-    from secondbrain.tracing import FileSpanExporter
-
     traces_dir = tmp_path / "traces"
-    exporter = FileSpanExporter(traces_dir)
+    FileSpanExporter(traces_dir)
     assert traces_dir.exists()
 
 
 def test_file_span_exporter_writes_jsonl(tmp_path):
-    from secondbrain.tracing import FileSpanExporter
-
     traces_dir = tmp_path / "traces"
     exporter = FileSpanExporter(traces_dir)
 
@@ -40,8 +38,7 @@ def test_file_span_exporter_writes_jsonl(tmp_path):
     files = list(traces_dir.glob("*.jsonl"))
     assert len(files) == 1
     assert files[0].name.endswith(".jsonl")
-    from datetime import datetime, timezone
-    expected_name = datetime.now(timezone.utc).strftime("%Y-%m-%d") + ".jsonl"
+    expected_name = datetime.now(UTC).strftime("%Y-%m-%d") + ".jsonl"
     assert files[0].name == expected_name
     lines = files[0].read_text().strip().split("\n")
     assert len(lines) == 1
@@ -50,8 +47,6 @@ def test_file_span_exporter_writes_jsonl(tmp_path):
 
 
 def test_file_span_exporter_appends_multiple_spans(tmp_path):
-    from secondbrain.tracing import FileSpanExporter
-
     traces_dir = tmp_path / "traces"
     exporter = FileSpanExporter(traces_dir)
 
@@ -71,8 +66,6 @@ def test_file_span_exporter_appends_multiple_spans(tmp_path):
 
 
 def test_file_span_exporter_handles_write_error(tmp_path):
-    from secondbrain.tracing import FileSpanExporter
-
     traces_dir = tmp_path / "traces"
     exporter = FileSpanExporter(traces_dir)
 
@@ -81,11 +74,6 @@ def test_file_span_exporter_handles_write_error(tmp_path):
 
     result = exporter.export([span])
     assert result == SpanExportResult.FAILURE
-
-
-from unittest.mock import patch
-
-from secondbrain.tracing import init_tracing, FileSpanExporter
 
 
 def test_init_tracing_noop_when_disabled(tmp_path):
@@ -111,9 +99,7 @@ def test_init_tracing_initializes_when_enabled(tmp_path):
         init_tracing(settings)
         mock_traceloop.init.assert_called_once()
         call_kwargs = mock_traceloop.init.call_args
-        # Should pass a FileSpanExporter instance
         assert isinstance(call_kwargs.kwargs.get("exporter"), FileSpanExporter)
-    # Traces directory should be created
     assert (tmp_path / "traces").exists()
 
 
@@ -146,6 +132,8 @@ def test_daily_sync_calls_init_tracing():
 
 def test_inbox_processor_calls_init_tracing():
     """Verify inbox_processor.py calls init_tracing."""
-    source_path = Path(__file__).parent.parent / "src" / "secondbrain" / "scripts" / "inbox_processor.py"
+    source_path = (
+        Path(__file__).parent.parent / "src" / "secondbrain" / "scripts" / "inbox_processor.py"
+    )
     source = source_path.read_text()
     assert "init_tracing" in source, "inbox_processor.py must call init_tracing"

@@ -246,7 +246,6 @@ def process_inbox(vault_path: Path) -> list[str]:
         return []
 
     # Create a UsageStore for standalone inbox runs
-    from secondbrain.config import get_settings
     from secondbrain.stores.usage import UsageStore
 
     settings = get_settings()

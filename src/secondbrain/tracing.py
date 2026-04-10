@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from collections.abc import Sequence
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Sequence
 
 from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
@@ -25,7 +25,7 @@ class FileSpanExporter(SpanExporter):
         self._traces_dir.mkdir(parents=True, exist_ok=True)
 
     def export(self, spans: Sequence[ReadableSpan]) -> SpanExportResult:
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        today = datetime.now(UTC).strftime("%Y-%m-%d")
         path = self._traces_dir / f"{today}.jsonl"
         try:
             with open(path, "a") as f:
