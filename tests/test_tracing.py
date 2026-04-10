@@ -115,3 +115,37 @@ def test_init_tracing_initializes_when_enabled(tmp_path):
         assert isinstance(call_kwargs.kwargs.get("exporter"), FileSpanExporter)
     # Traces directory should be created
     assert (tmp_path / "traces").exists()
+
+
+def test_main_calls_init_tracing():
+    """Verify main.py lifespan calls init_tracing."""
+    import ast
+
+    main_path = Path(__file__).parent.parent / "src" / "secondbrain" / "main.py"
+    source = main_path.read_text()
+    tree = ast.parse(source)
+
+    imports = [
+        node for node in ast.walk(tree)
+        if isinstance(node, (ast.Import, ast.ImportFrom))
+    ]
+    tracing_imported = any(
+        getattr(node, "module", "") == "secondbrain.tracing"
+        for node in imports
+    )
+    assert tracing_imported, "main.py must import from secondbrain.tracing"
+    assert "init_tracing" in source, "main.py must call init_tracing"
+
+
+def test_daily_sync_calls_init_tracing():
+    """Verify daily_sync.py calls init_tracing."""
+    source_path = Path(__file__).parent.parent / "src" / "secondbrain" / "scripts" / "daily_sync.py"
+    source = source_path.read_text()
+    assert "init_tracing" in source, "daily_sync.py must call init_tracing"
+
+
+def test_inbox_processor_calls_init_tracing():
+    """Verify inbox_processor.py calls init_tracing."""
+    source_path = Path(__file__).parent.parent / "src" / "secondbrain" / "scripts" / "inbox_processor.py"
+    source = source_path.read_text()
+    assert "init_tracing" in source, "inbox_processor.py must call init_tracing"
