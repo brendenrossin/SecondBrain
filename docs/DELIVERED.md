@@ -13,6 +13,14 @@ Completed work, moved here after PR merge. Grouped by epic, ordered by completio
 
 ---
 
+## Epic: RAG Quality & Performance
+
+| ID | Ticket | Completed | PR |
+|----|--------|-----------|----|
+| RAG-1 | Contextual retrieval — LLM-generated chunk context blurbs at index time (Anthropic Haiku, progressive disclosure for RAG) | 2026-04-09 | [#5](https://github.com/brendenrossin/SecondBrain/pull/5) |
+
+---
+
 ## Epic: RAG Reliability
 
 | ID | Ticket | Completed | PR |
