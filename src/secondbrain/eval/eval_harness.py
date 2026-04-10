@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
-import yaml
+import yaml  # type: ignore[import-untyped]
 
 from secondbrain.eval.metrics import mrr, precision_at_k, recall_at_k
 from secondbrain.retrieval.hybrid import HybridRetriever, RetrievalCandidate
