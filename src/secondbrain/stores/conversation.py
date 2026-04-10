@@ -311,7 +311,7 @@ class ConversationStore:
             self._reconnect()
             cursor = self.conn.execute("SELECT COUNT(*) FROM conversations")
         row = cursor.fetchone()
-        return row[0] if row else 0
+        return int(row[0]) if row else 0
 
     def delete_conversation(self, conversation_id: str) -> None:
         """Delete a conversation and all its messages."""

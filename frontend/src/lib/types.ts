@@ -269,3 +269,30 @@ export interface CaptureResponse {
   message: string;
   connections: CaptureConnection[];
 }
+
+// --- Knowledge Library (Wiki) ---
+
+export interface WikiIngestResponse {
+  job_id: string;
+  status: string;
+  message: string;
+}
+
+export interface WikiJobStatusResponse {
+  job_id: string;
+  status: string;
+  error: string;
+  result_title: string;
+  result_path: string;
+}
+
+export interface WikiSaveResponse {
+  title: string;
+  path: string;
+  message: string;
+}
+
+export interface WikiSuggestion {
+  eligible: boolean;
+  reason: string;
+}

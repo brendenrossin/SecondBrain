@@ -203,7 +203,10 @@ def get_local_reranker() -> LLMReranker:
 
 
 def get_vault_manifest() -> str | None:
-    """Load the vault manifest from disk, or generate it if missing."""
+    """Load the vault manifest from disk, or return None if missing.
+
+    Intentionally not cached — the manifest updates after each reindex.
+    """
     manifest_path = get_data_path() / "vault_manifest.txt"
     if manifest_path.exists():
         return manifest_path.read_text(encoding="utf-8").strip() or None
@@ -247,6 +250,28 @@ def get_local_answerer() -> Answerer:
         usage_store=get_usage_store(),
         vault_manifest=get_vault_manifest(),
     )
+
+
+@lru_cache
+def get_safety_auditor() -> "SafetyAuditor":  # type: ignore[name-defined]  # noqa: F821
+    """Get cached safety auditor instance."""
+    from secondbrain.ingestion.safety import SafetyAuditor
+
+    settings = get_settings()
+    if not settings.anthropic_api_key:
+        raise RuntimeError("Safety auditor requires SECONDBRAIN_ANTHROPIC_API_KEY")
+    return SafetyAuditor(api_key=settings.anthropic_api_key, usage_store=get_usage_store())
+
+
+@lru_cache
+def get_wiki_compiler() -> "WikiCompiler":  # type: ignore[name-defined]  # noqa: F821
+    """Get cached wiki compiler instance."""
+    from secondbrain.ingestion.compiler import WikiCompiler
+
+    settings = get_settings()
+    if not settings.anthropic_api_key:
+        raise RuntimeError("Wiki compiler requires SECONDBRAIN_ANTHROPIC_API_KEY")
+    return WikiCompiler(api_key=settings.anthropic_api_key, usage_store=get_usage_store())
 
 
 def check_and_reindex(full_rebuild: bool = False) -> str | None:

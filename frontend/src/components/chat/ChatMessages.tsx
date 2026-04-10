@@ -5,7 +5,7 @@ import { useChatContext } from "@/components/providers/ChatProvider";
 import { ChatMessage } from "./ChatMessage";
 
 export function ChatMessages() {
-  const { messages, isStreaming } = useChatContext();
+  const { messages, isStreaming, wikiSuggestion, conversationId, lastQuery } = useChatContext();
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -22,6 +22,10 @@ export function ChatMessages() {
             isStreaming={
               isStreaming && i === messages.length - 1 && msg.role === "assistant"
             }
+            isLastAssistant={msg.role === "assistant" && i === messages.length - 1}
+            wikiSuggestion={wikiSuggestion}
+            conversationId={conversationId}
+            query={lastQuery}
           />
         ))}
         <div ref={bottomRef} />
