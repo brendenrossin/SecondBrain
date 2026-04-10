@@ -203,3 +203,14 @@ def test_vector_store_metadata_includes_blurb(tmp_path):
 
     results = store._collection.get(ids=["vec_blurb_1"], include=["metadatas"])
     assert results["metadatas"][0]["context_blurb"] == "Context about testing."
+
+
+def test_indexing_pipeline_calls_context_generator():
+    """Verify index.py source code wires ContextGenerator into the pipeline."""
+    from pathlib import Path
+
+    source_path = Path(__file__).parent.parent / "src" / "secondbrain" / "api" / "index.py"
+    source = source_path.read_text()
+    assert "ContextGenerator" in source, "index.py must use ContextGenerator"
+    assert "generate_blurbs" in source, "index.py must call generate_blurbs"
+    assert "context_blurb" in source, "index.py must set context_blurb on chunks"
