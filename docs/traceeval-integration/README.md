@@ -15,8 +15,9 @@ SecondBrain produces OTel-format JSONL trace files from its LLM calls. TraceEval
 ```
 SecondBrain (LLM calls)
   → OpenLLMetry auto-instrumentation
-  → FileSpanExporter
-  → data/traces/YYYY-MM-DD.jsonl
+  → BatchSpanProcessor
+      ├→ FileSpanExporter → data/traces/YYYY-MM-DD.jsonl → TraceEval
+      └→ LangfuseSpanProcessor → cloud.langfuse.com (trace viewer UI)
   → TraceEval analyze + generate + export
   → pytest evals
 ```
@@ -25,9 +26,9 @@ SecondBrain (LLM calls)
 
 | Phase | What | Cost | Status |
 |-------|------|------|--------|
-| **9.8a** | OpenLLMetry + local JSONL file export | Free | Planned |
-| **9.8b** | Langfuse free tier (adds trace viewer UI) | Free | Future |
-| **9.8c** | Full platform (LangSmith/Arize/etc.) | Paid | Future, only if warranted |
+| **9.8a** | OpenLLMetry + local JSONL file export | Free | **Done** (TRACE-1) |
+| **9.8b** | Langfuse free tier (adds trace viewer UI) | Free | **Done** (TRACE-2) |
+| **9.8c** | Full platform (LangSmith/Arize/etc.) | Paid | Covered by OTel architecture — swap exporter |
 
 ## Documents
 
