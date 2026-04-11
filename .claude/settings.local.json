@@ -27,7 +27,11 @@
       "Bash(uv sync:*)",
       "Bash(make lint:*)",
       "Bash(make typecheck:*)",
-      "WebFetch(domain:docs.anthropic.com)"
+      "WebFetch(domain:docs.anthropic.com)",
+      "Bash(python -m pytest tests/test_tracing.py::test_tracing_disabled_by_default -v)",
+      "Bash(python -m pytest tests/test_tracing.py -v -k \"daily_sync_calls or inbox_processor_calls\")",
+      "Bash(~/.local/bin/uv run:*)",
+      "mcp__plugin_context7_context7__query-docs"
     ]
   }
 }

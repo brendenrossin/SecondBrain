@@ -128,7 +128,7 @@ def test_init_tracing_adds_langfuse_when_keys_present(tmp_path):
     )
     with (
         patch("secondbrain.tracing.Traceloop") as mock_traceloop,
-        patch("secondbrain.tracing._create_langfuse_processor") as mock_create,
+        patch("secondbrain.tracing._create_langfuse_otlp_processor") as mock_create,
         patch("secondbrain.tracing.trace") as mock_trace,
     ):
         mock_processor = MagicMock()
@@ -158,7 +158,7 @@ def test_init_tracing_skips_langfuse_when_no_keys(tmp_path):
     )
     with (
         patch("secondbrain.tracing.Traceloop") as mock_traceloop,
-        patch("secondbrain.tracing._create_langfuse_processor") as mock_create,
+        patch("secondbrain.tracing._create_langfuse_otlp_processor") as mock_create,
     ):
         init_tracing(settings)
 
@@ -178,7 +178,7 @@ def test_init_tracing_handles_langfuse_init_failure(tmp_path):
     with (
         patch("secondbrain.tracing.Traceloop") as mock_traceloop,
         patch(
-            "secondbrain.tracing._create_langfuse_processor",
+            "secondbrain.tracing._create_langfuse_otlp_processor",
             side_effect=Exception("connection failed"),
         ),
     ):

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
 from collections.abc import Sequence
@@ -10,7 +11,7 @@ from pathlib import Path
 
 from opentelemetry import trace
 from opentelemetry.sdk.trace import ReadableSpan
-from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
+from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter, SpanExportResult
 from traceloop.sdk import Traceloop
 
 from secondbrain.config import Settings
@@ -41,19 +42,25 @@ class FileSpanExporter(SpanExporter):
         pass
 
 
-def _create_langfuse_processor(
+def _create_langfuse_otlp_processor(
     public_key: str,
     secret_key: str,
     host: str,
-) -> object:
-    """Create a LangfuseSpanProcessor. Lazy import to avoid cost when unused."""
-    from langfuse.opentelemetry import LangfuseSpanProcessor
+) -> BatchSpanProcessor:
+    """Create an OTLP exporter targeting Langfuse's OTel endpoint.
 
-    return LangfuseSpanProcessor(
-        public_key=public_key,
-        secret_key=secret_key,
-        host=host,
+    Langfuse v4 accepts traces via standard OTLP/HTTP protocol with Basic Auth.
+    """
+    from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+
+    auth = base64.b64encode(f"{public_key}:{secret_key}".encode()).decode()
+    endpoint = f"{host.rstrip('/')}/api/public/otel/v1/traces"
+
+    exporter = OTLPSpanExporter(
+        endpoint=endpoint,
+        headers={"Authorization": f"Basic {auth}"},
     )
+    return BatchSpanProcessor(exporter)
 
 
 def init_tracing(settings: Settings) -> None:
@@ -71,10 +78,10 @@ def init_tracing(settings: Settings) -> None:
 
     logger.info("OTel tracing enabled — writing spans to %s", traces_dir)
 
-    # Add Langfuse exporter if keys are configured (dual-write)
+    # Add Langfuse OTLP exporter if keys are configured (dual-write)
     if settings.langfuse_public_key and settings.langfuse_secret_key:
         try:
-            processor = _create_langfuse_processor(
+            processor = _create_langfuse_otlp_processor(
                 public_key=settings.langfuse_public_key,
                 secret_key=settings.langfuse_secret_key,
                 host=settings.langfuse_host,

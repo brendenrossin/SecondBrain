@@ -63,7 +63,7 @@ KLIB-3 (Compounding query loop) ◄── done
 
 | ID | Ticket | Est. | Status | Spec |
 |----|--------|------|--------|------|
-| OPS-1 | Log persistence & data retention (launchd logs, usage pruning) | 1d | Backlog | [spec](features/log-persistence-retention.md) |
+| OPS-1 | Log persistence & data retention (launchd logs, usage pruning) | 1d | **In Progress** | [spec](features/log-persistence-retention.md) |
 | OPS-3 | Cloud migration (containerize API + workers, deploy to Railway/Fly.io, isolate content ingestion) | 3-4d | **Pending** | — |
 | OPS-2 | Public demo instance (Fly.io, sample vault, rate limiting) | 4-5d | **Pending** | [spec](features/public-demo-instance.md) |
 
