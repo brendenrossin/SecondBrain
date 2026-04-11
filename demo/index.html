@@ -436,16 +436,41 @@ body::after {
 
 <!-- ═══════════════════════════ SLIDE 2: THE PROBLEM ═══════════════════════════ -->
 <section>
-  <span class="eyebrow">The Problem</span>
-  <h2 style="font-size: 2.2em; max-width: 700px;">Your notes are worth more than<br>keyword search lets you find.</h2>
-  <div class="divider"></div>
-  <p style="max-width: 560px; font-size: 0.6em;">
-    You write daily notes, capture ideas, plan projects. But when you need that one insight
-    from three months ago, you're left guessing at filenames. SecondBrain understands
-    <em style="color: var(--gold);">what your notes mean</em> &mdash; not just what they contain.
-  </p>
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 48px; height: 100%; align-content: start;">
+    <!-- Left: The headline + problem -->
+    <div style="padding-top: 8px;">
+      <span class="eyebrow">The Problem</span>
+      <h2 style="font-size: 2em; line-height: 1.08;">Your notes are worth more than keyword search lets you find.</h2>
+      <div class="divider"></div>
+      <p style="font-size: 0.6em; margin-top: 0;">
+        SecondBrain understands <em style="color: var(--gold);">what your notes mean</em> &mdash;
+        not just what they contain. Semantic search, AI synthesis, and automatic briefings
+        turn your vault into a living knowledge system.
+      </p>
+    </div>
 
-  <div class="stat-row" style="margin-top: 20px;">
+    <!-- Right: The solution highlights -->
+    <div style="padding-top: 8px;">
+      <span class="eyebrow">The Solution</span>
+      <div style="display: flex; flex-direction: column; gap: 16px; margin-top: 16px;">
+        <div style="border-left: 2px solid var(--gold); padding-left: 16px;">
+          <div style="font-family: var(--sans); font-size: 0.6em; font-weight: 500; color: var(--text);">Semantic Search</div>
+          <div style="font-family: var(--sans); font-size: 0.5em; color: var(--text-dim); font-weight: 300; margin-top: 2px;">Ask questions in natural language, get answers grounded in your notes with citations.</div>
+        </div>
+        <div style="border-left: 2px solid var(--teal); padding-left: 16px;">
+          <div style="font-family: var(--sans); font-size: 0.6em; font-weight: 500; color: var(--text);">Knowledge Ingestion</div>
+          <div style="font-family: var(--sans); font-size: 0.5em; color: var(--text-dim); font-weight: 300; margin-top: 2px;">Paste a URL &mdash; articles, YouTube, PDFs become structured wiki pages in your vault.</div>
+        </div>
+        <div style="border-left: 2px solid var(--ember); padding-left: 16px;">
+          <div style="font-family: var(--sans); font-size: 0.6em; font-weight: 500; color: var(--text);">Safety-Gated AI</div>
+          <div style="font-family: var(--sans); font-size: 0.5em; color: var(--text-dim); font-weight: 300; margin-top: 2px;">Every piece of external content passes through an AI safety auditor before touching your vault.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats pinned at bottom -->
+  <div class="stat-row" style="margin-top: auto; position: absolute; bottom: 40px; left: 70px;">
     <div class="stat-item">
       <div class="stat-number">8</div>
       <div class="stat-label">AI integration points</div>
@@ -461,7 +486,8 @@ body::after {
   </div>
 
   <aside class="notes">
-    Talking points. Linger on the stats. "Eight different places where AI makes your vault smarter."
+    Two-column layout: left = the problem, right = three solution highlights.
+    Stats at the bottom. Linger on "8 AI integration points" and "100% local."
   </aside>
 </section>
 
