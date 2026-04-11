@@ -103,6 +103,90 @@ def test_init_tracing_initializes_when_enabled(tmp_path):
     assert (tmp_path / "traces").exists()
 
 
+# --- Langfuse integration tests ---
+
+
+def test_langfuse_config_defaults():
+    settings = Settings(
+        _env_file=None,
+        vault_path="/tmp/fake",
+    )
+    assert settings.langfuse_public_key == ""
+    assert settings.langfuse_secret_key == ""
+    assert settings.langfuse_host == "https://cloud.langfuse.com"
+
+
+def test_init_tracing_adds_langfuse_when_keys_present(tmp_path):
+    settings = Settings(
+        _env_file=None,
+        vault_path="/tmp/fake",
+        tracing_enabled=True,
+        data_path=tmp_path,
+        langfuse_public_key="pk-lf-test",
+        langfuse_secret_key="sk-lf-test",
+        langfuse_host="https://cloud.langfuse.com",
+    )
+    with (
+        patch("secondbrain.tracing.Traceloop") as mock_traceloop,
+        patch("secondbrain.tracing._create_langfuse_processor") as mock_create,
+        patch("secondbrain.tracing.trace") as mock_trace,
+    ):
+        mock_processor = MagicMock()
+        mock_create.return_value = mock_processor
+        mock_provider = MagicMock()
+        mock_trace.get_tracer_provider.return_value = mock_provider
+
+        init_tracing(settings)
+
+        mock_traceloop.init.assert_called_once()
+        mock_create.assert_called_once_with(
+            public_key="pk-lf-test",
+            secret_key="sk-lf-test",
+            host="https://cloud.langfuse.com",
+        )
+        mock_provider.add_span_processor.assert_called_once_with(mock_processor)
+
+
+def test_init_tracing_skips_langfuse_when_no_keys(tmp_path):
+    settings = Settings(
+        _env_file=None,
+        vault_path="/tmp/fake",
+        tracing_enabled=True,
+        data_path=tmp_path,
+        langfuse_public_key="",
+        langfuse_secret_key="",
+    )
+    with (
+        patch("secondbrain.tracing.Traceloop") as mock_traceloop,
+        patch("secondbrain.tracing._create_langfuse_processor") as mock_create,
+    ):
+        init_tracing(settings)
+
+        mock_traceloop.init.assert_called_once()
+        mock_create.assert_not_called()
+
+
+def test_init_tracing_handles_langfuse_init_failure(tmp_path):
+    settings = Settings(
+        _env_file=None,
+        vault_path="/tmp/fake",
+        tracing_enabled=True,
+        data_path=tmp_path,
+        langfuse_public_key="pk-lf-bad",
+        langfuse_secret_key="sk-lf-bad",
+    )
+    with (
+        patch("secondbrain.tracing.Traceloop") as mock_traceloop,
+        patch(
+            "secondbrain.tracing._create_langfuse_processor",
+            side_effect=Exception("connection failed"),
+        ),
+    ):
+        # Should not raise — graceful degradation to JSONL only
+        init_tracing(settings)
+        mock_traceloop.init.assert_called_once()
+
+
 def test_main_calls_init_tracing():
     """Verify main.py lifespan calls init_tracing."""
     import ast

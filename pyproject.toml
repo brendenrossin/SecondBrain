@@ -97,6 +97,8 @@ module = [
     "bs4",
     "bs4.*",
     "readability",
+    "langfuse",
+    "langfuse.*",
 ]
 ignore_missing_imports = true
 

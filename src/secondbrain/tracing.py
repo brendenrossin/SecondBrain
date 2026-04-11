@@ -8,6 +8,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
+from opentelemetry import trace
 from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
 from traceloop.sdk import Traceloop
@@ -40,6 +41,21 @@ class FileSpanExporter(SpanExporter):
         pass
 
 
+def _create_langfuse_processor(
+    public_key: str,
+    secret_key: str,
+    host: str,
+) -> object:
+    """Create a LangfuseSpanProcessor. Lazy import to avoid cost when unused."""
+    from langfuse.opentelemetry import LangfuseSpanProcessor
+
+    return LangfuseSpanProcessor(
+        public_key=public_key,
+        secret_key=secret_key,
+        host=host,
+    )
+
+
 def init_tracing(settings: Settings) -> None:
     """Initialize OTel tracing if enabled. Call once at app startup."""
     if not settings.tracing_enabled:
@@ -54,3 +70,17 @@ def init_tracing(settings: Settings) -> None:
     )
 
     logger.info("OTel tracing enabled — writing spans to %s", traces_dir)
+
+    # Add Langfuse exporter if keys are configured (dual-write)
+    if settings.langfuse_public_key and settings.langfuse_secret_key:
+        try:
+            processor = _create_langfuse_processor(
+                public_key=settings.langfuse_public_key,
+                secret_key=settings.langfuse_secret_key,
+                host=settings.langfuse_host,
+            )
+            provider = trace.get_tracer_provider()
+            provider.add_span_processor(processor)  # type: ignore[attr-defined]
+            logger.info("Langfuse tracing enabled — sending spans to %s", settings.langfuse_host)
+        except Exception:
+            logger.exception("Failed to initialize Langfuse exporter — continuing with JSONL only")

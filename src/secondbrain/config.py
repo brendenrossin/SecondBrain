@@ -60,6 +60,11 @@ class Settings(BaseSettings):
     # Tracing
     tracing_enabled: bool = False
 
+    # Langfuse (trace viewer UI) — keys from cloud.langfuse.com project settings
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+    langfuse_host: str = "https://cloud.langfuse.com"
+
     # Contextual retrieval
     context_generation_enabled: bool = True
 
