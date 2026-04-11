@@ -32,8 +32,8 @@
     <true/>
 
     <key>StandardOutPath</key>
-    <string>/Users/brentrossin/SecondBrain/data/ui.log</string>
+    <string>/Users/brentrossin/SecondBrain/data/logs/ui.stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/brentrossin/SecondBrain/data/ui.log</string>
+    <string>/Users/brentrossin/SecondBrain/data/logs/ui.stderr.log</string>
 </dict>
 </plist>

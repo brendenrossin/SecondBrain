@@ -26,18 +26,6 @@ def _log_structured(event: str, **kwargs: Any) -> None:
     logger.info(json.dumps({"event": event, **kwargs}))
 
 
-def _rotate_logs(data_path: Path, max_size_mb: float = 10.0) -> None:
-    """Rotate log files that exceed max_size_mb."""
-    for log_name in ["daily-sync.log", "api.log", "ui.log", "queries.jsonl"]:
-        log_file = data_path / log_name
-        if log_file.exists() and log_file.stat().st_size > max_size_mb * 1024 * 1024:
-            rotated = data_path / f"{log_name}.old"
-            if rotated.exists():
-                rotated.unlink()
-            log_file.rename(rotated)
-            logger.info("Rotated %s (exceeded %.1f MB)", log_name, max_size_mb)
-
-
 def reindex_vault(vault_path: Path, data_path: Path | None = None) -> str:
     """Signal the UI server to re-index by writing a trigger file.
 
@@ -168,10 +156,8 @@ def main() -> None:
     settings = get_settings()
     init_tracing(settings)
 
-    # Rotate logs before doing anything else
     data_path = Path(settings.data_path)
     data_path.mkdir(parents=True, exist_ok=True)
-    _rotate_logs(data_path)
 
     vault_path = args.vault_path
     if vault_path is None:
@@ -188,6 +174,16 @@ def main() -> None:
 
     logger.info("Vault path: %s", vault_path)
     sync_start = time.time()
+
+    # Prune old usage records before running sync steps
+    try:
+        from secondbrain.stores.usage import UsageStore
+
+        usage_store = UsageStore(data_path / "usage.db")
+        usage_store.prune_old_usage(settings.usage_retention_days)
+        usage_store.close()
+    except Exception:
+        logger.warning("Usage pruning failed", exc_info=True)
 
     try:
         if args.command in ("inbox", "all"):

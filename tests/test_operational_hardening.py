@@ -10,7 +10,6 @@ from fastapi.testclient import TestClient
 
 from secondbrain.api.dependencies import get_settings
 from secondbrain.main import app
-from secondbrain.scripts.daily_sync import _rotate_logs
 
 
 @pytest.fixture()
@@ -107,63 +106,6 @@ class TestHealthEndpoint:
             data = resp.json()
             assert data["sync"] == "stale"
             assert data["last_sync_hours_ago"] > 25
-
-
-# ── Log rotation tests ──
-
-
-class TestRotateLogs:
-    def test_skips_nonexistent_files(self, tmp_path):
-        _rotate_logs(tmp_path)
-        assert not (tmp_path / "daily-sync.log.old").exists()
-
-    def test_skips_files_under_threshold(self, tmp_path):
-        log_file = tmp_path / "api.log"
-        log_file.write_bytes(b"x" * 1024)  # 1 KB, under 10 MB
-        _rotate_logs(tmp_path)
-        assert log_file.exists()
-        assert not (tmp_path / "api.log.old").exists()
-
-    def test_rotates_file_over_threshold(self, tmp_path):
-        log_file = tmp_path / "api.log"
-        log_file.write_bytes(b"x" * int(10.1 * 1024 * 1024))
-        _rotate_logs(tmp_path)
-        assert not log_file.exists()
-        assert (tmp_path / "api.log.old").exists()
-
-    def test_replaces_existing_old_file(self, tmp_path):
-        log_file = tmp_path / "api.log"
-        log_file.write_bytes(b"x" * int(10.1 * 1024 * 1024))
-        old_file = tmp_path / "api.log.old"
-        old_file.write_text("previous rotation")
-        _rotate_logs(tmp_path)
-        assert not log_file.exists()
-        assert old_file.exists()
-        assert old_file.stat().st_size > 1024
-
-    def test_rotates_queries_jsonl(self, tmp_path):
-        log_file = tmp_path / "queries.jsonl"
-        log_file.write_bytes(b"x" * int(10.1 * 1024 * 1024))
-        _rotate_logs(tmp_path)
-        assert not log_file.exists()
-        assert (tmp_path / "queries.jsonl.old").exists()
-
-    def test_custom_threshold(self, tmp_path):
-        log_file = tmp_path / "api.log"
-        log_file.write_bytes(b"x" * int(5.1 * 1024 * 1024))
-        _rotate_logs(tmp_path, max_size_mb=5.0)
-        assert not log_file.exists()
-        assert (tmp_path / "api.log.old").exists()
-
-    def test_mixed_files_only_rotates_large(self, tmp_path):
-        small = tmp_path / "api.log"
-        small.write_bytes(b"x" * 1024)
-        big = tmp_path / "daily-sync.log"
-        big.write_bytes(b"x" * int(10.1 * 1024 * 1024))
-        _rotate_logs(tmp_path)
-        assert small.exists()
-        assert not big.exists()
-        assert (tmp_path / "daily-sync.log.old").exists()
 
 
 # ── Sync status endpoint tests ──

@@ -27,9 +27,9 @@
     <key>ThrottleInterval</key>
     <integer>10</integer>
     <key>StandardOutPath</key>
-    <string>/Users/brentrossin/SecondBrain/data/api.log</string>
+    <string>/Users/brentrossin/SecondBrain/data/logs/api.stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/brentrossin/SecondBrain/data/api.log</string>
+    <string>/Users/brentrossin/SecondBrain/data/logs/api.stderr.log</string>
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
