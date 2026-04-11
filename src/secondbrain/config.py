@@ -60,10 +60,10 @@ class Settings(BaseSettings):
     # Tracing
     tracing_enabled: bool = False
 
-    # Langfuse (trace viewer UI) — keys from cloud.langfuse.com project settings
+    # Langfuse (trace viewer UI) — self-hosted at localhost:3000
     langfuse_public_key: str = ""
     langfuse_secret_key: str = ""
-    langfuse_host: str = "https://cloud.langfuse.com"
+    langfuse_host: str = "http://localhost:3000"
 
     # Contextual retrieval
     context_generation_enabled: bool = True
