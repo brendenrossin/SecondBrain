@@ -16,9 +16,7 @@ def context_generator():
 
     Requires ANTHROPIC_API_KEY environment variable.
     """
-    api_key = os.environ.get("ANTHROPIC_API_KEY") or os.environ.get(
-        "SECONDBRAIN_ANTHROPIC_API_KEY"
-    )
+    api_key = os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("SECONDBRAIN_ANTHROPIC_API_KEY")
     if not api_key:
         pytest.skip("ANTHROPIC_API_KEY or SECONDBRAIN_ANTHROPIC_API_KEY not set")
     return ContextGenerator(api_key=api_key, model="claude-haiku-4-5")
