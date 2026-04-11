@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SecondBrain Demo</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/black.css">
+<style>
+  :root {
+    --sb-bg: #0a0e1a;
+    --sb-surface: #111827;
+    --sb-border: #1e293b;
+    --sb-accent: #3b82f6;
+    --sb-accent-dim: #1e40af;
+    --sb-text: #e2e8f0;
+    --sb-muted: #94a3b8;
+    --sb-green: #22c55e;
+    --sb-amber: #f59e0b;
+    --sb-red: #ef4444;
+  }
+
+  .reveal {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    color: var(--sb-text);
+  }
+
+  .reveal .slides { text-align: left; }
+
+  .reveal .slides section {
+    background: var(--sb-bg);
+    padding: 40px 60px;
+  }
+
+  .reveal h1, .reveal h2, .reveal h3 {
+    color: var(--sb-text);
+    font-weight: 700;
+    text-transform: none;
+    letter-spacing: -0.02em;
+  }
+
+  .reveal h1 { font-size: 2.4em; }
+  .reveal h2 { font-size: 1.8em; margin-bottom: 0.5em; }
+  .reveal h3 { font-size: 1.2em; color: var(--sb-muted); font-weight: 400; }
+
+  .reveal p, .reveal li {
+    font-size: 0.75em;
+    line-height: 1.6;
+    color: var(--sb-muted);
+  }
+
+  .reveal ul { list-style: none; padding-left: 0; }
+  .reveal ul li::before {
+    content: "\2022";
+    color: var(--sb-accent);
+    font-weight: bold;
+    display: inline-block;
+    width: 1em;
+  }
+
+  .accent { color: var(--sb-accent); }
+  .green { color: var(--sb-green); }
+  .amber { color: var(--sb-amber); }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 0.6em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .badge-blue { background: var(--sb-accent-dim); color: var(--sb-text); }
+  .badge-green { background: #166534; color: #bbf7d0; }
+  .badge-amber { background: #92400e; color: #fde68a; }
+
+  /* GIF placeholder */
+  .gif-slot {
+    width: 100%;
+    max-width: 800px;
+    height: 420px;
+    margin: 20px auto;
+    border: 2px dashed var(--sb-border);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--sb-surface);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .gif-slot img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border-radius: 10px;
+  }
+
+  .gif-slot .placeholder {
+    text-align: center;
+    color: var(--sb-border);
+  }
+
+  .gif-slot .placeholder .icon {
+    font-size: 3em;
+    margin-bottom: 10px;
+    display: block;
+  }
+
+  .gif-slot .placeholder .label {
+    font-size: 0.7em;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  /* Architecture diagram styles */
+  .arch-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-top: 20px;
+  }
+
+  .arch-box {
+    background: var(--sb-surface);
+    border: 1px solid var(--sb-border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+
+  .arch-box h4 {
+    color: var(--sb-accent);
+    font-size: 0.7em;
+    margin: 0 0 8px 0;
+    font-weight: 600;
+  }
+
+  .arch-box p {
+    font-size: 0.55em !important;
+    margin: 0;
+    color: var(--sb-muted);
+  }
+
+  /* LLM call site pills */
+  .llm-sites {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 16px;
+  }
+
+  .llm-pill {
+    background: var(--sb-surface);
+    border: 1px solid var(--sb-accent-dim);
+    border-radius: 20px;
+    padding: 4px 14px;
+    font-size: 0.55em;
+    color: var(--sb-accent);
+    font-weight: 500;
+  }
+
+  /* Feature slide layout */
+  .feature-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .feature-bullets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  .feature-chip {
+    background: var(--sb-surface);
+    border: 1px solid var(--sb-border);
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-size: 0.55em;
+    color: var(--sb-muted);
+  }
+
+  /* Title slide special */
+  .title-slide { text-align: center !important; }
+  .title-slide h1 { font-size: 3em; margin-bottom: 0.1em; }
+  .title-slide h3 { font-size: 1em; margin-top: 0; }
+
+  /* Roadmap list */
+  .roadmap-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 16px;
+  }
+
+  .roadmap-item {
+    background: var(--sb-surface);
+    border: 1px solid var(--sb-border);
+    border-radius: 8px;
+    padding: 12px 16px;
+  }
+
+  .roadmap-item h4 {
+    color: var(--sb-text);
+    font-size: 0.65em;
+    margin: 0 0 4px 0;
+  }
+
+  .roadmap-item p {
+    font-size: 0.5em !important;
+    margin: 0;
+  }
+
+  /* Data flow */
+  .flow-steps {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .flow-step {
+    background: var(--sb-surface);
+    border: 1px solid var(--sb-border);
+    border-radius: 8px;
+    padding: 10px 16px;
+    text-align: center;
+    font-size: 0.55em;
+    color: var(--sb-text);
+    min-width: 100px;
+  }
+
+  .flow-arrow {
+    color: var(--sb-accent);
+    font-size: 1.2em;
+    font-weight: bold;
+  }
+
+  /* Speaker notes hint */
+  .reveal .speaker-note-hint {
+    position: fixed;
+    bottom: 10px;
+    right: 10px;
+    font-size: 0.4em;
+    color: var(--sb-border);
+  }
+</style>
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+
+<!-- ==================== SLIDE 1: TITLE ==================== -->
+<section class="title-slide">
+  <h1>Second<span class="accent">Brain</span></h1>
+  <h3>AI-Powered Semantic Memory for Your Knowledge</h3>
+  <p style="margin-top: 40px; font-size: 0.6em; color: var(--sb-muted);">
+    Local-first &middot; Privacy-preserving &middot; Obsidian-native
+  </p>
+  <aside class="notes">
+    Opening slide. No recording needed.
+    Press 'S' to open speaker notes view with capture instructions for each slide.
+  </aside>
+</section>
+
+<!-- ==================== SLIDE 2: VALUE PROP ==================== -->
+<section>
+  <h2>Why SecondBrain?</h2>
+  <h3>Your notes are valuable. Most of that value is locked away.</h3>
+
+  <div style="margin-top: 30px;">
+    <ul>
+      <li>Semantic search across your entire vault &mdash; not just keyword matching</li>
+      <li>Morning briefings that surface what matters today</li>
+      <li>Ingest external content (articles, YouTube, PDFs) into structured wiki pages</li>
+      <li>AI safety auditor reviews everything before it touches your vault</li>
+      <li>All data stays on your machine &mdash; vault is the single source of truth</li>
+    </ul>
+  </div>
+
+  <div style="margin-top: 30px;">
+    <span class="badge badge-blue">Hybrid RAG</span>
+    <span class="badge badge-green">8 LLM Call Sites</span>
+    <span class="badge badge-amber">Safety-Gated</span>
+  </div>
+
+  <aside class="notes">
+    No recording needed for this slide. Talking points only.
+  </aside>
+</section>
+
+<!-- ==================== SLIDE 3: ARCHITECTURE ==================== -->
+<section>
+  <h2>Architecture</h2>
+  <h3>How it all fits together</h3>
+
+  <div class="flow-steps">
+    <div class="flow-step">Obsidian Vault<br><small style="color:var(--sb-muted)">Markdown + Frontmatter</small></div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-step">Chunker<br><small style="color:var(--sb-muted)">MD-aware splitting</small></div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-step">Embeddings<br><small style="color:var(--sb-muted)">BGE / OpenAI</small></div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-step">Hybrid Search<br><small style="color:var(--sb-muted)">BM25 + Vectors</small></div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-step">LLM Rerank<br><small style="color:var(--sb-muted)">+ Synthesis</small></div>
+  </div>
+
+  <p style="margin-top: 20px; font-size: 0.6em; text-align: center;">8 LLM integration points across the system:</p>
+  <div class="llm-sites" style="justify-content: center;">
+    <span class="llm-pill">Chat Rerank</span>
+    <span class="llm-pill">Chat Answer</span>
+    <span class="llm-pill">Morning Briefing</span>
+    <span class="llm-pill">Metadata Extraction</span>
+    <span class="llm-pill">Inbox Processing</span>
+    <span class="llm-pill">Safety Audit</span>
+    <span class="llm-pill">Wiki Compile</span>
+    <span class="llm-pill">Context Generation</span>
+  </div>
+
+  <div class="arch-grid" style="margin-top: 20px;">
+    <div class="arch-box">
+      <h4>Backend</h4>
+      <p>Python + FastAPI, SQLite (WAL), ChromaDB, FTS5</p>
+    </div>
+    <div class="arch-box">
+      <h4>Frontend</h4>
+      <p>Next.js "Mission Control" dashboard, dark theme</p>
+    </div>
+    <div class="arch-box">
+      <h4>Observability</h4>
+      <p>OpenTelemetry traces, Langfuse viewer, cost tracking</p>
+    </div>
+    <div class="arch-box">
+      <h4>Infrastructure</h4>
+      <p>Mac Studio, launchd services, Tailscale remote access</p>
+    </div>
+  </div>
+
+  <aside class="notes">
+    No recording needed. Architecture overview — talk through the data flow and call sites.
+  </aside>
+</section>
+
+<!-- ==================== SLIDE 4: HOME / BRIEFING ==================== -->
+<section>
+  <h2>Home &mdash; Morning Briefing</h2>
+  <h3>Your daily intelligence brief, auto-generated from your vault</h3>
+
+  <div class="gif-slot">
+    <!-- Replace with: <img src="gifs/home-briefing.gif" alt="Morning Briefing"> -->
+    <div class="placeholder">
+      <span class="icon">&#9728;</span>
+      <span class="label">home-briefing.gif</span>
+    </div>
+  </div>
+
+  <div class="feature-bullets">
+    <span class="feature-chip">LLM-synthesized daily summary</span>
+    <span class="feature-chip">Overdue task alerts</span>
+    <span class="feature-chip">Upcoming events</span>
+    <span class="feature-chip">Recent activity</span>
+  </div>
+
+  <aside class="notes">
+    ## OBS Capture Instructions: home-briefing.gif
+
+    **Duration:** ~8-10 seconds
+    **Window:** Browser at http://localhost:7860/ (or Tailscale URL)
+    **Resolution:** 1280x720 recommended
+
+    **What to record:**
+    1. Start on the home page — briefing should already be loaded
+    2. Slowly scroll down through the briefing sections:
+       - Daily summary paragraph
+       - Overdue tasks (if any)
+       - Today's events
+       - Recent vault activity
+    3. Pause briefly on each section so viewer can read
+
+    **Tips:**
+    - If briefing is empty, trigger one: the page auto-fetches on load
+    - Make sure there are some tasks and events for visual richness
+    - Smooth, slow scroll — no jerky mouse movements
+  </aside>
+</section>
+
+<!-- ==================== SLIDE 5: CHAT ==================== -->
+<section>
+  <h2>Chat</h2>
+  <h3>Ask questions grounded in your actual notes</h3>
+
+  <div class="gif-slot">
+    <!-- Replace with: <img src="gifs/chat.gif" alt="Chat Interface"> -->
+    <div class="placeholder">
+      <span class="icon">&#128172;</span>
+      <span class="label">chat.gif</span>
+    </div>
+  </div>
+
+  <div class="feature-bullets">
+    <span class="feature-chip">Hybrid retrieval (BM25 + vectors)</span>
+    <span class="feature-chip">LLM reranking</span>
+    <span class="feature-chip">Cited sources</span>
+    <span class="feature-chip">Conversation history</span>
+    <span class="feature-chip">Local or OpenAI toggle</span>
+  </div>
+
+  <aside class="notes">
+    ## OBS Capture Instructions: chat.gif
+
+    **Duration:** ~12-15 seconds
+    **Window:** Browser at /chat
+
+    **What to record:**
+    1. Start with empty chat (click "New Conversation" if needed)
+    2. Type a question that you know your vault can answer well
+       - Example: "What are my current project priorities?"
+       - Example: "Summarize my notes on [topic]"
+    3. Hit Enter and wait for the response to stream in
+    4. Scroll down to show the cited sources section
+    5. Optionally: show the provider toggle (Local/OpenAI)
+
+    **Tips:**
+    - Pick a question that returns 2-3 citations for visual impact
+    - The streaming response looks impressive — let it play out
+    - Make sure the conversation sidebar shows prior conversations
+  </aside>
+</section>
+
+<!-- ==================== SLIDE 6: CAPTURE + KNOWLEDGE LIBRARY ==================== -->
+<section>
+  <h2>Capture &amp; Knowledge Library</h2>
+  <h3>Ingest anything &mdash; quick notes, URLs, YouTube, PDFs</h3>
+
+  <div class="gif-slot">
+    <!-- Replace with: <img src="gifs/capture-url.gif" alt="Content Ingestion"> -->
+    <div class="placeholder">
+      <span class="icon">&#128279;</span>
+      <span class="label">capture-url.gif</span>
+    </div>
+  </div>
+
+  <div class="feature-bullets">
+    <span class="feature-chip">Quick text capture</span>
+    <span class="feature-chip">URL ingestion (articles)</span>
+    <span class="feature-chip">YouTube transcript extraction</span>
+    <span class="feature-chip">PDF parsing</span>
+    <span class="feature-chip">AI safety auditor gates all content</span>
+    <span class="feature-chip">Wiki compiler &rarr; structured vault pages</span>
+  </div>
+
+  <aside class="notes">
+    ## OBS Capture Instructions: capture-url.gif
+
+    **Duration:** ~15-20 seconds (longer — this is the wow feature)
+    **Window:** Browser at /capture
+
+    **What to record:**
+    1. Start on the capture page
+    2. Paste a URL of an interesting article or YouTube video
+       - Good examples: a blog post about AI, a tech talk transcript
+    3. Click submit / capture
+    4. Show the processing state (safety audit running, then wiki compilation)
+    5. If there's a "Save as Wiki" chip, click it to show the compiled output
+    6. Optionally: show the resulting wiki page in the vault
+
+    **Tips:**
+    - Pick a URL that processes in under 10 seconds
+    - The safety audit step is a key differentiator — highlight it
+    - If recording YouTube, pick a short video (~5 min) for fast transcript extraction
+    - This is the Knowledge Library (KLIB-1) feature — the Karpathy-style content ingestion
+  </aside>
+</section>
+
+<!-- ==================== SLIDE 7: TASKS ==================== -->
+<section>
+  <h2>Tasks</h2>
+  <h3>Mission control for everything on your plate</h3>
+
+  <div class="gif-slot">
+    <!-- Replace with: <img src="gifs/tasks.gif" alt="Task Management"> -->
+    <div class="placeholder">
+      <span class="icon">&#9745;</span>
+      <span class="label">tasks.gif</span>
+    </div>
+  </div>
+
+  <div class="feature-bullets">
+    <span class="feature-chip">Aggregated from daily notes</span>
+    <span class="feature-chip">Hierarchical task tree</span>
+    <span class="feature-chip">Bi-directional vault sync</span>
+    <span class="feature-chip">Status tracking</span>
+  </div>
+
+  <aside class="notes">
+    ## OBS Capture Instructions: tasks.gif
+
+    **Duration:** ~8-10 seconds
+    **Window:** Browser at /tasks
+
+    **What to record:**
+    1. Navigate to the Tasks page
+    2. Show the task tree with multiple categories/projects
+    3. Expand a few task groups to show hierarchy
+    4. Optionally: toggle a task's status to show interaction
+    5. Scroll to show the breadth of aggregated tasks
+
+    **Tips:**
+    - Make sure there are tasks from multiple daily notes for visual richness
+    - The key story: tasks live in your vault (Markdown checkboxes), SecondBrain aggregates and presents them
+    - Bi-directional sync means checking off here updates the vault file
+  </aside>
+</section>
+
+<!-- ==================== SLIDE 8: CALENDAR ==================== -->
+<section>
+  <h2>Calendar</h2>
+  <h3>Weekly agenda pulled from your vault</h3>
+
+  <div class="gif-slot">
+    <!-- Replace with: <img src="gifs/calendar.gif" alt="Calendar View"> -->
+    <div class="placeholder">
+      <span class="icon">&#128197;</span>
+      <span class="label">calendar.gif</span>
+    </div>
+  </div>
+
+  <div class="feature-bullets">
+    <span class="feature-chip">Weekly view</span>
+    <span class="feature-chip">Events from daily notes</span>
+    <span class="feature-chip">Time-based layout</span>
+  </div>
+
+  <aside class="notes">
+    ## OBS Capture Instructions: calendar.gif
+
+    **Duration:** ~6-8 seconds
+    **Window:** Browser at /calendar
+
+    **What to record:**
+    1. Navigate to the Calendar page
+    2. Show the current week view with events populated
+    3. Scroll or navigate to show event details
+    4. Briefly hover over an event to show any tooltip/detail
+
+    **Tips:**
+    - Make sure the current week has some events for visual impact
+    - If empty, add a few events to your daily notes first
+    - Simple, clean recording — this is a supporting feature
+  </aside>
+</section>
+
+<!-- ==================== SLIDE 9: ADMIN / TRACES ==================== -->
+<section>
+  <h2>Admin &amp; Traces</h2>
+  <h3>Full observability into every LLM call</h3>
+
+  <div class="gif-slot">
+    <!-- Replace with: <img src="gifs/admin-traces.gif" alt="Admin Dashboard"> -->
+    <div class="placeholder">
+      <span class="icon">&#128737;</span>
+      <span class="label">admin-traces.gif</span>
+    </div>
+  </div>
+
+  <div class="feature-bullets">
+    <span class="feature-chip">Cost tracking per provider</span>
+    <span class="feature-chip">Daily cost charts</span>
+    <span class="feature-chip">OpenTelemetry traces</span>
+    <span class="feature-chip">Langfuse integration</span>
+    <span class="feature-chip">Anomaly detection</span>
+    <span class="feature-chip">Sync status</span>
+  </div>
+
+  <aside class="notes">
+    ## OBS Capture Instructions: admin-traces.gif
+
+    **Duration:** ~12-15 seconds
+    **Window:** Browser at /admin
+
+    **What to record:**
+    1. Navigate to the Admin page
+    2. Show the top-level stats: total cost, calls, providers
+    3. Scroll to the daily cost chart
+    4. Scroll to the traces table — show a few recent LLM calls
+    5. Click into a trace to show the detail view (trace_id, latency, tokens)
+    6. Optionally: show the anomaly detection section
+
+    **Tips:**
+    - Make sure there's recent usage data (run a few chat queries first)
+    - The cost tracking and per-call tracing is a strong enterprise story
+    - Mention Langfuse integration for production-grade observability
+    - This is where OTel traces land — TraceEval can consume these for evals
+  </aside>
+</section>
+
+<!-- ==================== SLIDE 10: INSIGHTS ==================== -->
+<section>
+  <h2>Insights</h2>
+  <h3>Analytics and intelligence from your knowledge base</h3>
+
+  <div class="gif-slot">
+    <!-- Replace with: <img src="gifs/insights.gif" alt="Insights Dashboard"> -->
+    <div class="placeholder">
+      <span class="icon">&#128161;</span>
+      <span class="label">insights.gif</span>
+    </div>
+  </div>
+
+  <div class="feature-bullets">
+    <span class="feature-chip">Vault statistics</span>
+    <span class="feature-chip">Note activity trends</span>
+    <span class="feature-chip">Category breakdown</span>
+  </div>
+
+  <aside class="notes">
+    ## OBS Capture Instructions: insights.gif
+
+    **Duration:** ~6-8 seconds
+    **Window:** Browser at /insights
+
+    **What to record:**
+    1. Navigate to the Insights page
+    2. Show the main dashboard with vault stats
+    3. Scroll through any charts or category breakdowns
+    4. Brief — this is a supporting feature
+
+    **Tips:**
+    - Ensure the vault has been indexed recently for fresh stats
+    - Simple recording — show the breadth, not depth
+  </aside>
+</section>
+
+<!-- ==================== SLIDE 11: WHAT'S NEXT ==================== -->
+<section>
+  <h2>What's Next</h2>
+  <h3>Roadmap highlights</h3>
+
+  <div class="roadmap-grid">
+    <div class="roadmap-item">
+      <h4><span class="green">&#10003;</span> Knowledge Library</h4>
+      <p>Web, YouTube, PDF ingestion with AI safety auditor</p>
+    </div>
+    <div class="roadmap-item">
+      <h4><span class="green">&#10003;</span> LLM Tracing</h4>
+      <p>OpenTelemetry + Langfuse full observability</p>
+    </div>
+    <div class="roadmap-item">
+      <h4><span class="amber">&#9679;</span> Capture Connections</h4>
+      <p>Surface related notes after quick capture</p>
+    </div>
+    <div class="roadmap-item">
+      <h4><span class="amber">&#9679;</span> Insights Dashboard</h4>
+      <p>Note explorer, entity browser, vault stats</p>
+    </div>
+    <div class="roadmap-item">
+      <h4>&#9675; Voice Chat</h4>
+      <p>OpenAI Realtime API speech-to-speech</p>
+    </div>
+    <div class="roadmap-item">
+      <h4>&#9675; Knowledge Graph</h4>
+      <p>Entity resolution + navigable concept graph</p>
+    </div>
+  </div>
+
+  <aside class="notes">
+    Closing slide. Highlight completed items (green check) and upcoming work (amber dot).
+    No recording needed.
+  </aside>
+</section>
+
+</div><!-- /slides -->
+</div><!-- /reveal -->
+
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+<script>
+Reveal.initialize({
+  hash: true,
+  slideNumber: true,
+  controls: true,
+  progress: true,
+  center: false,
+  transition: 'fade',
+  transitionSpeed: 'fast',
+  backgroundTransition: 'fade',
+  showNotes: false,
+  width: 1280,
+  height: 720,
+});
+</script>
+</body>
+</html>
