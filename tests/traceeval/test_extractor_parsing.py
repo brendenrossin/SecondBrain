@@ -34,9 +34,7 @@ class TestParseResultComplete:
                     "confidence": 0.9,
                 }
             ],
-            "action_items": [
-                {"text": "Review the paper", "confidence": 0.8, "priority": "high"}
-            ],
+            "action_items": [{"text": "Review the paper", "confidence": 0.8, "priority": "high"}],
         }
         result = _parse_result(raw, note, model_used="gpt-4o-mini")
 
@@ -95,11 +93,7 @@ class TestParseResultComplete:
 
     def test_null_priority_handled(self):
         note = _make_note()
-        raw = {
-            "action_items": [
-                {"text": "Do something", "confidence": 0.7, "priority": None}
-            ]
-        }
+        raw = {"action_items": [{"text": "Do something", "confidence": 0.7, "priority": None}]}
         result = _parse_result(raw, note, model_used="gpt-4o-mini")
 
         assert len(result.action_items) == 1
@@ -156,9 +150,7 @@ class TestExtractBatchResilience:
         meta_a = _parse_result({"summary": "A"}, notes[0], "gpt-4o-mini")
         meta_c = _parse_result({"summary": "C"}, notes[2], "gpt-4o-mini")
 
-        extractor = self._make_extractor(
-            side_effects=[meta_a, RuntimeError("LLM timeout"), meta_c]
-        )
+        extractor = self._make_extractor(side_effects=[meta_a, RuntimeError("LLM timeout"), meta_c])
 
         results = extractor.extract_batch(notes)
 

@@ -3,7 +3,6 @@
 from pathlib import Path
 
 from secondbrain.scripts.task_aggregator import (
-    Task,
     _parse_tasks_from_file,
     aggregate_tasks,
     scan_daily_notes,
@@ -133,9 +132,7 @@ class TestDueDateEdgeCases:
         (tmp_path / "2026-03-01.md").write_text(
             "## Tasks\n### Work\n- [ ] Submit report (due: 2026-03-10)\n"
         )
-        (tmp_path / "2026-03-02.md").write_text(
-            "## Tasks\n### Work\n- [ ] Submit report\n"
-        )
+        (tmp_path / "2026-03-02.md").write_text("## Tasks\n### Work\n- [ ] Submit report\n")
         all_tasks = scan_daily_notes(tmp_path)
         aggregated = aggregate_tasks(all_tasks)
         assert len(aggregated) == 1

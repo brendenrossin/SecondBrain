@@ -1,7 +1,10 @@
 """VectorStore modify failure tests — real bug found by TraceEval."""
 
+import contextlib
+
 import numpy as np
 import pytest
+
 from secondbrain.models import Chunk
 from secondbrain.stores.vector import VectorStore
 
@@ -43,10 +46,8 @@ class TestModifyDistanceFunction:
         assert store.count() == 1
 
         # Attempt to change hnsw:space — should raise but not corrupt data
-        try:
+        with contextlib.suppress(Exception):
             store.collection.modify(metadata={"hnsw:space": "l2"})
-        except Exception:
-            pass  # Expected — we just want to confirm data survived
 
         assert store.count() == 1
         result = store.get_chunk("c1")

@@ -2,22 +2,20 @@
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from secondbrain.indexing.context import ContextGenerator
 from secondbrain.models import Chunk
 
 
 def _make_chunk(**kwargs) -> Chunk:
-    defaults = dict(
-        chunk_id="test-chunk-1",
-        note_path="notes/test.md",
-        note_title="Test Note",
-        heading_path=["Introduction"],
-        chunk_index=0,
-        chunk_text="This is a test chunk of text.",
-        checksum="abc123",
-    )
+    defaults = {
+        "chunk_id": "test-chunk-1",
+        "note_path": "notes/test.md",
+        "note_title": "Test Note",
+        "heading_path": ["Introduction"],
+        "chunk_index": 0,
+        "chunk_text": "This is a test chunk of text.",
+        "checksum": "abc123",
+    }
     defaults.update(kwargs)
     return Chunk(**defaults)
 
@@ -76,9 +74,7 @@ class TestLLMClientModelSelection:
 
     @patch("secondbrain.scripts.llm_client.get_settings")
     def test_anthropic_client_created_when_key_present(self, mock_get_settings):
-        mock_get_settings.return_value = self._mock_settings(
-            anthropic_api_key="sk-ant-test-key"
-        )
+        mock_get_settings.return_value = self._mock_settings(anthropic_api_key="sk-ant-test-key")
 
         from secondbrain.scripts.llm_client import LLMClient
 
