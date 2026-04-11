@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SecondBrain</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/black.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════
+   DESIGN SYSTEM — Cinematic Noir + Warm Gold
+   ═══════════════════════════════════════════════════ */
+:root {
+  --void: #05070e;
+  --deep: #0a0d16;
+  --surface: #0f1320;
+  --elevated: #161b2e;
+  --stroke: rgba(255,255,255,0.06);
+  --text: #f0ece4;
+  --text-dim: rgba(240,236,228,0.5);
+  --text-faint: rgba(240,236,228,0.25);
+  --gold: #e8a849;
+  --gold-dim: rgba(232,168,73,0.15);
+  --gold-glow: rgba(232,168,73,0.4);
+  --ember: #d4634a;
+  --teal: #4ecdc4;
+  --teal-dim: rgba(78,205,196,0.12);
+  --lavender: #a78bfa;
+  --serif: 'Instrument Serif', Georgia, serif;
+  --sans: 'DM Sans', -apple-system, sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+}
+
+/* ═══════════════════════════════════════════════════
+   GLOBAL REVEAL OVERRIDES
+   ═══════════════════════════════════════════════════ */
+.reveal {
+  font-family: var(--sans);
+  color: var(--text);
+  background: var(--void);
+}
+.reveal .slides { text-align: left; }
+.reveal .slides section {
+  padding: 32px 70px;
+  height: 100%;
+  box-sizing: border-box;
+}
+.reveal .slide-number { color: var(--text-faint); font-family: var(--mono); font-size: 12px; }
+.reveal .progress span { background: var(--gold); }
+.reveal .controls { color: var(--gold); }
+.reveal h1, .reveal h2, .reveal h3, .reveal h4 {
+  font-family: var(--serif);
+  text-transform: none;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+}
+.reveal h1 { color: var(--text); font-weight: 400; }
+.reveal h2 { color: var(--text); font-weight: 400; font-size: 1.9em; margin-bottom: 0; }
+.reveal p { font-family: var(--sans); font-size: 0.7em; line-height: 1.7; color: var(--text-dim); font-weight: 300; }
+
+/* ═══════════════════════════════════════════════════
+   ANIMATED BACKGROUND GRAIN + MESH
+   ═══════════════════════════════════════════════════ */
+.reveal .slides section::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 20% 50%, rgba(232,168,73,0.04) 0%, transparent 60%),
+              radial-gradient(ellipse at 80% 20%, rgba(78,205,196,0.03) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+}
+.reveal .slides section > * { position: relative; z-index: 1; }
+
+/* Film grain overlay */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.5;
+}
+
+/* ═══════════════════════════════════════════════════
+   COMMON ELEMENTS
+   ═══════════════════════════════════════════════════ */
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 0.42em;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 6px;
+  display: block;
+}
+
+.tagline {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 0.85em;
+  color: var(--text-dim);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+.divider {
+  width: 60px;
+  height: 1px;
+  background: linear-gradient(90deg, var(--gold), transparent);
+  margin: 16px 0;
+}
+
+/* GIF container — premium feel */
+.gif-slot {
+  width: 100%;
+  max-width: 820px;
+  height: 340px;
+  margin: 14px auto 0;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--stroke), 0 20px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.03);
+}
+.gif-slot::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(232,168,73,0.2), transparent 40%, transparent 60%, rgba(78,205,196,0.15));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+.gif-slot img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 14px;
+}
+.gif-slot .placeholder-inner {
+  text-align: center;
+  opacity: 0.2;
+}
+.gif-slot .placeholder-inner .ph-icon {
+  font-size: 2.5em;
+  display: block;
+  margin-bottom: 8px;
+  filter: grayscale(1);
+}
+.gif-slot .placeholder-inner .ph-label {
+  font-family: var(--mono);
+  font-size: 0.5em;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+/* Stat numbers */
+.stat-row {
+  display: flex;
+  gap: 48px;
+  margin-top: 28px;
+}
+.stat-item .stat-number {
+  font-family: var(--serif);
+  font-size: 2.4em;
+  color: var(--gold);
+  line-height: 1;
+}
+.stat-item .stat-label {
+  font-family: var(--mono);
+  font-size: 0.4em;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-top: 4px;
+}
+
+/* ═══════════════════════════════════════════════════
+   TITLE SLIDE
+   ═══════════════════════════════════════════════════ */
+.slide-title {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+.slide-title .logo-mark {
+  font-family: var(--serif);
+  font-size: 5em;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  background: linear-gradient(135deg, var(--text) 30%, var(--gold));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.slide-title .logo-sub {
+  font-family: var(--sans);
+  font-size: 0.75em;
+  font-weight: 300;
+  color: var(--text-dim);
+  margin-top: 16px;
+  letter-spacing: 0.04em;
+}
+.slide-title .logo-pills {
+  display: flex;
+  gap: 12px;
+  margin-top: 36px;
+}
+.slide-title .logo-pill {
+  font-family: var(--mono);
+  font-size: 0.38em;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 6px 16px;
+  border: 1px solid var(--stroke);
+  border-radius: 100px;
+  color: var(--text-faint);
+  background: rgba(255,255,255,0.02);
+}
+/* Animated glow behind title */
+.slide-title::after {
+  content: '';
+  position: absolute;
+  width: 500px;
+  height: 500px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--gold-dim) 0%, transparent 70%);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation: pulse-glow 4s ease-in-out infinite;
+  z-index: 0;
+}
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.4; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 0.7; transform: translate(-50%, -50%) scale(1.15); }
+}
+
+/* ═══════════════════════════════════════════════════
+   ARCHITECTURE SLIDE — Animated SVG
+   ═══════════════════════════════════════════════════ */
+.arch-canvas {
+  position: relative;
+  width: 100%;
+  height: 380px;
+  margin-top: 10px;
+}
+.arch-canvas svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.arch-node {
+  position: absolute;
+  text-align: center;
+  z-index: 2;
+}
+.arch-node .node-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3em;
+  margin: 0 auto 8px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+}
+.arch-node .node-label {
+  font-family: var(--sans);
+  font-size: 0.5em;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+}
+.arch-node .node-detail {
+  font-family: var(--mono);
+  font-size: 0.32em;
+  color: var(--text-faint);
+  margin-top: 2px;
+}
+
+/* Animated flow lines */
+@keyframes flow-dash {
+  to { stroke-dashoffset: -20; }
+}
+.flow-line {
+  stroke-dasharray: 6 4;
+  animation: flow-dash 1.5s linear infinite;
+}
+.flow-line-slow {
+  stroke-dasharray: 8 6;
+  animation: flow-dash 3s linear infinite;
+}
+
+/* Orbiting particles on the architecture */
+@keyframes orbit-particle {
+  0% { offset-distance: 0%; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { offset-distance: 100%; opacity: 0; }
+}
+
+/* ═══════════════════════════════════════════════════
+   FEATURE SLIDES
+   ═══════════════════════════════════════════════════ */
+.feature-slide {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  height: 100%;
+}
+.feature-header { margin-bottom: 4px; }
+.feature-footer {
+  display: flex;
+  gap: 20px;
+  padding-top: 10px;
+  border-top: 1px solid var(--stroke);
+  margin-top: auto;
+}
+.feature-footer .ff-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.feature-footer .ff-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.feature-footer .ff-text {
+  font-family: var(--sans);
+  font-size: 0.48em;
+  color: var(--text-dim);
+  font-weight: 300;
+}
+
+/* ═══════════════════════════════════════════════════
+   ROADMAP SLIDE — Timeline Style
+   ═══════════════════════════════════════════════════ */
+.timeline {
+  position: relative;
+  margin-top: 32px;
+  padding-left: 40px;
+}
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 12px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: linear-gradient(180deg, var(--gold), var(--gold-dim), var(--stroke));
+}
+.timeline-item {
+  position: relative;
+  padding-bottom: 28px;
+}
+.timeline-item::before {
+  content: '';
+  position: absolute;
+  left: -33px;
+  top: 6px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--gold);
+  background: var(--deep);
+}
+.timeline-item.done::before {
+  background: var(--gold);
+  box-shadow: 0 0 12px var(--gold-glow);
+}
+.timeline-item.next::before {
+  border-color: var(--teal);
+  box-shadow: 0 0 12px rgba(78,205,196,0.3);
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%, 100% { box-shadow: 0 0 8px rgba(78,205,196,0.2); }
+  50% { box-shadow: 0 0 16px rgba(78,205,196,0.5); }
+}
+.timeline-item.future::before { border-color: var(--text-faint); }
+.timeline-title {
+  font-family: var(--sans);
+  font-size: 0.65em;
+  font-weight: 500;
+  color: var(--text);
+}
+.timeline-desc {
+  font-family: var(--sans);
+  font-size: 0.48em;
+  color: var(--text-faint);
+  margin-top: 2px;
+  font-weight: 300;
+}
+.timeline-badge {
+  font-family: var(--mono);
+  font-size: 0.36em;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-left: 8px;
+}
+.badge-shipped { background: rgba(232,168,73,0.15); color: var(--gold); }
+.badge-next { background: var(--teal-dim); color: var(--teal); }
+</style>
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+
+<!-- ═══════════════════════════ SLIDE 1: TITLE ═══════════════════════════ -->
+<section class="slide-title">
+  <div class="logo-mark">SecondBrain</div>
+  <div class="logo-sub">Your knowledge, searchable by meaning</div>
+  <div class="logo-pills">
+    <span class="logo-pill">Local-first</span>
+    <span class="logo-pill">Privacy-preserving</span>
+    <span class="logo-pill">Obsidian-native</span>
+  </div>
+  <aside class="notes">
+    Opening slide. No recording needed.
+    Press 'S' to open speaker notes view with capture instructions for each slide.
+  </aside>
+</section>
+
+<!-- ═══════════════════════════ SLIDE 2: THE PROBLEM ═══════════════════════════ -->
+<section style="display: grid; grid-template-rows: 1fr auto; height: 100%;">
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-content: center;">
+    <!-- Left: The headline -->
+    <div>
+      <span class="eyebrow">The Problem</span>
+      <h2 style="font-size: 1.8em; line-height: 1.12;">Your notes are worth more than keyword search lets you find.</h2>
+      <div class="divider"></div>
+      <p style="font-size: 0.55em; margin: 0; max-width: 420px;">
+        SecondBrain understands <em style="color: var(--gold);">what your notes mean</em> &mdash;
+        not just what they contain.
+      </p>
+    </div>
+
+    <!-- Right: The solution highlights -->
+    <div>
+      <span class="eyebrow">The Solution</span>
+      <div style="display: flex; flex-direction: column; gap: 18px; margin-top: 16px;">
+        <div style="border-left: 2px solid var(--gold); padding-left: 16px;">
+          <div style="font-family: var(--sans); font-size: 0.58em; font-weight: 500; color: var(--text);">Semantic Search</div>
+          <div style="font-family: var(--sans); font-size: 0.46em; color: var(--text-dim); font-weight: 300; margin-top: 2px;">Ask in natural language, get cited answers from your vault.</div>
+        </div>
+        <div style="border-left: 2px solid var(--teal); padding-left: 16px;">
+          <div style="font-family: var(--sans); font-size: 0.58em; font-weight: 500; color: var(--text);">Knowledge Ingestion</div>
+          <div style="font-family: var(--sans); font-size: 0.46em; color: var(--text-dim); font-weight: 300; margin-top: 2px;">Paste a URL &mdash; articles, YouTube, PDFs become wiki pages.</div>
+        </div>
+        <div style="border-left: 2px solid var(--ember); padding-left: 16px;">
+          <div style="font-family: var(--sans); font-size: 0.58em; font-weight: 500; color: var(--text);">Safety-Gated AI</div>
+          <div style="font-family: var(--sans); font-size: 0.46em; color: var(--text-dim); font-weight: 300; margin-top: 2px;">Every external document passes an AI safety auditor first.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats at bottom, in the grid flow — no overlap -->
+  <div class="stat-row" style="margin-top: 0; padding-bottom: 8px;">
+    <div class="stat-item">
+      <div class="stat-number">8</div>
+      <div class="stat-label">AI integration points</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-number">&lt;2s</div>
+      <div class="stat-label">Semantic search</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-number">100%</div>
+      <div class="stat-label">Local &amp; private</div>
+    </div>
+  </div>
+
+  <aside class="notes">
+    Two-column layout: left = the problem, right = three solution highlights.
+    Stats at the bottom. Linger on "8 AI integration points" and "100% local."
+  </aside>
+</section>
+
+<!-- ═══════════════════════════ SLIDE 3: ARCHITECTURE ═══════════════════════════ -->
+<section>
+  <span class="eyebrow">How It Works</span>
+  <h2>A living pipeline for your knowledge</h2>
+
+  <div class="arch-canvas">
+    <svg viewBox="0 0 1140 420" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <!-- Flow paths with animation -->
+      <!-- Vault → Index -->
+      <path d="M 160 100 C 260 100, 260 100, 330 100" class="flow-line" stroke="var(--gold)" stroke-width="1.5" fill="none" opacity="0.6"/>
+      <!-- Index → Search -->
+      <path d="M 480 100 C 560 100, 560 100, 620 100" class="flow-line" stroke="var(--gold)" stroke-width="1.5" fill="none" opacity="0.6"/>
+      <!-- Search → Intelligence -->
+      <path d="M 770 100 C 860 100, 860 100, 920 100" class="flow-line" stroke="var(--gold)" stroke-width="1.5" fill="none" opacity="0.6"/>
+
+      <!-- Vault → Ingest (downward) -->
+      <path d="M 100 150 C 100 210, 100 210, 100 260" class="flow-line-slow" stroke="var(--teal)" stroke-width="1" fill="none" opacity="0.4"/>
+      <!-- Ingest → Safety -->
+      <path d="M 160 310 C 260 310, 260 310, 330 310" class="flow-line-slow" stroke="var(--teal)" stroke-width="1" fill="none" opacity="0.4"/>
+      <!-- Safety → Wiki -->
+      <path d="M 480 310 C 560 310, 560 310, 620 310" class="flow-line-slow" stroke="var(--teal)" stroke-width="1" fill="none" opacity="0.4"/>
+      <!-- Wiki → back to Vault (curved) -->
+      <path d="M 770 310 C 870 310, 870 360, 780 380 C 500 400, 200 380, 100 310 C 80 295, 80 260, 100 245" class="flow-line-slow" stroke="var(--teal)" stroke-width="1" fill="none" opacity="0.25"/>
+
+      <!-- Glow circles at nodes -->
+      <circle cx="100" cy="100" r="40" fill="url(#glow-gold)" opacity="0.15"/>
+      <circle cx="400" cy="100" r="35" fill="url(#glow-gold)" opacity="0.1"/>
+      <circle cx="695" cy="100" r="35" fill="url(#glow-gold)" opacity="0.1"/>
+      <circle cx="990" cy="100" r="40" fill="url(#glow-gold)" opacity="0.15"/>
+
+      <!-- Gradient defs -->
+      <defs>
+        <radialGradient id="glow-gold"><stop offset="0%" stop-color="var(--gold)" stop-opacity="1"/><stop offset="100%" stop-color="var(--gold)" stop-opacity="0"/></radialGradient>
+        <radialGradient id="glow-teal"><stop offset="0%" stop-color="var(--teal)" stop-opacity="1"/><stop offset="100%" stop-color="var(--teal)" stop-opacity="0"/></radialGradient>
+      </defs>
+    </svg>
+
+    <!-- Top row: Main retrieval pipeline -->
+    <div class="arch-node" style="left: 60px; top: 50px;">
+      <div class="node-icon" style="background: linear-gradient(135deg, #2d1f4e, #1a1230); border: 1px solid rgba(167,139,250,0.3);">
+        <span>&#128218;</span>
+      </div>
+      <div class="node-label">Obsidian Vault</div>
+      <div class="node-detail">Source of truth</div>
+    </div>
+
+    <div class="arch-node" style="left: 330px; top: 50px;">
+      <div class="node-icon" style="background: linear-gradient(135deg, var(--elevated), var(--surface)); border: 1px solid var(--stroke);">
+        <span>&#9881;</span>
+      </div>
+      <div class="node-label">Index &amp; Embed</div>
+      <div class="node-detail">Contextual chunking</div>
+    </div>
+
+    <div class="arch-node" style="left: 625px; top: 50px;">
+      <div class="node-icon" style="background: linear-gradient(135deg, var(--elevated), var(--surface)); border: 1px solid var(--stroke);">
+        <span>&#128269;</span>
+      </div>
+      <div class="node-label">Hybrid Search</div>
+      <div class="node-detail">BM25 + Vectors</div>
+    </div>
+
+    <div class="arch-node" style="left: 920px; top: 50px;">
+      <div class="node-icon" style="background: linear-gradient(135deg, #2e1f0f, #1a1510); border: 1px solid rgba(232,168,73,0.3);">
+        <span>&#10024;</span>
+      </div>
+      <div class="node-label">Intelligence</div>
+      <div class="node-detail">Rerank &bull; Answer &bull; Brief</div>
+    </div>
+
+    <!-- Bottom row: Ingestion pipeline -->
+    <div class="arch-node" style="left: 60px; top: 260px;">
+      <div class="node-icon" style="background: linear-gradient(135deg, #0f2520, #0a1a16); border: 1px solid rgba(78,205,196,0.3);">
+        <span>&#128279;</span>
+      </div>
+      <div class="node-label">Ingest</div>
+      <div class="node-detail">Web &bull; YouTube &bull; PDF</div>
+    </div>
+
+    <div class="arch-node" style="left: 340px; top: 260px;">
+      <div class="node-icon" style="background: linear-gradient(135deg, #2a1215, #1a0d0f); border: 1px solid rgba(212,99,74,0.3);">
+        <span>&#128737;</span>
+      </div>
+      <div class="node-label">Safety Auditor</div>
+      <div class="node-detail">AI content review</div>
+    </div>
+
+    <div class="arch-node" style="left: 630px; top: 260px;">
+      <div class="node-icon" style="background: linear-gradient(135deg, #0f2520, #0a1a16); border: 1px solid rgba(78,205,196,0.3);">
+        <span>&#128214;</span>
+      </div>
+      <div class="node-label">Wiki Compiler</div>
+      <div class="node-detail">Structured knowledge</div>
+    </div>
+
+    <!-- Right side: Observability (small, subtle) -->
+    <div class="arch-node" style="right: 30px; bottom: 30px; opacity: 0.5;">
+      <div class="node-label" style="font-size: 0.4em; color: var(--text-faint);">Traced with OpenTelemetry + Langfuse</div>
+    </div>
+  </div>
+
+  <aside class="notes">
+    Walk through the two pipelines:
+    - Gold path (top): Your question → index → hybrid search → AI reranking → cited answer
+    - Teal path (bottom): External URL → safety audit → wiki compilation → back into vault
+    Both pipelines are fully traced with OpenTelemetry.
+  </aside>
+</section>
+
+<!-- ═══════════════════════════ SLIDE 4: MORNING BRIEFING ═══════════════════════════ -->
+<section class="feature-slide">
+  <div class="feature-header">
+    <span class="eyebrow">Home</span>
+    <h2>Your morning briefing,<br>written by your vault.</h2>
+    <div class="tagline">Every day starts with what matters most &mdash; surfaced automatically.</div>
+  </div>
+
+  <div class="gif-slot">
+    <!-- Replace with: <img src="gifs/home-briefing.gif" alt="Morning Briefing"> -->
+    <div class="placeholder-inner">
+      <span class="ph-icon">&#9728;&#65039;</span>
+      <span class="ph-label">home-briefing.gif</span>
+    </div>
+  </div>
+
+  <div class="feature-footer">
+    <div class="ff-item"><div class="ff-dot" style="background: var(--gold);"></div><span class="ff-text">AI-synthesized daily summary</span></div>
+    <div class="ff-item"><div class="ff-dot" style="background: var(--ember);"></div><span class="ff-text">Overdue task escalation</span></div>
+    <div class="ff-item"><div class="ff-dot" style="background: var(--teal);"></div><span class="ff-text">Today's agenda</span></div>
+  </div>
+
+  <aside class="notes">
+    ## OBS Capture: home-briefing.gif
+    **Duration:** ~8-10s | **URL:** http://localhost:7860/ | **Res:** 1280x720
+
+    1. Start on home — briefing should be loaded
+    2. Slow scroll through: daily summary, overdue tasks, events, recent activity
+    3. Pause on each section for readability
+    Tip: Ensure tasks + events exist for visual richness. Smooth scroll only.
+  </aside>
+</section>
+
+<!-- ═══════════════════════════ SLIDE 5: CHAT ═══════════════════════════ -->
+<section class="feature-slide">
+  <div class="feature-header">
+    <span class="eyebrow">Chat</span>
+    <h2>Ask anything.<br>Get answers <em style="color: var(--gold);">from your own notes.</em></h2>
+    <div class="tagline">Every response is grounded in your vault, with citations.</div>
+  </div>
+
+  <div class="gif-slot">
+    <!-- Replace with: <img src="gifs/chat.gif" alt="Chat Interface"> -->
+    <div class="placeholder-inner">
+      <span class="ph-icon">&#128172;</span>
+      <span class="ph-label">chat.gif</span>
+    </div>
+  </div>
+
+  <div class="feature-footer">
+    <div class="ff-item"><div class="ff-dot" style="background: var(--gold);"></div><span class="ff-text">Hybrid retrieval + reranking</span></div>
+    <div class="ff-item"><div class="ff-dot" style="background: var(--lavender);"></div><span class="ff-text">Cited sources</span></div>
+    <div class="ff-item"><div class="ff-dot" style="background: var(--teal);"></div><span class="ff-text">Conversation memory</span></div>
+  </div>
+
+  <aside class="notes">
+    ## OBS Capture: chat.gif
+    **Duration:** ~12-15s | **URL:** /chat
+
+    1. Start empty (New Conversation)
+    2. Type a vault-answerable question, e.g. "What are my current project priorities?"
+    3. Let the response stream in — this looks impressive
+    4. Scroll to show cited sources
+    Tip: Pick a question that yields 2-3 citations.
+  </aside>
+</section>
+
+<!-- ═══════════════════════════ SLIDE 6: KNOWLEDGE LIBRARY ═══════════════════════════ -->
+<section class="feature-slide">
+  <div class="feature-header">
+    <span class="eyebrow">Knowledge Library</span>
+    <h2>Paste a URL.<br>Get a wiki page.</h2>
+    <div class="tagline">Articles, YouTube talks, PDFs &mdash; ingested, safety-audited, and compiled into your vault.</div>
+  </div>
+
+  <div class="gif-slot">
+    <!-- Replace with: <img src="gifs/capture-url.gif" alt="Content Ingestion"> -->
+    <div class="placeholder-inner">
+      <span class="ph-icon">&#128279;</span>
+      <span class="ph-label">capture-url.gif</span>
+    </div>
+  </div>
+
+  <div class="feature-footer">
+    <div class="ff-item"><div class="ff-dot" style="background: var(--ember);"></div><span class="ff-text">AI safety audit gates every document</span></div>
+    <div class="ff-item"><div class="ff-dot" style="background: var(--gold);"></div><span class="ff-text">LLM-compiled wiki pages</span></div>
+    <div class="ff-item"><div class="ff-dot" style="background: var(--teal);"></div><span class="ff-text">Searchable immediately</span></div>
+  </div>
+
+  <aside class="notes">
+    ## OBS Capture: capture-url.gif
+    **Duration:** ~15-20s | **URL:** /capture
+
+    1. Paste a URL (interesting article or YouTube video)
+    2. Submit — show the safety audit + wiki compilation pipeline
+    3. Show "Save as Wiki" chip if available
+    Tip: This is the wow feature. The safety audit is a key differentiator. Pick a URL under 10s processing.
+  </aside>
+</section>
+
+<!-- ═══════════════════════════ SLIDE 7: TASKS ═══════════════════════════ -->
+<section class="feature-slide">
+  <div class="feature-header">
+    <span class="eyebrow">Tasks</span>
+    <h2>Your vault is your task manager.</h2>
+    <div class="tagline">Checkboxes in Markdown, aggregated into a live dashboard. Changes sync both ways.</div>
+  </div>
+
+  <div class="gif-slot">
+    <!-- Replace with: <img src="gifs/tasks.gif" alt="Task Management"> -->
+    <div class="placeholder-inner">
+      <span class="ph-icon">&#9745;&#65039;</span>
+      <span class="ph-label">tasks.gif</span>
+    </div>
+  </div>
+
+  <div class="feature-footer">
+    <div class="ff-item"><div class="ff-dot" style="background: var(--gold);"></div><span class="ff-text">Aggregated from daily notes</span></div>
+    <div class="ff-item"><div class="ff-dot" style="background: var(--teal);"></div><span class="ff-text">Bi-directional vault sync</span></div>
+  </div>
+
+  <aside class="notes">
+    ## OBS Capture: tasks.gif
+    **Duration:** ~8-10s | **URL:** /tasks
+
+    1. Show task tree with multiple categories
+    2. Expand a few groups, toggle a task status
+    3. Scroll to show breadth
+    Key story: tasks live in Markdown, SecondBrain aggregates them.
+  </aside>
+</section>
+
+<!-- ═══════════════════════════ SLIDE 8: CALENDAR ═══════════════════════════ -->
+<section class="feature-slide">
+  <div class="feature-header">
+    <span class="eyebrow">Calendar</span>
+    <h2>Your week, at a glance.</h2>
+    <div class="tagline">Events extracted from your daily notes into a clean weekly view.</div>
+  </div>
+
+  <div class="gif-slot">
+    <!-- Replace with: <img src="gifs/calendar.gif" alt="Calendar View"> -->
+    <div class="placeholder-inner">
+      <span class="ph-icon">&#128197;</span>
+      <span class="ph-label">calendar.gif</span>
+    </div>
+  </div>
+
+  <div class="feature-footer">
+    <div class="ff-item"><div class="ff-dot" style="background: var(--gold);"></div><span class="ff-text">Parsed from vault notes</span></div>
+    <div class="ff-item"><div class="ff-dot" style="background: var(--lavender);"></div><span class="ff-text">Weekly agenda layout</span></div>
+  </div>
+
+  <aside class="notes">
+    ## OBS Capture: calendar.gif
+    **Duration:** ~6-8s | **URL:** /calendar
+
+    1. Show current week with events
+    2. Brief scroll/hover
+    Tip: Add events to daily notes beforehand if empty.
+  </aside>
+</section>
+
+<!-- ═══════════════════════════ SLIDE 9: OBSERVABILITY ═══════════════════════════ -->
+<section class="feature-slide">
+  <div class="feature-header">
+    <span class="eyebrow">Observability</span>
+    <h2>Every AI call, traced and costed.</h2>
+    <div class="tagline">OpenTelemetry spans, Langfuse integration, anomaly detection &mdash; production-grade from day one.</div>
+  </div>
+
+  <div class="gif-slot">
+    <!-- Replace with: <img src="gifs/admin-traces.gif" alt="Admin Dashboard"> -->
+    <div class="placeholder-inner">
+      <span class="ph-icon">&#128737;&#65039;</span>
+      <span class="ph-label">admin-traces.gif</span>
+    </div>
+  </div>
+
+  <div class="feature-footer">
+    <div class="ff-item"><div class="ff-dot" style="background: var(--gold);"></div><span class="ff-text">Per-call cost tracking</span></div>
+    <div class="ff-item"><div class="ff-dot" style="background: var(--ember);"></div><span class="ff-text">Anomaly detection</span></div>
+    <div class="ff-item"><div class="ff-dot" style="background: var(--teal);"></div><span class="ff-text">OTel + Langfuse traces</span></div>
+  </div>
+
+  <aside class="notes">
+    ## OBS Capture: admin-traces.gif
+    **Duration:** ~12-15s | **URL:** /admin
+
+    1. Show top-level stats (cost, calls, providers)
+    2. Scroll to daily cost chart
+    3. Show traces table, click into a trace detail
+    Tip: Run a few chat queries first for fresh data.
+  </aside>
+</section>
+
+<!-- ═══════════════════════════ SLIDE 10: INSIGHTS ═══════════════════════════ -->
+<section class="feature-slide">
+  <div class="feature-header">
+    <span class="eyebrow">Insights</span>
+    <h2>See your knowledge base from above.</h2>
+    <div class="tagline">Vault statistics, activity trends, and category intelligence.</div>
+  </div>
+
+  <div class="gif-slot">
+    <!-- Replace with: <img src="gifs/insights.gif" alt="Insights Dashboard"> -->
+    <div class="placeholder-inner">
+      <span class="ph-icon">&#128161;</span>
+      <span class="ph-label">insights.gif</span>
+    </div>
+  </div>
+
+  <div class="feature-footer">
+    <div class="ff-item"><div class="ff-dot" style="background: var(--gold);"></div><span class="ff-text">Vault analytics</span></div>
+    <div class="ff-item"><div class="ff-dot" style="background: var(--lavender);"></div><span class="ff-text">Activity trends</span></div>
+  </div>
+
+  <aside class="notes">
+    ## OBS Capture: insights.gif
+    **Duration:** ~6-8s | **URL:** /insights
+
+    1. Show main dashboard
+    2. Scroll through charts/breakdowns
+    Tip: Simple recording — supporting feature.
+  </aside>
+</section>
+
+<!-- ═══════════════════════════ SLIDE 11: ROADMAP ═══════════════════════════ -->
+<section>
+  <span class="eyebrow">What's Next</span>
+  <h2>The road ahead</h2>
+  <div class="divider"></div>
+
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0 60px;">
+    <div class="timeline">
+      <div class="timeline-item done">
+        <div class="timeline-title">Knowledge Library <span class="timeline-badge badge-shipped">Shipped</span></div>
+        <div class="timeline-desc">Web, YouTube, PDF ingestion with AI safety auditor</div>
+      </div>
+      <div class="timeline-item done">
+        <div class="timeline-title">LLM Tracing <span class="timeline-badge badge-shipped">Shipped</span></div>
+        <div class="timeline-desc">OpenTelemetry + Langfuse full observability</div>
+      </div>
+      <div class="timeline-item next">
+        <div class="timeline-title">Capture Connections <span class="timeline-badge badge-next">Next</span></div>
+        <div class="timeline-desc">Surface related notes after quick capture</div>
+      </div>
+    </div>
+    <div class="timeline">
+      <div class="timeline-item next">
+        <div class="timeline-title">Insights Dashboard <span class="timeline-badge badge-next">Next</span></div>
+        <div class="timeline-desc">Note explorer, entity browser, vault statistics</div>
+      </div>
+      <div class="timeline-item future">
+        <div class="timeline-title">Voice Chat</div>
+        <div class="timeline-desc">OpenAI Realtime API speech-to-speech</div>
+      </div>
+      <div class="timeline-item future">
+        <div class="timeline-title">Knowledge Graph</div>
+        <div class="timeline-desc">Entity resolution + navigable concept map</div>
+      </div>
+    </div>
+  </div>
+
+  <aside class="notes">
+    Closing. Shipped items glow gold. "Next" items pulse teal. Future items are dimmed.
+  </aside>
+</section>
+
+</div><!-- /slides -->
+</div><!-- /reveal -->
+
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+<script>
+Reveal.initialize({
+  hash: true,
+  slideNumber: 'c/t',
+  controls: true,
+  progress: true,
+  center: false,
+  transition: 'fade',
+  transitionSpeed: 'default',
+  backgroundTransition: 'fade',
+  showNotes: false,
+  width: 1280,
+  height: 720,
+});
+</script>
+</body>
+</html>

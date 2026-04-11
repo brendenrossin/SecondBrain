@@ -1,42 +1,102 @@
-# SecondBrain
+<h1 align="center">SecondBrain</h1>
 
-A personal semantic memory system that turns a folder of Markdown notes into a searchable, queryable knowledge base with task management, calendar, and an LLM-powered chat interface.
+<p align="center">
+  <strong>AI-powered semantic memory for your Obsidian vault.</strong><br>
+  <sub>Ask questions in plain English. Get answers grounded in your own notes, with citations.</sub>
+</p>
 
-Works with any directory of `.md` files — an Obsidian vault, a folder of plain Markdown, or any note-taking setup that uses text files. No proprietary formats, no lock-in.
+<p align="center">
+  <img src="https://img.shields.io/badge/python-3.12-blue?style=flat-square" alt="Python 3.12">
+  <img src="https://img.shields.io/badge/frontend-Next.js%2015-black?style=flat-square" alt="Next.js 15">
+  <img src="https://img.shields.io/badge/search-hybrid%20RAG-gold?style=flat-square" alt="Hybrid RAG">
+  <img src="https://img.shields.io/badge/privacy-100%25%20local-green?style=flat-square" alt="100% Local">
+  <img src="https://img.shields.io/badge/tests-669%20passing-brightgreen?style=flat-square" alt="669 Tests">
+</p>
 
-## Key Principles
+---
 
-- **Local-first, privacy-preserving** — all data stays on your machine
-- **Your notes are the source of truth** — no application state outside your Markdown files
-- **Suggestion-only** — the system recommends, never acts autonomously
-- **Simple over clever** — maintainable systems over fragile ones
+You take notes every day -- daily journals, project plans, meeting notes, ideas. But when you need that one insight from three months ago, you're guessing at filenames and keywords.
 
-## Features
+SecondBrain turns your Obsidian vault into a **searchable knowledge base that understands meaning**, not just words. It combines hybrid semantic search, LLM synthesis, and AI-powered content ingestion into a local-first system where your vault remains the single source of truth.
 
-- **Hybrid search** — BM25 lexical + vector similarity with reciprocal rank fusion
-- **LLM reranking + synthesis** — Claude, GPT-4o-mini, or local Ollama for answer generation with citations
-- **Task management** — aggregates tasks from daily notes, three-value status (open/in-progress/done), due dates, category reassignment — all from the browser
-- **Calendar** — weekly agenda with events, overdue tracking, and due date badges
-- **Metadata extraction** — summaries, entities, key phrases, action items, deadlines
-- **Morning briefing** — overdue tasks, due today, aging follow-ups, yesterday's context
-- **Quick capture** — get thoughts into the system in seconds from your phone
-- **Next.js dashboard** — dark "mission control" UI with chat, tasks, calendar, admin, and capture pages
-- **Dual LLM providers** — Anthropic Claude, OpenAI API, or local Ollama
-- **Secure remote access** — Tailscale VPN for private mobile access
-- **LLM cost tracking** — per-call token and cost logging with admin dashboard
+Works with any directory of `.md` files -- Obsidian, plain Markdown, or any text-based note system. No proprietary formats, no lock-in.
 
-## Tech Stack
+## Highlights
+
+**8 AI integration points** across the system, all observable and cost-tracked:
+
+| Feature | What it does |
+|---------|-------------|
+| **Semantic Chat** | Ask questions in natural language, get cited answers synthesized from your notes |
+| **Morning Briefing** | Daily intelligence summary -- overdue tasks, today's events, recent vault activity |
+| **Knowledge Library** | Paste a URL (article, YouTube, PDF) and get a structured wiki page, reviewed by an AI safety auditor |
+| **Hybrid Search** | BM25 lexical + vector embeddings + LLM reranking for precision |
+| **Task Dashboard** | Checkboxes across daily notes aggregated into a live dashboard with bi-directional sync |
+| **Calendar** | Weekly agenda extracted from vault events with overdue tracking |
+| **Full Observability** | Every AI call traced with OpenTelemetry + Langfuse, per-call cost tracking, anomaly detection |
+| **100% Local** | All data on your machine. Nothing leaves without your approval. |
+
+## Architecture
+
+```
+                        ┌─────────────────────────────┐
+                        │       Obsidian Vault         │
+                        │   (Markdown + Frontmatter)   │
+                        └──────────┬──────────────────┘
+                                   │
+                  ┌────────────────┼────────────────┐
+                  ▼                                  ▼
+        ┌─────────────────┐               ┌─────────────────┐
+        │  Index & Embed  │               │     Ingest      │
+        │ Contextual      │               │ Web, YouTube,   │
+        │ chunking        │               │ PDF extraction   │
+        └────────┬────────┘               └────────┬────────┘
+                 ▼                                  ▼
+        ┌─────────────────┐               ┌─────────────────┐
+        │  Hybrid Search  │               │  Safety Auditor │
+        │ BM25 + Vectors  │               │  AI review gate │
+        └────────┬────────┘               └────────┬────────┘
+                 ▼                                  ▼
+        ┌─────────────────┐               ┌─────────────────┐
+        │  Intelligence   │               │  Wiki Compiler  │
+        │ Rerank, Answer, │               │  Structured     │
+        │ Briefing        │               │  vault pages    │
+        └─────────────────┘               └────────┬────────┘
+                                                   ▼
+                                            Back to Vault
+```
+
+Two pipelines:
+- **Retrieval** (left): Your question goes through hybrid search, LLM reranking, and answer synthesis with citations
+- **Ingestion** (right): External content is extracted, safety-audited, compiled into a wiki page, and stored back in your vault
+
+## The Stack
 
 | Layer | Technology |
 |-------|-----------|
 | **Backend** | Python 3.12+, FastAPI |
 | **Frontend** | Next.js 15, React 19, Tailwind CSS v4, TypeScript |
-| **Documents** | SQLite (WAL mode) |
 | **Vectors** | ChromaDB (local) |
-| **Lexical search** | SQLite FTS5 |
+| **Lexical Search** | SQLite FTS5 |
 | **Embeddings** | BAAI/bge-base-en-v1.5 (local) or OpenAI text-embedding-3-small |
-| **LLM** | Anthropic Claude, OpenAI GPT-4o-mini, or local Ollama |
-| **Package management** | uv (Python), npm (frontend) |
+| **LLM** | Anthropic Claude, OpenAI, or local Ollama |
+| **Observability** | OpenTelemetry + Langfuse |
+| **Infrastructure** | macOS launchd services, Tailscale remote access |
+
+## Pages
+
+| Page | Description |
+|------|------------|
+| **Home** | Morning briefing -- AI-synthesized daily summary, overdue tasks, upcoming events |
+| **Chat** | Semantic Q&A with hybrid retrieval, LLM reranking, cited sources, conversation history |
+| **Capture** | Quick notes + URL ingestion (Knowledge Library) with safety audit pipeline |
+| **Tasks** | Aggregated task tree from daily notes, bi-directional vault sync, category management |
+| **Calendar** | Weekly agenda extracted from vault events with overdue tracking |
+| **Admin** | Cost tracking, LLM traces, anomaly detection, sync status |
+| **Insights** | Vault analytics, activity trends, category breakdown |
+| **Settings** | Category management and configuration |
+
+---
 
 ## Quick Start
 
@@ -45,252 +105,168 @@ Works with any directory of `.md` files — an Obsidian vault, a folder of plain
 - Python 3.12+
 - [uv](https://docs.astral.sh/uv/) (Python package manager)
 - Node.js 18+ and npm (for the frontend)
-- A folder of Markdown notes (Obsidian vault, plain `.md` files, or any Markdown-based note system)
+- A folder of Markdown notes
 
-### Setup
+### Install & Run
 
 ```bash
-# Clone the repo
+# Clone
 git clone https://github.com/brendenrossin/SecondBrain.git
 cd SecondBrain
 
-# Install Python dependencies
-make install
+# Backend
+make install          # Install Python dependencies
+cp .env.example .env  # Configure vault path and API keys
+make dev              # Start API server at localhost:8000
 
-# Install frontend dependencies
+# Frontend
 make frontend-install
+make frontend-dev     # Start Next.js at localhost:7860
 
-# Copy and configure environment variables
-cp .env.example .env
-# Edit .env with your vault path and API keys
-
-# Set up git hooks (pre-push runs lint, typecheck, and tests)
-make setup-hooks
+# Index your vault
+make index
 ```
 
-### Running
-
-```bash
-# Start the FastAPI backend (http://localhost:8000)
-make dev
-
-# Start the Next.js frontend (http://localhost:7860)
-make frontend-dev
-
-# Or run both together
-make dev-all
-```
-
-Verify the backend is running:
+Verify:
 ```bash
 curl http://localhost:8000/health
-# Returns: {"status": "ok"}
+# {"status": "ok"}
 ```
 
-### Index Your Vault
+### Local-Only Setup (No API Keys)
+
+SecondBrain can run entirely on your machine with [Ollama](https://ollama.com):
 
 ```bash
-# With the server running:
-make index
-
-# Or standalone (no server needed):
-make reindex
-```
-
-### Local-Only Setup (Optional)
-
-SecondBrain can run entirely on your machine with no API keys — using local embeddings and a local LLM via [Ollama](https://ollama.com).
-
-**Local embeddings** are enabled by default (`SECONDBRAIN_EMBEDDING_PROVIDER=local`). The model (~400MB) downloads automatically on first run — no manual step needed.
-
-**Local LLM** requires Ollama:
-
-```bash
-# Install Ollama (macOS)
 brew install ollama
-
-# Start the Ollama server
 ollama serve
-
-# Pull a model (any model works — pick one that fits your hardware)
-ollama pull llama3.2:3b        # 3B params, ~2GB, runs on most machines
-ollama pull mistral:7b         # 7B params, ~4GB, good quality/speed balance
+ollama pull llama3.2:3b    # or any model that fits your hardware
 ```
 
-Then set your model in `.env`:
 ```bash
-SECONDBRAIN_OLLAMA_MODEL=llama3.2:3b          # whichever model you pulled
-SECONDBRAIN_OLLAMA_BASE_URL=http://127.0.0.1:11434/v1  # default, usually no change needed
+# .env -- only vault path required
+SECONDBRAIN_VAULT_PATH=/path/to/your/notes
+SECONDBRAIN_OLLAMA_MODEL=llama3.2:3b
 ```
 
-The chat UI has a provider toggle — switch between "Local (Ollama)" and your API provider at any time.
+The chat UI has a provider toggle to switch between local and API providers.
 
-> **No API keys at all?** With local embeddings + Ollama, the only required env var is `SECONDBRAIN_VAULT_PATH`. Everything else runs on your hardware.
+### Customize for Your Notes
 
-## Customize for Your Notes
+1. **Environment** -- Set `SECONDBRAIN_VAULT_PATH` in `.env` to your notes folder
+2. **Folder structure** -- Create: `00_Daily/`, `10_Notes/`, `20_Projects/`, `30_Concepts/`, `Inbox/`, `Tasks/`, `90_Meta/Templates/`
+3. **Branding** -- Edit `frontend/src/lib/config.ts` for display name and app name
+4. **Categories** -- Edit task categories in `src/secondbrain/scripts/inbox_processor.py`
 
-After cloning, edit these files to make it yours:
+> **Obsidian users** get the best experience (in-progress checkboxes, wiki-links, etc.), but the system reads plain Markdown -- no Obsidian plugins required.
 
-1. **Environment** — Copy `.env.example` to `.env` and set `SECONDBRAIN_VAULT_PATH` to your notes folder (any directory of `.md` files works)
-2. **Folder structure** — Create these folders in your notes directory: `00_Daily/`, `10_Notes/`, `20_Projects/`, `30_Concepts/`, `Inbox/`, `Tasks/`, `90_Meta/Templates/`
-3. **Frontend branding** — Edit `frontend/src/lib/config.ts` to set your display name, app name, and user initial
-4. **Inbox categories** — Edit task categories and living documents at the top of `src/secondbrain/scripts/inbox_processor.py`
-5. **PWA manifest** — Update `frontend/public/manifest.json` and `frontend/package.json` with your app name
-
-> **Note on Obsidian:** This project was originally built with Obsidian in mind, and Obsidian users will get the best experience (the `- [/]` in-progress checkbox renders natively, wiki-links work, etc.). But the system reads plain Markdown — no Obsidian plugins or proprietary features are required. If you use a different Markdown editor or just plain text files, everything works the same.
+---
 
 ## Environment Variables
 
 ```bash
-SECONDBRAIN_VAULT_PATH=/path/to/your/notes             # Required — your Markdown folder
+SECONDBRAIN_VAULT_PATH=/path/to/your/notes             # Required
 SECONDBRAIN_HOST=127.0.0.1                             # API server host
 SECONDBRAIN_PORT=8000                                  # API server port
 SECONDBRAIN_DATA_PATH=data                             # Data storage directory
 
-# LLM API keys (at least one recommended, or use Ollama for fully local)
-SECONDBRAIN_ANTHROPIC_API_KEY=sk-ant-...               # Anthropic Claude (preferred)
-SECONDBRAIN_OPENAI_API_KEY=sk-...                      # OpenAI GPT-4o-mini
+# LLM API keys (at least one, or use Ollama for fully local)
+SECONDBRAIN_ANTHROPIC_API_KEY=sk-ant-...               # Anthropic Claude
+SECONDBRAIN_OPENAI_API_KEY=sk-...                      # OpenAI
 
-# Local LLM via Ollama (no API key needed)
-SECONDBRAIN_OLLAMA_MODEL=llama3.2:3b                   # Any Ollama model you've pulled
-SECONDBRAIN_OLLAMA_BASE_URL=http://127.0.0.1:11434/v1  # Default Ollama endpoint
+# Local LLM
+SECONDBRAIN_OLLAMA_MODEL=llama3.2:3b
+SECONDBRAIN_OLLAMA_BASE_URL=http://127.0.0.1:11434/v1
 
 # Embeddings
-SECONDBRAIN_EMBEDDING_PROVIDER=local                   # "local" (default) or "openai"
-SECONDBRAIN_EMBEDDING_MODEL=BAAI/bge-base-en-v1.5     # Local embedding model
-SECONDBRAIN_OPENAI_EMBEDDING_MODEL=text-embedding-3-small  # OpenAI embedding model
+SECONDBRAIN_EMBEDDING_PROVIDER=local                   # "local" or "openai"
+SECONDBRAIN_EMBEDDING_MODEL=BAAI/bge-base-en-v1.5
 ```
 
-## Development Commands
+## Development
 
 ```bash
-# Backend
-make dev           # Run FastAPI server with hot reload
-make test          # Run pytest (282 tests)
-make lint          # Run ruff linter
-make format        # Run ruff formatter
-make typecheck     # Run mypy type checker
-make check         # Run all checks (lint + format-check + typecheck + test)
-make eval          # Run RAG evaluation harness
-make reindex       # Reindex vault standalone
-make daily-sync    # Run full daily sync (inbox + tasks + reindex)
-make extract       # Extract metadata from vault notes
-
-# Frontend
-make frontend-install  # Install npm dependencies
-make frontend-dev      # Run Next.js dev server
-make frontend-build    # Production build
-
-# Both
-make dev-all       # Run FastAPI + Next.js together
+make check     # All checks (lint + format + typecheck + 669 tests)
+make test      # Run pytest
+make lint      # Run ruff
+make format    # Run ruff formatter
+make typecheck # Run mypy
+make eval      # RAG evaluation harness
 ```
 
-## Project Structure
+### Project Structure
 
 ```
 src/secondbrain/
-├── main.py              # FastAPI app entry point
+├── main.py              # FastAPI entry point
 ├── config.py            # Settings (pydantic-settings)
-├── models.py            # Pydantic models
 ├── vault/               # Vault connector + parser
-├── indexing/            # Chunker + multi-provider embedder
-├── stores/              # Vector (ChromaDB), lexical (FTS5), conversation
-├── retrieval/           # Hybrid search + reranker
-├── synthesis/           # LLM answer generation
-├── eval/                # RAG evaluation harness + metrics
-├── api/                 # FastAPI routes (/ask, /index, /tasks, etc.)
+├── indexing/            # Chunker + embeddings + contextual retrieval
+├── stores/              # Vector (ChromaDB), lexical (FTS5), usage, conversation
+├── retrieval/           # Hybrid search + LLM reranker
+├── synthesis/           # Answer generation with citations
+├── ingestion/           # Content ingestion, safety auditor, wiki compiler
+├── api/                 # FastAPI routes
 ├── scripts/             # Daily sync, inbox processor, task aggregator
-└── logging/             # Query logger (JSONL)
+└── tracing/             # OpenTelemetry + Langfuse integration
 
 frontend/
-├── src/app/             # Next.js app router pages
-│   └── (dashboard)/     # Chat, Tasks, Calendar, Insights pages
-├── src/components/      # React components (layout, chat, tasks, calendar)
+├── src/app/(dashboard)/ # Next.js pages (Chat, Tasks, Calendar, etc.)
+├── src/components/      # React components
 ├── src/lib/             # API client, utilities, types
-└── public/              # Static assets
+└── public/              # Static assets, PWA manifest
 ```
-
-## Architecture
-
-### Data Flow
-
-1. Vault file changes detected → parse Markdown → extract frontmatter/headings/blocks
-2. Create stable chunk IDs using `hash(note_path + heading_path + block)`
-3. Generate embeddings → store in ChromaDB
-4. Build BM25/FTS5 lexical index
-5. Query: hybrid retrieve (BM25 + vectors) → LLM rerank → synthesize answer with citations
-
-### Frontend Pages
-
-- **Chat** — RAG-powered Q&A against your vault with conversation history
-- **Tasks** — Aggregated tasks from daily notes with stat cards, filters, and category tree
-- **Calendar** — Weekly agenda view with overdue tracking and due date badges
-- **Insights** — Metadata summaries, entities, and note suggestions
 
 ### Daily Sync Pipeline
 
-The daily sync (`make daily-sync`) runs three steps:
-1. **Inbox processing** — routes inbox notes to daily notes and task files
-2. **Task sync** — aggregates tasks from daily notes with bi-directional completion sync back to vault
-3. **Reindexing** — incremental re-index of changed files + metadata extraction
+The daily sync (`make daily-sync`) runs automatically via launchd:
+1. **Inbox processing** -- routes inbox notes to daily notes and task files
+2. **Task sync** -- aggregates tasks with bi-directional completion sync
+3. **Reindexing** -- incremental re-index of changed files + metadata extraction
+4. **Usage pruning** -- removes usage records older than 90 days
 
-This can be automated via launchd on macOS:
 ```bash
-make install-cron    # Install daily sync at 7 AM
+make install-cron    # Install hourly sync via launchd
 make uninstall-cron  # Remove the scheduled job
 ```
 
-## macOS Services
-
-The frontend can run as a persistent launchd service (auto-start on boot, auto-restart on crash):
+### macOS Services
 
 ```bash
-make install-ui-service    # Install and start the UI service
-make uninstall-ui-service  # Stop and remove the service
+make install-api-service   # Persistent API server (auto-restart)
+make install-ui-service    # Persistent frontend (auto-restart)
 ```
+
+## Key Principles
+
+- **Vault is truth** -- No application state outside your Markdown files and derived indexes
+- **Local-first** -- All data stays on your machine by default
+- **Suggestion-only** -- The system recommends, never acts autonomously on your notes
+- **Safety-gated** -- External content passes an AI safety auditor before entering the vault
+- **Observable** -- Every LLM call is traced, costed, and anomaly-checked
 
 ## Documentation
 
-Detailed docs are in the `docs/` directory:
+Detailed docs in `docs/`:
 
 | Doc | Contents |
 |-----|----------|
-| `docs/PRD.md` | Product requirements and vision |
-| `docs/ROADMAP.md` | Phased implementation plan + decisions log |
-| `docs/SOLUTION_ARCHITECTURE.md` | Tech choices and rationale |
-| `docs/DATA_MODEL.md` | Schema, entities, relations |
-| `docs/INDEXING_PIPELINE.md` | Chunking and embedding details |
-| `docs/API_SPEC.md` | REST endpoint specifications |
-| `docs/SECURITY_PRIVACY.md` | Threat model and hardening |
-| `docs/UI_DESIGN_SPEC.md` | Frontend design spec |
-| `docs/features/*.md` | Individual feature specs and proposals |
-| `docs/devlog/` | Development logs for features and error resolutions |
-
-## Implementation Status
-
-| Phase | Description | Status |
-|-------|------------|--------|
-| 0 | Repo scaffolding, CI/CD, config, Makefile | Done |
-| 1 | Vault ingestion, chunker, hybrid search, retrieval API | Done |
-| 2 | Incremental indexing, reranking, eval framework, embedding upgrade | Done |
-| 3 | Metadata extraction, suggestions engine | Done |
-| 3.5 | Next.js frontend, task aggregation, calendar, chat UI | Done |
-| 4 | Secure remote access via Tailscale | Done |
-| 5 | Morning briefing dashboard | Done |
-| 5.5 | Inbox upgrade + Anthropic migration | Done |
-| 5.7 | User configurability (branding, constants) | Done |
-| 6 | LLM cost tracking + admin dashboard | Done |
-| 6.5 | Quick capture | Done |
-| 7 | Weekly review generation | Done |
-| 7.5 | Calendar events | Done |
-| 8 | Task management UI (status, due dates, categories, detail panel) | Done |
-| 9 | Voice chat via OpenAI Realtime API | Planned |
-| 10 | Knowledge graph | Future |
-| 11 | Write-back workflow (PR-style changesets) | Future |
+| `ROADMAP.md` | Active work organized by epic, ticket statuses |
+| `DELIVERED.md` | Completed work archive |
+| `SOLUTION_ARCHITECTURE.md` | Tech choices and rationale |
+| `DATA_MODEL.md` | Schema, entities, relations |
+| `API_SPEC.md` | REST endpoint specifications |
+| `SECURITY_PRIVACY.md` | Threat model and hardening |
+| `features/*.md` | Individual feature specs |
 
 ## Security
 
 - All services bind to `127.0.0.1` by default
 - Remote access only via Tailscale VPN (no public endpoints)
 - API keys stored in `.env` (gitignored)
-- Vault remains the source of truth — system never auto-edits notes
+- Vault remains the source of truth -- system never auto-edits notes
+- External content gated by AI safety auditor
+
+## License
+
+This project is currently private. Contact [@brendenrossin](https://github.com/brendenrossin) for access.

@@ -106,7 +106,10 @@ def test_init_tracing_initializes_when_enabled(tmp_path):
 # --- Langfuse integration tests ---
 
 
-def test_langfuse_config_defaults():
+def test_langfuse_config_defaults(monkeypatch):
+    monkeypatch.setenv("SECONDBRAIN_LANGFUSE_PUBLIC_KEY", "")
+    monkeypatch.setenv("SECONDBRAIN_LANGFUSE_SECRET_KEY", "")
+    monkeypatch.setenv("SECONDBRAIN_LANGFUSE_HOST", "https://cloud.langfuse.com")
     settings = Settings(
         _env_file=None,
         vault_path="/tmp/fake",

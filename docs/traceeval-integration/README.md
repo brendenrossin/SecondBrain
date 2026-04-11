@@ -17,17 +17,21 @@ SecondBrain (LLM calls)
   → OpenLLMetry auto-instrumentation
   → BatchSpanProcessor
       ├→ FileSpanExporter → data/traces/YYYY-MM-DD.jsonl → TraceEval
-      └→ LangfuseSpanProcessor → cloud.langfuse.com (trace viewer UI)
+      └→ OTLP exporter → localhost:3000 (self-hosted Langfuse, trace viewer UI)
   → TraceEval analyze + generate + export
   → pytest evals
 ```
+
+> **Privacy note:** Langfuse is self-hosted via Docker Compose at `etc/langfuse/`.
+> All ports bound to `127.0.0.1`. No trace data leaves the machine.
+> See `etc/langfuse/docker-compose.yml` for the full stack.
 
 ## Phased Approach
 
 | Phase | What | Cost | Status |
 |-------|------|------|--------|
 | **9.8a** | OpenLLMetry + local JSONL file export | Free | **Done** (TRACE-1) |
-| **9.8b** | Langfuse free tier (adds trace viewer UI) | Free | **Done** (TRACE-2) |
+| **9.8b** | Langfuse self-hosted (adds trace viewer UI) | Free | **Done** (TRACE-2) |
 | **9.8c** | Full platform (LangSmith/Arize/etc.) | Paid | Covered by OTel architecture — swap exporter |
 
 ## Documents
