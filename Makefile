@@ -1,4 +1,4 @@
-.PHONY: install dev ui test lint format format-check typecheck check clean index reindex extract process-inbox sync-tasks weekly-review daily-sync install-cron uninstall-cron install-ui-service uninstall-ui-service install-api-service uninstall-api-service backup restore eval frontend-install frontend-dev frontend-build dev-all setup-hooks
+.PHONY: install dev ui test lint format format-check typecheck check clean index reindex extract process-inbox sync-tasks weekly-review daily-sync install-cron uninstall-cron install-ui-service uninstall-ui-service install-api-service uninstall-api-service backup restore eval frontend-install frontend-dev frontend-build dev-all setup-hooks prune-usage
 
 # Install dependencies
 install:
@@ -131,6 +131,10 @@ dev-all:
 setup-hooks:
 	git config core.hooksPath .githooks
 	@echo "Git hooks configured to use .githooks/"
+
+# Prune old LLM usage records (default: 90 days)
+prune-usage:
+	uv run python -c "from secondbrain.stores.usage import UsageStore; from pathlib import Path; s = UsageStore(Path('data/usage.db')); print(f'Pruned {s.prune_old_usage()} records')"
 
 # Clean build artifacts
 clean:

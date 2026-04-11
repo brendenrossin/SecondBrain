@@ -501,6 +501,22 @@ class UsageStore:
 
         return anomalies
 
+    def prune_old_usage(self, retention_days: int = 90) -> int:
+        """Delete usage records older than retention_days. Returns count deleted."""
+        sql = "DELETE FROM llm_usage WHERE timestamp < datetime('now', ?)"
+        try:
+            cursor = self.conn.execute(sql, (f"-{retention_days} days",))
+            self.conn.commit()
+        except sqlite3.DatabaseError:
+            logger.warning("UsageStore: DatabaseError on prune_old_usage, reconnecting")
+            self._reconnect()
+            cursor = self.conn.execute(sql, (f"-{retention_days} days",))
+            self.conn.commit()
+        deleted = cursor.rowcount
+        if deleted:
+            logger.info("Pruned %d usage records older than %d days", deleted, retention_days)
+        return deleted
+
     def close(self) -> None:
         """Close the database connection."""
         if self._conn:

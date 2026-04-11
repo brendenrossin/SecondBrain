@@ -141,6 +141,56 @@ class TestUsageStore:
         assert len(store.get_recent(limit=1)) == 1
 
 
+class TestPruneOldUsage:
+    @pytest.fixture()
+    def store(self, tmp_path: Path) -> UsageStore:
+        return UsageStore(tmp_path / "usage.db")
+
+    def test_prunes_old_records(self, store: UsageStore):
+        now = datetime.now(UTC)
+        # Insert an old record (120 days ago) and a recent one (10 days ago)
+        old_ts = (now - timedelta(days=120)).isoformat()
+        recent_ts = (now - timedelta(days=10)).isoformat()
+        store.conn.execute(
+            "INSERT INTO llm_usage (timestamp, provider, model, usage_type, input_tokens, output_tokens, cost_usd) VALUES (?,?,?,?,?,?,?)",
+            (old_ts, "anthropic", "claude-haiku-4-5", "chat_answer", 100, 50, 0.01),
+        )
+        store.conn.execute(
+            "INSERT INTO llm_usage (timestamp, provider, model, usage_type, input_tokens, output_tokens, cost_usd) VALUES (?,?,?,?,?,?,?)",
+            (recent_ts, "anthropic", "claude-haiku-4-5", "chat_answer", 100, 50, 0.01),
+        )
+        store.conn.commit()
+
+        deleted = store.prune_old_usage(retention_days=90)
+        assert deleted == 1
+        remaining = store.get_recent(limit=10)
+        assert len(remaining) == 1
+
+    def test_noop_when_no_old_records(self, store: UsageStore):
+        store.log_usage("anthropic", "claude-haiku-4-5", "chat_answer", 100, 50, 0.01)
+        deleted = store.prune_old_usage(retention_days=90)
+        assert deleted == 0
+        assert len(store.get_recent(limit=10)) == 1
+
+    def test_respects_custom_retention(self, store: UsageStore):
+        now = datetime.now(UTC)
+        ts_15d = (now - timedelta(days=15)).isoformat()
+        ts_5d = (now - timedelta(days=5)).isoformat()
+        store.conn.execute(
+            "INSERT INTO llm_usage (timestamp, provider, model, usage_type, input_tokens, output_tokens, cost_usd) VALUES (?,?,?,?,?,?,?)",
+            (ts_15d, "anthropic", "claude-haiku-4-5", "chat_answer", 100, 50, 0.01),
+        )
+        store.conn.execute(
+            "INSERT INTO llm_usage (timestamp, provider, model, usage_type, input_tokens, output_tokens, cost_usd) VALUES (?,?,?,?,?,?,?)",
+            (ts_5d, "anthropic", "claude-haiku-4-5", "chat_answer", 100, 50, 0.01),
+        )
+        store.conn.commit()
+
+        deleted = store.prune_old_usage(retention_days=10)
+        assert deleted == 1
+        assert len(store.get_recent(limit=10)) == 1
+
+
 class TestSchemaMigration:
     @pytest.fixture()
     def store(self, tmp_path: Path) -> UsageStore:

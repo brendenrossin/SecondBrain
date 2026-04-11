@@ -65,6 +65,9 @@ class Settings(BaseSettings):
     langfuse_secret_key: str = ""
     langfuse_host: str = "https://cloud.langfuse.com"
 
+    # Data retention
+    usage_retention_days: int = 90
+
     # Contextual retrieval
     context_generation_enabled: bool = True
 

@@ -25,8 +25,8 @@
 	<key>StartInterval</key>
 	<integer>3600</integer>
 	<key>StandardOutPath</key>
-	<string>/Users/brentrossin/SecondBrain/data/daily-sync.log</string>
+	<string>/Users/brentrossin/SecondBrain/data/logs/daily-sync.stdout.log</string>
 	<key>StandardErrorPath</key>
-	<string>/Users/brentrossin/SecondBrain/data/daily-sync.log</string>
+	<string>/Users/brentrossin/SecondBrain/data/logs/daily-sync.stderr.log</string>
 </dict>
 </plist>
