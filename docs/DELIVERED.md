@@ -8,6 +8,8 @@ Completed work, moved here after PR merge. Grouped by epic, ordered by completio
 
 | ID | Ticket | Completed | PR |
 |----|--------|-----------|----|
+| TRACE-2 | Langfuse free tier integration — dual-export OTel spans to JSONL + Langfuse trace viewer UI | 2026-04-11 | direct-to-main |
+| TRACE-3 | Full platform support — covered by TRACE-2's OTel architecture (swap exporter for any backend) | 2026-04-11 | direct-to-main |
 | TRACE-1 | OpenLLMetry auto-instrumentation + JSONL file export (traceloop-sdk, FileSpanExporter, BatchSpanProcessor) | 2026-04-09 | [#4](https://github.com/brendenrossin/SecondBrain/pull/4) |
 | OBS-1 | LLM observability & tracing — trace_id, latency, status, error tracking, anomaly detection, admin Traces tab | 2026-04-09 | [#2](https://github.com/brendenrossin/SecondBrain/pull/2) |
 

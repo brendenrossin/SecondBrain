@@ -29,8 +29,9 @@ Once a PR merges → ticket moves to `DELIVERED.md` with date and PR link.
 Arrows mean "must complete before." Items without dependencies can be worked in any order.
 
 ```
-TRACE-1 (OTel export)
-  └─► TRACE-2 (Langfuse) ─► TRACE-3 (Full platform)
+TRACE-1 (OTel export) ◄── done
+  └─► TRACE-2 (Langfuse) ◄── done
+        └─► TRACE-3 (Full platform) ◄── done (covered by OTel architecture)
 
 OPS-1 (Log persistence) — independent
 OPS-3 (Cloud migration) ─► OPS-2 (Public demo)
@@ -51,17 +52,6 @@ KLIB-1 (External content ingestion) ◄── done
 KLIB-2 (Vault lint/health checks) — independent
 KLIB-3 (Compounding query loop) ◄── done
 ```
-
----
-
-## Epic: LLM Tracing & Evaluation
-
-> Instrument LLM calls with OTel, export traces for TraceEval, evolve toward hosted trace platform.
-
-| ID | Ticket | Est. | Status | Spec |
-|----|--------|------|--------|------|
-| TRACE-2 | Langfuse free tier integration (trace viewer UI) | 2-3d | **In Progress** | [spec](superpowers/specs/2026-04-11-trace2-trace3-langfuse-integration-design.md) |
-| TRACE-3 | Full platform (LangSmith/Arize, only if warranted) | — | **In Progress** | Covered by TRACE-2 OTel architecture |
 
 ---
 
