@@ -60,7 +60,7 @@ KLIB-3 (Compounding query loop) ◄── done
 
 | ID | Ticket | Est. | Status | Spec |
 |----|--------|------|--------|------|
-| TRACE-2 | Langfuse free tier integration (trace viewer UI) | 2-3d | Backlog | — |
+| TRACE-2 | Langfuse free tier integration (trace viewer UI) | 2-3d | **In Progress** | — |
 | TRACE-3 | Full platform (LangSmith/Arize, only if warranted) | TBD | Backlog | — |
 
 ---
