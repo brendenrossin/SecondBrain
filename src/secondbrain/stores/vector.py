@@ -68,12 +68,9 @@ class VectorStore:
     def set_stored_model(self, model_name: str) -> None:
         """Store the embedding model name in collection metadata."""
         try:
-            self.collection.modify(
-                metadata={
-                    "hnsw:space": "cosine",
-                    "embedding_model": model_name,
-                }
-            )
+            # Note: do NOT include hnsw:space here — ChromaDB forbids changing
+            # the distance function after collection creation and will raise.
+            self.collection.modify(metadata={"embedding_model": model_name})
         except Exception:
             logger.debug("VectorStore: could not store embedding model metadata", exc_info=True)
 
