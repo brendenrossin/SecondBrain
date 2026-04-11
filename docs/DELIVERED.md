@@ -71,8 +71,10 @@ Completed work, moved here after PR merge. Grouped by epic, ordered by completio
 
 | ID | Ticket | Completed | PR |
 |----|--------|-----------|----|
-| OPS-4 | Operational hardening (launchd, health endpoint, WAL tuning, backup/restore) | 2026-02 | — |
-| OPS-3 | Server hardening (absolute paths, startup logging, 503 on missing vault) | 2026-02 | — |
+| OPS-4 | Interactive HTML demo deck (reveal.js + embedded GIFs, page walkthrough, README redesign) | 2026-04-11 | [#9](https://github.com/brendenrossin/SecondBrain/pull/9) |
+| OPS-1 | Log persistence & data retention (launchd logs to data/logs/, newsyslog rotation, usage pruning 90d) | 2026-04-11 | [#8](https://github.com/brendenrossin/SecondBrain/pull/8) |
+| OPS-4-old | Operational hardening (launchd, health endpoint, WAL tuning, backup/restore) | 2026-02 | — |
+| OPS-3-old | Server hardening (absolute paths, startup logging, 503 on missing vault) | 2026-02 | — |
 
 ---
 

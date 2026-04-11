@@ -33,8 +33,6 @@ TRACE-1 (OTel export) ◄── done
   └─► TRACE-2 (Langfuse) ◄── done
         └─► TRACE-3 (Full platform) ◄── done (covered by OTel architecture)
 
-OPS-1 (Log persistence) — independent
-OPS-4 (Demo deck) — independent
 OPS-3 (Cloud migration) ─► OPS-2 (Public demo)
 OPS-3 (Cloud migration) ─► EMAIL-1 (Gmail ingestion)
 
@@ -64,10 +62,8 @@ KLIB-3 (Compounding query loop) ◄── done
 
 | ID | Ticket | Est. | Status | Spec |
 |----|--------|------|--------|------|
-| OPS-1 | Log persistence & data retention (launchd logs, usage pruning) | 1d | **PR** | [spec](features/log-persistence-retention.md) |
 | OPS-3 | Cloud migration (containerize API + workers, deploy to Railway/Fly.io, isolate content ingestion) | 3-4d | **Pending** | — |
 | OPS-2 | Public demo instance (Fly.io, sample vault, rate limiting) | 4-5d | **Pending** | [spec](features/public-demo-instance.md) |
-| OPS-4 | Interactive HTML demo deck (reveal.js + embedded GIFs, page walkthrough) | 1d | **PR** | — |
 
 ---
 
