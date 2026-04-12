@@ -113,9 +113,9 @@ Read docs in this order for full context:
 
 ## Active Epics (see `docs/ROADMAP.md` for full details)
 
-- **LLM Tracing & Evaluation** — TRACE-2, TRACE-3 (Langfuse → full platform). TRACE-1 delivered.
+- **TraceEval Integration** — EVAL-1, EVAL-2 (unit tests from trace analysis, behavioral evals, CI/CD)
 - **RAG Quality & Performance** — RAG-1 through RAG-3 (contextual retrieval, caching, topic manifests)
-- **Operations & Infrastructure** — OPS-1, OPS-2 (log persistence, public demo)
+- **Operations & Infrastructure** — OPS-2 (public demo). OPS-1 delivered.
 - **Smarter Retrieval & Discovery** — RETRIEVAL-2, RETRIEVAL-3 (capture connections, insights dashboard)
 - **Email Ingestion** — EMAIL-1 (Gmail read-only)
 - **Voice Chat** — VOICE-1 (OpenAI Realtime API)
