@@ -2,6 +2,7 @@
 
 import numpy as np
 import pytest
+
 from secondbrain.models import Chunk
 from secondbrain.stores.vector import VectorStore
 
