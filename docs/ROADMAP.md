@@ -36,9 +36,6 @@ TRACE-1 (OTel export) ◄── done
 OPS-3 (Cloud migration) ─► OPS-2 (Public demo)
 OPS-3 (Cloud migration) ─► EMAIL-1 (Gmail ingestion)
 
-EVAL-1 (unit tests) — independent
-EVAL-2 (behavioral eval) — independent
-
 RETRIEVAL-1 (Wiki links) ◄── done
   └─► RETRIEVAL-2 (Capture connections)
 RETRIEVAL-3 (Insights dashboard) — independent
@@ -67,17 +64,6 @@ KLIB-3 (Compounding query loop) ◄── done
 |----|--------|------|--------|------|
 | OPS-3 | Cloud migration (containerize API + workers, deploy to Railway/Fly.io, isolate content ingestion) | 3-4d | **Pending** | — |
 | OPS-2 | Public demo instance (Fly.io, sample vault, rate limiting) | 4-5d | **Pending** | [spec](features/public-demo-instance.md) |
-
----
-
-## Epic: TraceEval Integration
-
-> Behavioral contracts and quality gaps identified by TraceEval from real OTel traces.
-
-| ID | Ticket | Est. | Status | Spec |
-|----|--------|------|--------|------|
-| EVAL-1 | Unit tests from TraceEval findings (vector store, task parsing, extractor, model routing) | 0.5d | **Pending** | [spec](superpowers/specs/2026-04-11-traceeval-integration-design.md) |
-| EVAL-2 | Context blurb behavioral eval + CI/CD integration | 0.5d | **Pending** | [spec](superpowers/specs/2026-04-11-traceeval-integration-design.md) |
 
 ---
 
