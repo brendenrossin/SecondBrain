@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add OTel tracing to SecondBrain's LLM calls via traceloop-sdk, exporting spans as daily JSONL files for future TraceEval ingestion.
+**Goal:** Add OTel tracing to SecondBrain's LLM calls via traceloop-sdk, exporting spans as daily JSONL files for future eval tooling ingestion.
 
 **Architecture:** Single new file `src/secondbrain/tracing.py` with a custom `FileSpanExporter` and `init_tracing()` function. traceloop-sdk auto-instruments OpenAI + Anthropic SDK clients via monkey-patching. Three integration points: FastAPI startup, daily_sync, inbox_processor.
 
@@ -200,7 +200,7 @@ Expected: FAIL — `secondbrain.tracing` module does not exist
 Create `src/secondbrain/tracing.py`:
 
 ```python
-"""OTel tracing initialization for TraceEval integration."""
+"""OTel tracing initialization for eval tooling integration."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""MetadataExtractor result parsing tests — gaps identified by TraceEval."""
+"""MetadataExtractor result parsing tests."""
 
 from unittest.mock import MagicMock
 

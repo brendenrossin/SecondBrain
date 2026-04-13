@@ -189,7 +189,7 @@ Expected: FAIL (LangfuseSpanProcessor not imported, trace not imported)
 Replace the contents of `src/secondbrain/tracing.py` with:
 
 ```python
-"""OTel tracing initialization for TraceEval integration."""
+"""OTel tracing initialization for eval tooling integration."""
 
 from __future__ import annotations
 
@@ -300,11 +300,11 @@ git commit -m "feat(trace): add Langfuse dual-export to tracing init (TRACE-2)"
 
 **Files:**
 - Modify: `docs/ROADMAP.md`
-- Modify: `docs/traceeval-integration/README.md`
+- Modify: `docs/ROADMAP.md`
 
-- [ ] **Step 1: Update traceeval-integration README**
+- [ ] **Step 1: Update ROADMAP docs**
 
-In `docs/traceeval-integration/README.md`, update the Phase 9.8b row status from "Future" to "Done" and add a note about the implementation.
+In `docs/ROADMAP.md`, update the Phase 9.8b row status from "Future" to "Done" and add a note about the implementation.
 
 - [ ] **Step 2: Update ROADMAP.md**
 
@@ -313,7 +313,7 @@ Update TRACE-3's description to note it's covered by TRACE-2's platform-agnostic
 - [ ] **Step 3: Commit**
 
 ```bash
-git add docs/ROADMAP.md docs/traceeval-integration/README.md
+git add docs/ROADMAP.md docs/ROADMAP.md
 git commit -m "docs: update tracing docs for TRACE-2 Langfuse integration"
 ```
 

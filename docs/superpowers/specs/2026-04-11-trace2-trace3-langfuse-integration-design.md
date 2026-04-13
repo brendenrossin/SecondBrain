@@ -6,11 +6,11 @@
 
 ## Problem
 
-SecondBrain has OTel auto-instrumentation (TRACE-1) writing LLM trace spans to JSONL files. These files are machine-readable for TraceEval but offer no human-friendly trace viewer. Developers need a way to visually inspect trace timelines, token counts, and call hierarchies without parsing JSONL.
+SecondBrain has OTel auto-instrumentation (TRACE-1) writing LLM trace spans to JSONL files. These files are machine-readable for downstream eval tooling but offer no human-friendly trace viewer. Developers need a way to visually inspect trace timelines, token counts, and call hierarchies without parsing JSONL.
 
 ## Solution
 
-Add Langfuse's OpenTelemetry exporter as a second span destination alongside the existing `FileSpanExporter`. Dual-write: JSONL continues for TraceEval consumption, Langfuse provides the trace viewer UI via their free-tier web dashboard.
+Add Langfuse's OpenTelemetry exporter as a second span destination alongside the existing `FileSpanExporter`. Dual-write: JSONL continues for eval tooling consumption, Langfuse provides the trace viewer UI via their free-tier web dashboard.
 
 TRACE-3 ("full platform — LangSmith/Arize, only if warranted") is closed by this design: any OTel-compatible backend can be added by swapping/adding an exporter. The architecture is already platform-agnostic.
 
@@ -22,7 +22,7 @@ OpenLLMetry auto-instruments Anthropic/OpenAI SDK calls
     ▼
 BatchSpanProcessor
     │
-    ├──► FileSpanExporter → data/traces/YYYY-MM-DD.jsonl  (TraceEval)
+    ├──► FileSpanExporter → data/traces/YYYY-MM-DD.jsonl  (eval tooling)
     │
     └──► LangfuseExporter → Langfuse cloud (trace viewer UI)
 ```
@@ -86,14 +86,6 @@ langfuse_host: str = "https://cloud.langfuse.com"
 - No changes to UsageStore or admin dashboard
 - No Langfuse SDK decorators (`@observe`) — we use the OTel exporter path
 - No removal of OpenLLMetry — it remains the instrumentation layer
-
-## TraceEval Context
-
-This integration serves as TraceEval's first real-world test case:
-- **JSONL files** remain the canonical input for TraceEval's trace-to-eval compiler
-- **Langfuse** proves the architecture works with a hosted platform
-- Future TraceEval test cases: pull spans from Langfuse API, LangSmith, or Arize to verify platform-agnostic consumption
-- The OTel span format is the contract between SecondBrain and TraceEval — as long as spans conform to OpenInference attributes, TraceEval doesn't care where they came from
 
 ## Langfuse Setup Guide
 

@@ -1,4 +1,4 @@
-"""Model routing tests — behavioral contract identified by TraceEval."""
+"""Model routing tests."""
 
 from unittest.mock import MagicMock, patch
 

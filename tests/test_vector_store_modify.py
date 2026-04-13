@@ -1,4 +1,4 @@
-"""VectorStore modify failure tests — real bug found by TraceEval."""
+"""VectorStore modify failure tests."""
 
 import contextlib
 

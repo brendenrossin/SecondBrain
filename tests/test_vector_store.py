@@ -1,4 +1,4 @@
-"""VectorStore CRUD tests — gap identified by TraceEval trace analysis."""
+"""VectorStore CRUD tests."""
 
 import numpy as np
 import pytest

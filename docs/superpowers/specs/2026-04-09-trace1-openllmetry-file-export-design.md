@@ -7,15 +7,15 @@
 
 ## Goal
 
-Add OpenTelemetry tracing to SecondBrain's LLM calls using Traceloop's OpenLLMetry SDK, exporting spans as JSONL files for future TraceEval ingestion. Zero cost, no hosted services, no changes to LLM call sites.
+Add OpenTelemetry tracing to SecondBrain's LLM calls using Traceloop's OpenLLMetry SDK, exporting spans as JSONL files for future downstream eval tooling ingestion. Zero cost, no hosted services, no changes to LLM call sites.
 
 ## Motivation
 
 SecondBrain has had real LLM reliability issues (Gemma 4 model swap breakage, $300/month hash mismatch bug). Diagnosing these requires manual investigation. With OTel tracing:
 
 1. Traces capture what each LLM call received and produced (full input/output)
-2. TraceEval (future) analyzes traces to identify behavioral contracts and risks
-3. TraceEval generates pytest evals that codify "this should work"
+2. downstream eval tooling (future) analyzes traces to identify behavioral contracts and risks
+3. downstream eval tooling generates pytest evals that codify "this should work"
 4. Model/prompt changes are caught by running those evals
 
 This complements the existing UsageStore (cost tracking, anomaly detection, admin dashboard) — different purpose, independent systems, no shared state.
@@ -104,14 +104,14 @@ No new infrastructure — no Docker, no collector, no hosted service.
 
 **Retention:** No auto-deletion. Files accumulate as durable artifacts. Manual cleanup if needed. Future: TTL system or database migration.
 
-**Privacy:** Input/output values contain vault content. Acceptable — traces stay local in `data/traces/` (already gitignored under `data/`), same privacy posture as the vault. TraceEval runs locally.
+**Privacy:** Input/output values contain vault content. Acceptable — traces stay local in `data/traces/` (already gitignored under `data/`), same privacy posture as the vault. downstream eval tooling runs locally.
 
 ## Relationship to UsageStore
 
 | System | Purpose | Storage | Consumer |
 |--------|---------|---------|----------|
 | **UsageStore** (existing) | Cost tracking, anomaly detection, admin dashboard | `data/usage.db` (SQLite) | Admin UI, pricing guardrails |
-| **OTel Traces** (this spec) | Full LLM call traces with inputs/outputs | `data/traces/*.jsonl` | TraceEval |
+| **OTel Traces** (this spec) | Full LLM call traces with inputs/outputs | `data/traces/*.jsonl` | downstream eval tooling |
 
 Independent systems: no shared state, each hooks into LLM calls independently (UsageStore via explicit `_log_usage()` calls, OTel via SDK monkey-patching). Disabling one has no effect on the other.
 
@@ -134,7 +134,7 @@ No changes to existing tests. Tracing is opt-in and independent.
 |------|--------|------------|
 | Traceloop monkey-patching breaks on SDK upgrade | Medium — tracing stops, app unaffected | `tracing_enabled=False` kill switch. Pin traceloop-sdk version. |
 | Trace files grow unbounded | Low — ~4.5MB/month | Manual cleanup now. TTL/DB later. |
-| `span.to_json()` format doesn't match TraceEval expectations | Medium | Verify format during implementation. Thin adapter if needed. |
+| `span.to_json()` format doesn't match downstream eval tooling expectations | Medium | Verify format during implementation. Thin adapter if needed. |
 | Traceloop SDK phones home | Low | No `TRACELOOP_API_KEY` set, custom exporter overrides default. |
 
 ## Not in Scope
@@ -143,9 +143,9 @@ No changes to existing tests. Tracing is opt-in and independent.
 - No manual parent spans or trace hierarchy
 - No changes to UsageStore or admin dashboard
 - No automatic trace cleanup or rotation
-- No TraceEval integration in CI
+- No downstream eval tooling integration in CI
 - No trace viewer UI in SecondBrain frontend
 
 ## Future (TRACE-2/3)
 
-When upgrading to Langfuse: add the platform's OTel exporter alongside `FileSpanExporter` (dual-write). JSONL files continue for TraceEval. `BatchSpanProcessor` is already the right foundation for network exporters.
+When upgrading to Langfuse: add the platform's OTel exporter alongside `FileSpanExporter` (dual-write). JSONL files continue for downstream eval tooling. `BatchSpanProcessor` is already the right foundation for network exporters.

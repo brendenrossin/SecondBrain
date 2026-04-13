@@ -149,7 +149,7 @@ Features deprioritized based on current usage patterns and vault size.
 | **Email: Gmail API direct, no MCP** | MCP servers require write scopes; supply-chain risk. Direct `gmail.readonly` is safer. |
 | **Email deprioritized** | Quick capture covers the manual workflow. Spec is ready when the need is clear. |
 | **LLM observability: SQLite first, defer Langfuse** | Custom tracing (trace_id, latency, status, anomaly detection) is sufficient for v1. Langfuse is the upgrade path. |
-| **OTel traces complement UsageStore** | Different purposes: UsageStore = cost/anomaly dashboard, OTel = TraceEval behavioral evals. |
+| **OTel traces complement UsageStore** | Different purposes: UsageStore = cost/anomaly dashboard, OTel = behavioral evals and observability. |
 | **Voice chat: resolve v1 decisions** | Single voice (alloy), fresh sessions, server VAD only, no Whisper fallback. |
 | **Configurable categories over hardcoded** | New users shouldn't need to edit source code. |
 | **Recency via LLM context, not decay formula** | When two similar notes exist, the LLM contextually prefers the recent one during synthesis. |

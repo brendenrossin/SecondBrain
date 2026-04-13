@@ -1,4 +1,4 @@
-"""OTel tracing initialization for TraceEval integration."""
+"""OTel tracing initialization."""
 
 from __future__ import annotations
 

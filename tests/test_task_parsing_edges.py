@@ -1,4 +1,4 @@
-"""Task parser edge case tests — gaps identified by TraceEval."""
+"""Task parser edge case tests."""
 
 from pathlib import Path
 

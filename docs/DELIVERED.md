@@ -4,15 +4,6 @@ Completed work, moved here after PR merge. Grouped by epic, ordered by completio
 
 ---
 
-## Epic: TraceEval Integration
-
-| ID | Ticket | Completed | PR |
-|----|--------|-----------|----|
-| EVAL-2 | Context blurb behavioral eval + CI/CD integration | 2026-04-11 | [#10](https://github.com/brendenrossin/SecondBrain/pull/10) |
-| EVAL-1 | Unit tests from TraceEval findings (vector store, task parsing, extractor, model routing) | 2026-04-11 | [#10](https://github.com/brendenrossin/SecondBrain/pull/10) |
-
----
-
 ## Epic: LLM Observability & Tracing
 
 | ID | Ticket | Completed | PR |

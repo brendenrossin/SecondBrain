@@ -109,11 +109,9 @@ Read docs in this order for full context:
 9. `docs/UI_DESIGN_SPEC.md` - Frontend redesign spec ("Mission Control" dashboard overhaul)
 10. `docs/ENGINEERING_REVIEW.md` - System health assessment, improvement priorities, and review criteria for changes
 11. `docs/features/*.md` - Individual feature specs, explorations, and deferred proposals
-12. `docs/traceeval-integration/` - TraceEval integration specs and configuration
 
 ## Active Epics (see `docs/ROADMAP.md` for full details)
 
-- **TraceEval Integration** — EVAL-1, EVAL-2 (unit tests from trace analysis, behavioral evals, CI/CD)
 - **RAG Quality & Performance** — RAG-1 through RAG-3 (contextual retrieval, caching, topic manifests)
 - **Operations & Infrastructure** — OPS-2 (public demo). OPS-1 delivered.
 - **Smarter Retrieval & Discovery** — RETRIEVAL-2, RETRIEVAL-3 (capture connections, insights dashboard)
