@@ -1,0 +1,49 @@
+# VCS
+.git
+.gitignore
+.gitattributes
+
+# Local environments
+.env
+.env.local
+.envrc
+.venv
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.mypy_cache
+.ruff_cache
+
+# Frontend artifacts
+frontend/node_modules
+frontend/.next
+frontend/out
+frontend/.turbo
+
+# Local data — never bake personal data into the image
+data/
+**/.sync_completed
+chroma/
+
+# Real Obsidian vault — never copy in
+/Users/brentrossin/Obsidian-Vault
+
+# IDE / OS
+.vscode
+.idea
+.DS_Store
+*.swp
+
+# Worktrees
+.worktrees
+
+# Docs / dev artifacts not needed at runtime
+docs/
+tests/
+.github/
+
+# Misc
+*.log
+*.bak
+*.tmp

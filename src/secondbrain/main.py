@@ -25,6 +25,7 @@ from secondbrain.api.settings import router as settings_router
 from secondbrain.api.tasks import router as tasks_router
 from secondbrain.api.wiki import router as wiki_router
 from secondbrain.config import get_settings
+from secondbrain.middleware.rate_limit import RateLimitMiddleware
 from secondbrain.tracing import init_tracing
 
 logger = logging.getLogger(__name__)
@@ -58,6 +59,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(GZipMiddleware, minimum_size=500)
+app.add_middleware(RateLimitMiddleware, enabled=settings.demo_mode)
 
 # Include API routers
 app.include_router(admin_router)
