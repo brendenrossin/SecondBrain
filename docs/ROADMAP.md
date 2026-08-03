@@ -71,7 +71,7 @@ KLIB-3 (Compounding query loop) ◄── done
 
 | ID | Ticket | Est. | Status | Spec |
 |----|--------|------|--------|------|
-| ENGAGE-1 | "Today" landing surface + daily local push plumbing (shared foundation for ENGAGE + FEED) | 2-3d | **In Progress** | [spec](features/engage-today-surface-and-push.md) |
+| ENGAGE-1 | "Today" landing surface + daily local push plumbing (shared foundation for ENGAGE + FEED) | 2-3d | **PR** | [spec](features/engage-today-surface-and-push.md) |
 | ENGAGE-2 | Resurfacing block: spaced-repetition (SM-2, schedule in frontmatter) + "on this day" temporal | 2-3d | Backlog | — |
 | ENGAGE-3 | Related-notes panel (in-context; absorbs RETRIEVAL-2 capture connections) | 1-2d | Backlog | [spec](features/capture-connection-surfacing.md) |
 
