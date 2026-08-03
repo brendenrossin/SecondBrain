@@ -4,6 +4,14 @@ Completed work, moved here after PR merge. Grouped by epic, ordered by completio
 
 ---
 
+## Epic: ENGAGE — Proactive Resurfacing & Daily Habit
+
+| ID | Ticket | Completed | PR |
+|----|--------|-----------|----|
+| ENGAGE-1 | Daily digest push — `GET /api/v1/digest` (compact briefing projection) + iOS Shortcut setup for a fully local-first phone notification over Tailscale | 2026-08-02 | [#12](https://github.com/brendenrossin/SecondBrain/pull/12) |
+
+---
+
 ## Epic: LLM Observability & Tracing
 
 | ID | Ticket | Completed | PR |

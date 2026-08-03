@@ -36,7 +36,7 @@ TRACE-1 (OTel export) ◄── done
 OPS-3 (Cloud migration) ─► OPS-2 (Public demo)
 OPS-3 (Cloud migration) ─► EMAIL-1 (Gmail ingestion)
 
-ENGAGE-1 (Today surface + daily push plumbing) ◄── keystone
+ENGAGE-1 (Today surface + daily push plumbing) ◄── done
   ├─► ENGAGE-2 (Resurfacing: spaced-repetition + on-this-day)
   ├─► ENGAGE-3 (Related-notes panel — absorbs RETRIEVAL-2)
   └─► FEED-1 (RSS attention router: AI + sports) ── delivered via ENGAGE-1 push
@@ -71,9 +71,10 @@ KLIB-3 (Compounding query loop) ◄── done
 
 | ID | Ticket | Est. | Status | Spec |
 |----|--------|------|--------|------|
-| ENGAGE-1 | "Today" landing surface + daily local push plumbing (shared foundation for ENGAGE + FEED) | 2-3d | **PR** | [spec](features/engage-today-surface-and-push.md) |
 | ENGAGE-2 | Resurfacing block: spaced-repetition (SM-2, schedule in frontmatter) + "on this day" temporal | 2-3d | Backlog | — |
 | ENGAGE-3 | Related-notes panel (in-context; absorbs RETRIEVAL-2 capture connections) | 1-2d | Backlog | [spec](features/capture-connection-surfacing.md) |
+
+_ENGAGE-1 delivered — see [DELIVERED.md](DELIVERED.md)._
 
 ---
 
