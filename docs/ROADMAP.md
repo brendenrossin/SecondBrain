@@ -36,8 +36,17 @@ TRACE-1 (OTel export) ◄── done
 OPS-3 (Cloud migration) ─► OPS-2 (Public demo)
 OPS-3 (Cloud migration) ─► EMAIL-1 (Gmail ingestion)
 
+ENGAGE-1 (Today surface + daily push plumbing) ◄── keystone
+  ├─► ENGAGE-2 (Resurfacing: spaced-repetition + on-this-day)
+  ├─► ENGAGE-3 (Related-notes panel — absorbs RETRIEVAL-2)
+  └─► FEED-1 (RSS attention router: AI + sports) ── delivered via ENGAGE-1 push
+        ├─► FEED-2 (Engagement learning + save-to-vault via KLIB-1)
+        ├─► FEED-3 (Google Calendar read-only)
+        └─► FEED-4 (Gmail — absorbs EMAIL-1)
+              └─► FEED-5 (Podcasts / X — deferred, expensive)
+
 RETRIEVAL-1 (Wiki links) ◄── done
-  └─► RETRIEVAL-2 (Capture connections)
+  └─► RETRIEVAL-2 (Capture connections) ── folded into ENGAGE-3
 RETRIEVAL-3 (Insights dashboard) — independent
 
 EMAIL-1 (Gmail ingestion) — depends on OPS-3
@@ -53,6 +62,32 @@ KLIB-3 (Compounding query loop) ◄── done
 ```
 
 ---
+
+---
+
+## Epic: ENGAGE — Proactive Resurfacing & Daily Habit
+
+> **Top priority.** The tool "works well" but pull-only tools don't build habits. ENGAGE adds a changing daily surface and a local push so there's a reason to open SecondBrain every day — powered by infrastructure already built (briefing, task aggregation, hybrid search, daily-sync cron). All mechanics are local-first and suggestion-only. No gamification (single-user tool: any mechanic that isn't genuine value is self-sabotage).
+
+| ID | Ticket | Est. | Status | Spec |
+|----|--------|------|--------|------|
+| ENGAGE-1 | "Today" landing surface + daily local push plumbing (shared foundation for ENGAGE + FEED) | 2-3d | **PR** | [spec](features/engage-today-surface-and-push.md) |
+| ENGAGE-2 | Resurfacing block: spaced-repetition (SM-2, schedule in frontmatter) + "on this day" temporal | 2-3d | Backlog | — |
+| ENGAGE-3 | Related-notes panel (in-context; absorbs RETRIEVAL-2 capture connections) | 1-2d | Backlog | [spec](features/capture-connection-surfacing.md) |
+
+---
+
+## Epic: FEED — Personalized Attention Router
+
+> Bring the *outside world* onto the same daily surface: a cheap, personalized content feed (AI space + sports) that learns from engagement. Cost is a hard design constraint — filter with heuristics before spending on LLM, one batched summary call/day (~$0.15/mo), no embeddings in the trial, aggressive pruning, local models for grunt work. Trial narrow (RSS-only), expand only if the habit sticks.
+
+| ID | Ticket | Est. | Status | Spec |
+|----|--------|------|--------|------|
+| FEED-1 | RSS attention router trial: ~10 sources (AI + Padres/Michigan/NFL), heuristic ranking, one batched daily summary, Feed page + brief block | 2-3d | **Pending** | [spec](features/feed-attention-router.md) |
+| FEED-2 | Engagement learning (click/thumbs → interest-weight tuning) + "save to vault" via KLIB-1 | 2d | Backlog | — |
+| FEED-3 | Google Calendar read-only → real events in the daily brief | 1-2d | Backlog | [exploration](features/EXPLORATION-calendar-integration.md) |
+| FEED-4 | Gmail read-only (absorbs EMAIL-1): trusted-sender summaries, recruiter/family detection, newsletter ingestion | 5-7d | Backlog | [spec](features/email-ingestion.md) |
+| FEED-5 | Podcasts (captions) / X — deferred until the cheaper feed proves the habit; expensive sources | TBD | Backlog | — |
 
 ---
 
@@ -73,7 +108,7 @@ KLIB-3 (Compounding query loop) ◄── done
 
 | ID | Ticket | Est. | Status | Spec |
 |----|--------|------|--------|------|
-| RETRIEVAL-2 | Capture connections (related notes surfaced after quick capture) | 1-2d | Backlog | [spec](features/capture-connection-surfacing.md) |
+| RETRIEVAL-2 | Capture connections (related notes surfaced after quick capture) — **moved to ENGAGE-3** | 1-2d | Backlog | [spec](features/capture-connection-surfacing.md) |
 | RETRIEVAL-3 | Insights dashboard (note explorer, entity browser, vault stats) | 3-5d | Backlog | — |
 
 ---
@@ -156,3 +191,8 @@ Features deprioritized based on current usage patterns and vault size.
 | **Knowledge Library: hybrid with RAG, not replacement** | Karpathy's LLM Wiki (compile-then-query) is complementary to SecondBrain's RAG (index-then-retrieve). Wiki pages become vault content indexed by the existing pipeline. Progressive disclosure pattern: wiki index = metadata layer, RAG = deep retrieval. |
 | **Cloud migration before OPS-2 and EMAIL-1** | External content ingestion (KLIB-1) is safe enough locally — text-only extraction, no code execution, safety auditor gates all content. But public demo and email ingestion need proper isolation. OPS-3 added as prerequisite. |
 | **Safety auditor uses Sonnet (latest)** | Stronger model for security-critical classification. Cost is ~$0.01-0.02 per document — negligible for the ingestion volume. Three-layer hardening: XML delimiters, structured output, tool message pattern. |
+| **Retention is the real gap, not capability** | Tool "works well" but usage dropped. Root cause: pull-only tools don't build habits. ENGAGE + FEED prioritized over Voice/KG/Write-back, which add power without adding a reason to open the app. |
+| **No gamification (single-user)** | Maker and user are the same person. Streaks, guilt-nudges, and fake variable rewards farm your own attention — self-sabotage. Only genuine-value ("Facilitator quadrant") mechanics: changing surface, real serendipity, useful push. |
+| **FEED cost discipline** | Filter with free heuristics (source trust × keyword × interest weight) before any LLM. One batched summary call/day (~$0.15/mo). No embeddings in trial; local BGE/Ollama for dedup/scoring if needed. Prune feed rows after 30d. |
+| **Defer X/Twitter and podcast transcription** | X API ~$200/mo and Nitter is dead; Whisper transcription is the expensive part of podcasts. Most AI voices cross-post to free-RSS newsletters/blogs; Gmail-as-universal-inbox (EMAIL-1) ingests the rest. Revisit only if the cheap feed proves the habit. |
+| **ENGAGE + FEED share one push surface** | Interleave build: ship the "Today" surface + local daily push once (ENGAGE-1), then land resurfacing (ENGAGE-2) and the RSS feed (FEED-1) onto it. Two feeds — inward (notes) and outward (world) — one delivery channel. |
