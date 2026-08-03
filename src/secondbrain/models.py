@@ -165,6 +165,19 @@ class BriefingResponse(BaseModel):
     total_open: int
 
 
+class DigestResponse(BaseModel):
+    """Compact, phone-notification-friendly projection of the briefing.
+
+    Consumed by a scheduled iOS Shortcut (over Tailscale) that fires a native
+    notification. ``count`` drives quiet-when-empty behavior: the Shortcut only
+    notifies when ``count > 0``.
+    """
+
+    title: str
+    body: str
+    count: int
+
+
 # --- Phase 3: Metadata Extraction + Suggestions ---
 
 

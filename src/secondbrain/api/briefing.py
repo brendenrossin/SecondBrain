@@ -11,7 +11,13 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from secondbrain.api.dependencies import get_settings
 from secondbrain.config import Settings
-from secondbrain.models import BriefingResponse, BriefingTask, DailyContext, EventResponse
+from secondbrain.models import (
+    BriefingResponse,
+    BriefingTask,
+    DailyContext,
+    DigestResponse,
+    EventResponse,
+)
 from secondbrain.scripts.event_parser import get_events_in_range
 from secondbrain.scripts.task_aggregator import (
     AggregatedTask,
@@ -119,9 +125,58 @@ def _build_briefing(settings: Settings) -> BriefingResponse:
     return result
 
 
+def _short_date(today_iso: str) -> str:
+    """Format an ISO date (YYYY-MM-DD) as a compact label, e.g. 'Aug 2'."""
+    try:
+        d = datetime.strptime(today_iso, "%Y-%m-%d")
+    except ValueError:
+        return today_iso
+    return d.strftime("%b %-d")
+
+
+def _build_digest(briefing: BriefingResponse) -> DigestResponse:
+    """Reduce a briefing to a compact push digest.
+
+    Pure projection: no I/O. ``count`` is the number of items worth surfacing;
+    when zero, the body is a neutral all-clear so the notifier can stay quiet.
+    """
+    overdue = len(briefing.overdue_tasks)
+    due = len(briefing.due_today_tasks)
+    aging = len(briefing.aging_followups)
+    count = overdue + due + aging
+
+    title = f"SecondBrain · {_short_date(briefing.today)}"
+
+    if count == 0:
+        return DigestResponse(title=title, body="All clear — nothing needs attention.", count=0)
+
+    segments: list[str] = []
+    if overdue:
+        segments.append(f"{overdue} overdue")
+    if due:
+        segments.append(f"{due} due today")
+    if aging:
+        segments.append(f"{aging} aging follow-up{'s' if aging != 1 else ''}")
+
+    return DigestResponse(title=title, body=" · ".join(segments), count=count)
+
+
 @router.get("/briefing", response_model=BriefingResponse)
 async def get_briefing(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> BriefingResponse:
     """Get the morning briefing: overdue tasks, due today, aging follow-ups, and yesterday's context."""
     return await asyncio.to_thread(_build_briefing, settings)
+
+
+@router.get("/digest", response_model=DigestResponse)
+async def get_digest(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> DigestResponse:
+    """Compact push digest for a scheduled iOS Shortcut (title, one-line body, count).
+
+    The shared re-engagement channel: future ENGAGE/FEED sections fold their
+    counts into the same one-liner. ``count == 0`` means the notifier stays quiet.
+    """
+    briefing = await asyncio.to_thread(_build_briefing, settings)
+    return _build_digest(briefing)
