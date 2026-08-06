@@ -13,6 +13,16 @@
   <img src="https://img.shields.io/badge/tests-669%20passing-brightgreen?style=flat-square" alt="669 Tests">
 </p>
 
+<p align="center">
+  <a href="https://secondbrain-demo.fly.dev">
+    <img src="https://img.shields.io/badge/%E2%96%B6%20Live%20Demo-secondbrain--demo.fly.dev-e8a849?style=for-the-badge" alt="Live Demo">
+  </a>
+</p>
+
+<p align="center">
+  <sub>Try it with a sample vault — no setup required. LLM calls are rate-limited to keep costs predictable.</sub>
+</p>
+
 ---
 
 You take notes every day -- daily journals, project plans, meeting notes, ideas. But when you need that one insight from three months ago, you're guessing at filenames and keywords.

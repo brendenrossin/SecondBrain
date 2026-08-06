@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   experimental: {
     proxyTimeout: 1000 * 120, // 120s — Ollama requests can take 30-60s
   },

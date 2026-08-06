@@ -71,6 +71,9 @@ class Settings(BaseSettings):
     # Contextual retrieval
     context_generation_enabled: bool = True
 
+    # Demo mode (public demo instance — enables rate limiting, swaps branding)
+    demo_mode: bool = False
+
 
 def get_settings() -> Settings:
     """Get application settings instance."""

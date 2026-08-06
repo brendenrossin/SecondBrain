@@ -1,0 +1,38 @@
+name: Deploy Demo
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "frontend/**"
+      - "demo/**"
+      - "Dockerfile"
+      - ".dockerignore"
+      - "fly.toml"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/deploy-demo.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-demo
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy to Fly.io
+    runs-on: ubuntu-latest
+    if: ${{ github.repository == 'brendenrossin/SecondBrain' || github.event_name == 'workflow_dispatch' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy to Fly.io
+        run: flyctl deploy --remote-only --app secondbrain-demo
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

@@ -1,0 +1,52 @@
+# Fly.io configuration for the SecondBrain public demo.
+#
+# Deploy: `fly deploy`
+# Status: `fly status`
+# Logs:   `fly logs`
+# Secrets: managed via `fly secrets set KEY=value` (never commit secrets here).
+
+app = "secondbrain-demo"
+primary_region = "ewr"  # Newark — closest US East region; change with `fly regions`
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  # Public, non-secret config. Secrets (API keys) come from `fly secrets set`.
+  SECONDBRAIN_VAULT_PATH = "/vault"
+  SECONDBRAIN_DATA_PATH = "/data"
+  SECONDBRAIN_DEMO_MODE = "true"
+  SECONDBRAIN_EMBEDDING_PROVIDER = "local"
+  SECONDBRAIN_CONTEXT_GENERATION_ENABLED = "false"
+  SECONDBRAIN_TRACING_ENABLED = "false"
+
+[[mounts]]
+  source = "secondbrain_data"
+  destination = "/data"
+  initial_size = "1gb"
+
+[http_service]
+  internal_port = 7860
+  force_https = true
+  auto_stop_machines = "stop"   # stop after idle — pays only when used
+  auto_start_machines = true    # start on incoming request
+  min_machines_running = 0
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 80
+    hard_limit = 100
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "30s"
+    method = "GET"
+    path = "/api/v1/health"
+
+[[vm]]
+  size = "shared-cpu-2x"
+  memory = "4gb"
+  cpu_kind = "shared"
+  cpus = 2
