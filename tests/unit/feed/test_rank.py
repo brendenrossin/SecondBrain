@@ -68,3 +68,12 @@ def test_select_top_n_enforces_per_type_minimum():
     top = select_top_n(ranked, n=6, min_per_type=2, types=("ai", "sports"))
     assert len(top) == 6
     assert sum(1 for i in top if i.type == "sports") >= 2
+
+
+def test_select_top_n_respects_n_when_minimums_infeasible():
+    ai = [_item(f"ai{i}", "agents", type="ai", trust=1.0) for i in range(3)]
+    sports = [_item(f"sp{i}", "padres", type="sports", trust=1.0) for i in range(3)]
+    interests = {"agents": 1.0, "padres": 1.0}
+    ranked = rank_items(ai + sports, interests, now_ts=NOW)
+    top = select_top_n(ranked, n=2, min_per_type=2, types=("ai", "sports"))
+    assert len(top) == 2  # never exceeds n even though min_per_type*types=4 > n

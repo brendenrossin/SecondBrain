@@ -45,7 +45,7 @@ def _parse_epoch(published_at: str | None) -> float | None:
         return None
 
 
-def recency_decay(published_ts_or_iso, now_ts: float) -> float:
+def recency_decay(published_ts_or_iso: float | str | None, now_ts: float) -> float:
     """Exponential decay by age; unknown date -> 0.5 (neutral)."""
     ts = published_ts_or_iso
     if isinstance(ts, str) or ts is None:
@@ -75,11 +75,15 @@ def select_top_n(
     min_per_type: int,
     types: tuple[str, ...] = ("ai", "sports"),
 ) -> list[FeedItem]:
-    """Top-N by score, but guarantee `min_per_type` slots for each listed type."""
+    """Top-N by score, but guarantee `min_per_type` slots for each listed type (best-effort when infeasible)."""
     chosen: list[FeedItem] = []
     chosen_urls: set[str] = set()
     for t in types:
+        if len(chosen) >= n:
+            break
         for it in [i for i in ranked if i.type == t][:min_per_type]:
+            if len(chosen) >= n:
+                break
             if it.url not in chosen_urls:
                 chosen.append(it)
                 chosen_urls.add(it.url)
