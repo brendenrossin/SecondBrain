@@ -56,12 +56,12 @@ def parse_feed_config(text: str) -> FeedConfig:
         ]
         if not sources:
             return SEED_DEFAULTS
-        raw_interests = post.get("interests") or {}
-        interests = {
-            str(k): float(v)
-            for k, v in raw_interests.items()
+        raw_interests = post.get("interests")
+        interests = (
+            {str(k): float(v) for k, v in raw_interests.items()}
             if isinstance(raw_interests, dict)
-        }
+            else {}
+        )
         return FeedConfig(sources=sources, interests=interests)
     except Exception:
         logger.warning("Feed config parse failed; using seed defaults", exc_info=True)

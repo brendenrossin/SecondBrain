@@ -39,3 +39,20 @@ def test_load_missing_file_returns_defaults(tmp_path):
 def test_seed_defaults_have_both_types():
     types = {s.type for s in SEED_DEFAULTS.sources}
     assert "ai" in types and "sports" in types
+
+
+def test_non_dict_interests_keeps_sources():
+    text = """---
+sources:
+  - url: https://example.com/feed
+    label: Example
+    type: ai
+interests:
+  - 1
+  - 2
+---
+"""
+    cfg = parse_feed_config(text)
+    assert len(cfg.sources) == 1
+    assert cfg.sources[0].url == "https://example.com/feed"
+    assert cfg.interests == {}
