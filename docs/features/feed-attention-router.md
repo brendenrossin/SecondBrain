@@ -143,3 +143,24 @@ WI1 → WI2 → WI3 → WI4 (backend pipeline, testable via script) → WI5 (fro
 | Ship behind `feed_enabled` flag | Trial without affecting repo cloners; easy on/off |
 | Log the summary call to UsageStore | Makes the trial's real cost visible — proves the cheapness claim |
 | Defer X/podcasts to FEED-5 | X API ~$200/mo, Whisper expensive; earn them only if the cheap feed proves the habit |
+
+## Codebase Validation & Decisions (2026-08-04)
+
+Validated the spec's integration assumptions against the current codebase before planning. Confirmed reusable, and three "registry" assumptions resolved to simpler builders.
+
+**Confirmed as-is:**
+- `stores/usage.py` — `UsageStore.log_usage(provider, model, usage_type, input_tokens, output_tokens, cost_usd, ...)`, top-level `calculate_cost(provider, model, in, out)` (pricing dict already includes `claude-haiku-4-5: (1.00, 5.00)`), and `prune_old_usage(retention_days)`. WAL + busy_timeout=5000 + reconnect-on-error.
+- Anthropic client (`ingestion/compiler.py`): `Anthropic(api_key=settings.anthropic_api_key, timeout=60.0)` → `.messages.create(...)` → `response.usage.input_tokens/output_tokens`.
+- SQLite store skeleton is consistent across stores — `FeedStore` clones it.
+- `scripts/daily_sync.py` `main()` command list — feed step slots in after usage-prune, before inbox.
+- `config.py` — `*_enabled: bool` flags + `anthropic_api_key` present.
+
+**Gap resolutions (spec assumed registries that don't exist — resolved simpler):**
+1. **No ENGAGE-1 "block registry."** `_build_briefing()` is a monolithic builder; `_build_digest()` composes the one-liner from a `segments` list. → Add a `feed` field to `BriefingResponse`, populate in `_build_briefing()` (reads FeedStore, cheap SQLite), append a feed segment in `_build_digest()`. No registry authored.
+2. **No frontend `briefing/blocks/` dir.** `MorningBriefing.tsx` is monolithic. → Add a feed section following that pattern + a standalone `/feed` page. Update `Sidebar.tsx` (toolsNavItems + NAV_COLORS) **and** `MobileNav.tsx` (moreItems).
+3. **No vault-config reader.** Only env-var Settings exist; `frontmatter` lib is available. → Build one small reader for `_config/feed.md` (the single genuinely-new sub-component). Malformed/missing → seed defaults, never crash.
+
+**Confirmed content scope:**
+- **AI sources:** blogs + newsletters (Simon Willison, Latent Space, Import AI, The Batch / DeepLearning.AI, Anthropic news) — free RSS, high signal, no aggregator spam. Verify each feed is live during WI2.
+- **Sports sources:** all three — Padres (MLB), Michigan football (CFB), NFL — team-specific RSS where it exists, league-level fallback where it doesn't. Verify during WI2.
+- **Session scope:** full ticket, backend-first (WI1→WI4 script-testable + cost-visible, then WI5 frontend, then WI6 schedule). One PR.
