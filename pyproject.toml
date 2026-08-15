@@ -28,6 +28,7 @@ dependencies = [
     # File watching
     "watchdog>=4.0.0",
     "pyyaml>=6.0.0",
+    "feedparser>=6.0.14",
 ]
 
 [project.optional-dependencies]
