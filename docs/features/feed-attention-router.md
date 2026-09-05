@@ -152,11 +152,11 @@ Validated the spec's integration assumptions against the current codebase before
 - `stores/usage.py` — `UsageStore.log_usage(provider, model, usage_type, input_tokens, output_tokens, cost_usd, ...)`, top-level `calculate_cost(provider, model, in, out)` (pricing dict already includes `claude-haiku-4-5: (1.00, 5.00)`), and `prune_old_usage(retention_days)`. WAL + busy_timeout=5000 + reconnect-on-error.
 - Anthropic client (`ingestion/compiler.py`): `Anthropic(api_key=settings.anthropic_api_key, timeout=60.0)` → `.messages.create(...)` → `response.usage.input_tokens/output_tokens`.
 - SQLite store skeleton is consistent across stores — `FeedStore` clones it.
-- `scripts/daily_sync.py` `main()` command list — feed step slots in after usage-prune, before inbox.
+- `scripts/daily_sync.py` `main()` command list — feed step runs last in daily_sync, after every vault step (it is discretionary and must never abort the core sync).
 - `config.py` — `*_enabled: bool` flags + `anthropic_api_key` present.
 
 **Gap resolutions (spec assumed registries that don't exist — resolved simpler):**
-1. **No ENGAGE-1 "block registry."** `_build_briefing()` is a monolithic builder; `_build_digest()` composes the one-liner from a `segments` list. → Add a `feed` field to `BriefingResponse`, populate in `_build_briefing()` (reads FeedStore, cheap SQLite), append a feed segment in `_build_digest()`. No registry authored.
+1. **No ENGAGE-1 "block registry."** `_build_briefing()` is a monolithic builder; `_build_digest()` composes the one-liner from a `segments` list. → Add a `feed_counts: dict[str, int]` field to `BriefingResponse`, populate in `_build_briefing()` (reads FeedStore, cheap SQLite), append a feed segment in `_build_digest()`. No registry authored.
 2. **No frontend `briefing/blocks/` dir.** `MorningBriefing.tsx` is monolithic. → Add a feed section following that pattern + a standalone `/feed` page. Update `Sidebar.tsx` (toolsNavItems + NAV_COLORS) **and** `MobileNav.tsx` (moreItems).
 3. **No vault-config reader.** Only env-var Settings exist; `frontmatter` lib is available. → Build one small reader for `_config/feed.md` (the single genuinely-new sub-component). Malformed/missing → seed defaults, never crash.
 

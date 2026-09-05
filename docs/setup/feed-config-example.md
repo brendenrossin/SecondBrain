@@ -100,6 +100,9 @@ Other knobs (all optional, defaults in `src/secondbrain/config.py`):
 | `SECONDBRAIN_FEED_MIN_PER_TYPE` | `3` | Guaranteed slots per type, so one domain can't crowd out the other |
 | `SECONDBRAIN_FEED_SUMMARY_MODEL` | `claude-haiku-4-5` | Model for the batched summary |
 | `SECONDBRAIN_FEED_RETENTION_DAYS` | `30` | Age at which feed rows are pruned |
+| `SECONDBRAIN_FEED_MIN_INTERVAL_HOURS` | `20` | Minimum gap between refreshes (see Scheduling) |
+| `SECONDBRAIN_FEED_DIGEST_WINDOW_HOURS` | `20` | Digest counts only refreshes this recent |
+| `SECONDBRAIN_FEED_PAGE_LIMIT` | `50` | Rows returned by `GET /feed` |
 
 ## Scheduling
 
@@ -107,6 +110,15 @@ No new launchd job is needed. The existing `com.secondbrain.daily-sync.plist` ru
 `daily_sync all`, which now includes a `feed` step. That step runs **last** and
 catches its own exceptions: the feed is discretionary and depends on the network
 plus an LLM, so a failure must never abort inbox/tasks/projects/index/extract.
+
+**That job fires hourly** (`StartInterval 3600`), not daily. One LLM call per
+*run* would therefore be 24 calls a day. The pipeline guards against this itself:
+a refresh is skipped unless the last one is older than
+`SECONDBRAIN_FEED_MIN_INTERVAL_HOURS` (default 20), so the feed refreshes about
+once a morning no matter how often the sync runs. The guard lives in the pipeline
+rather than in the plist so it survives someone re-adding `all` or adding another
+scheduler. To force one, lower the interval or run the `feed` command after
+clearing `feed.db`.
 
 Because the sync runs well before the 9:15 AM iOS digest pull, the feed is already
 refreshed by the time the digest fires, and its counts appear in the push body
@@ -120,8 +132,10 @@ uv run python -m secondbrain.scripts.daily_sync feed --vault-path "$SECONDBRAIN_
 
 ## Cost
 
-One batched `claude-haiku-4-5` call per refresh over the top-N items — roughly
-$0.15/month at daily cadence. Everything before that call (fetch, dedup, recency
+One batched `claude-haiku-4-5` call per refresh over the top-N items —
+about **$0.005 per run**, so roughly $0.15/month at the default once-a-day
+cadence. The min-interval guard above is what keeps that true under an hourly
+cron. Everything before that call (fetch, dedup, recency
 decay, interest scoring, top-N selection) is free. Every failure path falls back to
 headlines, so a missing API key or a model error costs nothing and still renders.
 
