@@ -11,6 +11,14 @@ from secondbrain.feed.models import FeedItem, FeedSource
 logger = logging.getLogger(__name__)
 
 _SNIPPET_MAX = 400
+# Feed content is attacker-influenced: anyone who can land an entry in a
+# subscribed feed controls the link. Only ever store navigable web URLs so a
+# "javascript:" or "data:" href can never reach the UI.
+_SAFE_SCHEMES = ("http://", "https://")
+
+
+def _is_safe_link(link: str) -> bool:
+    return link.lower().startswith(_SAFE_SCHEMES)
 
 
 def _entry_published(entry: object) -> str | None:
@@ -38,6 +46,9 @@ def fetch_source(source: FeedSource) -> list[FeedItem]:
         title = (getattr(entry, "title", "") or "").strip()
         link = (getattr(entry, "link", "") or "").strip()
         if not title or not link:
+            continue
+        if not _is_safe_link(link):
+            logger.warning("Skipping entry with unsafe link scheme from %s", source.label)
             continue
         snippet = (getattr(entry, "summary", "") or "")[:_SNIPPET_MAX]
         items.append(

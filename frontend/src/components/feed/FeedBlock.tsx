@@ -6,6 +6,23 @@ import { cn } from "@/lib/utils";
 import { getFeed, recordFeedClick } from "@/lib/api";
 import type { FeedResponse, FeedItem } from "@/lib/types";
 
+/**
+ * Feed content is attacker-influenced — anyone who can land an entry in a
+ * subscribed feed controls the link, and React does not sanitize `href`.
+ * The backend already drops non-http(s) schemes at ingestion; this is the
+ * second layer, so a stale row can never render a `javascript:` link.
+ */
+function safeHref(url: string): string | undefined {
+  try {
+    // No base URL on purpose: feed links are always absolute, and omitting it
+    // keeps this safe to call during SSR where `window` does not exist.
+    const { protocol } = new URL(url);
+    return protocol === "http:" || protocol === "https:" ? url : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Per-type accent so AI and Sports read apart at a glance. */
 const HEADING_COLOR: Record<string, string> = {
   AI: "text-accent",
@@ -31,14 +48,24 @@ export function FeedLink({
   source?: string;
   className?: string;
 }): React.JSX.Element {
+  const href = safeHref(url);
+
+  // An unsafe or unparseable URL still shows its title — it just isn't clickable.
+  const Wrapper = href ? "a" : "div";
+
   return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
-      onClick={() => id !== undefined && recordFeedClick(id)}
+    <Wrapper
+      {...(href
+        ? {
+            href,
+            target: "_blank",
+            rel: "noopener noreferrer",
+            onClick: () => id !== undefined && recordFeedClick(id),
+          }
+        : {})}
       className={cn(
-        "group flex items-start gap-2.5 py-2 -mx-2 px-2 rounded-lg transition-colors hover:bg-white/[0.04]",
+        "group flex items-start gap-2.5 py-2 -mx-2 px-2 rounded-lg transition-colors",
+        href ? "hover:bg-white/[0.04]" : "opacity-60",
         className
       )}
     >
@@ -48,7 +75,7 @@ export function FeedLink({
         {take && <p className="text-[12px] text-text-muted mt-0.5 break-words">{take}</p>}
         {source && <p className="text-[10px] text-text-dim mt-1">{source}</p>}
       </div>
-    </a>
+    </Wrapper>
   );
 }
 

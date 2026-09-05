@@ -49,3 +49,22 @@ def test_fetch_all_continues_past_failures(monkeypatch):
     monkeypatch.setattr(fetch_mod.feedparser, "parse", parse)
     sources = [FeedSource("bad", "B", "ai"), FeedSource("good", "G", "ai")]
     assert len(fetch_mod.fetch_all(sources)) == 1
+
+
+def test_fetch_source_rejects_non_http_link_schemes(monkeypatch):
+    """Feed content is attacker-influenced; only http(s) links may be stored."""
+    entries = [
+        SimpleNamespace(title="xss", link="javascript:alert(1)", summary=""),
+        SimpleNamespace(title="data", link="data:text/html,<script>x</script>", summary=""),
+        SimpleNamespace(title="file", link="file:///etc/passwd", summary=""),
+        SimpleNamespace(title="ok", link="https://x.com/good", summary=""),
+    ]
+    monkeypatch.setattr(fetch_mod.feedparser, "parse", lambda _url: _fake_parsed(entries))
+    items = fetch_mod.fetch_source(FeedSource("u", "L", "ai"))
+    assert [i.url for i in items] == ["https://x.com/good"]
+
+
+def test_fetch_source_scheme_check_is_case_insensitive(monkeypatch):
+    entries = [SimpleNamespace(title="t", link="JavaScript:alert(1)", summary="")]
+    monkeypatch.setattr(fetch_mod.feedparser, "parse", lambda _url: _fake_parsed(entries))
+    assert fetch_mod.fetch_source(FeedSource("u", "L", "ai")) == []
