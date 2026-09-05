@@ -2,7 +2,8 @@
 
 Reads a vault note (default ``_config/feed.md``) whose frontmatter lists sources
 and interests. Missing or malformed config falls back to seed defaults; never crashes.
-Source RSS URLs are verified live during implementation (Task 3 manual QA).
+Seed source URLs were verified live on 2026-09-05; a source that later dies is
+logged and skipped, never fatal.
 """
 
 import logging
@@ -16,13 +17,20 @@ logger = logging.getLogger(__name__)
 
 SEED_DEFAULTS = FeedConfig(
     sources=[
-        # AI — blogs + newsletters (free RSS, high signal). Verify each is live.
+        # AI — blogs + newsletters (free RSS, high signal). All verified live 2026-09-05;
+        # deeplearning.ai and anthropic.com no longer serve RSS at all.
         FeedSource("https://simonwillison.net/atom/everything/", "Simon Willison", "ai", 0.9),
         FeedSource("https://www.latent.space/feed", "Latent Space", "ai", 0.8),
         FeedSource("https://importai.substack.com/feed", "Import AI", "ai", 0.8),
-        FeedSource("https://www.deeplearning.ai/the-batch/rss/", "The Batch", "ai", 0.8),
-        FeedSource("https://www.anthropic.com/rss.xml", "Anthropic News", "ai", 0.7),
-        # Sports — team-specific where it exists, league-level fallback. Verify each.
+        FeedSource(
+            "https://www.technologyreview.com/topic/artificial-intelligence/feed",
+            "MIT Tech Review AI",
+            "ai",
+            0.7,
+        ),
+        # Aggregated, so noisier — the points filter is what makes it worth a slot.
+        FeedSource("https://hnrss.org/newest?q=AI&points=100", "Hacker News AI", "ai", 0.6),
+        # Sports — team-specific where it exists, league-level fallback. Verified live 2026-09-05.
         FeedSource("https://www.mlb.com/padres/feeds/news/rss.xml", "Padres", "sports", 0.8),
         FeedSource("https://mgoblog.com/rss.xml", "Michigan FB (MGoBlog)", "sports", 0.7),
         FeedSource("https://www.espn.com/espn/rss/nfl/news", "NFL (ESPN)", "sports", 0.6),
