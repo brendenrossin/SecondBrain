@@ -17,52 +17,68 @@ from secondbrain.stores.usage import UsageStore, calculate_cost
 logger = logging.getLogger(__name__)
 
 _SYSTEM = (
-    "You are a terse news editor. Group the provided items into sections by their "
+    "You are a terse news editor. Group the numbered items into sections by their "
     "type (AI, Sports). For each item write a one-line take (<=20 words). "
+    "Refer to each item ONLY by its number `i` — never invent or copy a URL. "
     "Respond with ONLY JSON: "
-    '{"sections":[{"heading":"AI","items":[{"url":"...","title":"...","take":"..."}]}]}'
+    '{"sections":[{"heading":"AI","items":[{"i":1,"take":"..."}]}]}'
 )
 
 _PROMPT_SNIPPET_MAX = 200  # prompt-cost trim; fetch.py already caps snippets at 400
-_FALLBACK_TAKE_MAX = 120
 
 
 def build_summary_prompt(items: list[FeedItem]) -> str:
-    """One line per item — type, source, title, trimmed snippet, URL."""
+    """One numbered line per item — index, type, source, title, trimmed snippet.
+
+    URLs are deliberately withheld. Asking the model to echo them back made it
+    substitute links found inside the snippets (observed live: 2 of 10 items
+    came back with a URL from the article body), so those takes silently failed
+    to reattach. Indexes cannot be mistranscribed, halve the output tokens, and
+    keep model-controlled text out of anything that becomes an href.
+    """
     lines = [
-        f"- [{it.type}] ({it.source_label}) {it.title} :: {it.snippet[:_PROMPT_SNIPPET_MAX]} <{it.url}>"
-        for it in items
+        f"{n}. [{it.type}] ({it.source_label}) {it.title} :: {it.snippet[:_PROMPT_SNIPPET_MAX]}"
+        for n, it in enumerate(items, start=1)
     ]
     return "Items:\n" + "\n".join(lines)
 
 
 def _fallback(items: list[FeedItem]) -> FeedSummary:
-    """Headline-only sections, grouped by type — used whenever the LLM path fails."""
+    """Headline-only sections, grouped by type — used whenever the LLM path fails.
+
+    The `take` is deliberately empty rather than a truncated snippet: the pipeline
+    persists takes into `summary`, and a snippet stored there would be
+    indistinguishable from a real LLM take, making `generated` report True for a
+    run that never reached the model. The UI already falls back to the snippet.
+    """
     by_type: dict[str, list[dict[str, str]]] = {}
     for it in items:
-        by_type.setdefault(it.type, []).append(
-            {"url": it.url, "title": it.title, "take": it.snippet[:_FALLBACK_TAKE_MAX]}
-        )
+        by_type.setdefault(it.type, []).append({"url": it.url, "title": it.title, "take": ""})
     sections = [FeedSection(heading=t.upper(), items=v) for t, v in by_type.items()]
     return FeedSummary(sections=sections, generated=False)
 
 
-def _section_from_json(raw: Any) -> FeedSection:
-    """One section from raw model JSON; missing fields become empty strings.
+def _section_from_json(raw: Any, items: list[FeedItem]) -> FeedSection:
+    """One section from raw model JSON, resolving 1-based indexes against `items`.
+
+    url and title always come from our own data, never from the model. An index
+    that is out of range or repeated is dropped rather than guessed at.
 
     Raises on malformed shapes — callers treat that as "fall back to headlines".
     """
-    return FeedSection(
-        heading=str(raw.get("heading", "")),
-        items=[
-            {
-                "url": str(i.get("url", "")),
-                "title": str(i.get("title", "")),
-                "take": str(i.get("take", "")),
-            }
-            for i in raw.get("items", [])
-        ],
-    )
+    resolved: list[dict[str, str]] = []
+    seen: set[int] = set()
+    for entry in raw.get("items", []):
+        try:
+            idx = int(entry["i"]) - 1
+        except (KeyError, TypeError, ValueError):
+            continue
+        if not (0 <= idx < len(items)) or idx in seen:
+            continue
+        seen.add(idx)
+        item = items[idx]
+        resolved.append({"url": item.url, "title": item.title, "take": str(entry.get("take", ""))})
+    return FeedSection(heading=str(raw.get("heading", "")), items=resolved)
 
 
 def parse_summary_response(text: str, items: list[FeedItem]) -> FeedSummary:
@@ -70,11 +86,12 @@ def parse_summary_response(text: str, items: list[FeedItem]) -> FeedSummary:
     try:
         start, end = text.index("{"), text.rindex("}") + 1
         data = json.loads(text[start:end])
-        sections = [_section_from_json(s) for s in data.get("sections", [])]
+        sections = [_section_from_json(s, items) for s in data.get("sections", [])]
     except Exception:
         logger.warning("Feed summary parse failed; falling back to headlines", exc_info=True)
         return _fallback(items)
-    if not sections:
+    if not any(section.items for section in sections):
+        # Every index was unusable — no better than not having called at all.
         return _fallback(items)
     return FeedSummary(sections=sections, generated=True)
 
@@ -100,7 +117,7 @@ def summarize_items(
     try:
         resp = client.messages.create(
             model=model,
-            max_tokens=1024,
+            max_tokens=2048,
             system=_SYSTEM,
             messages=[{"role": "user", "content": build_summary_prompt(items)}],
         )
@@ -119,4 +136,7 @@ def summarize_items(
             cost_usd=calculate_cost("anthropic", model, in_tok, out_tok),
             latency_ms=(time.perf_counter() - start) * 1000,
         )
+    if getattr(resp, "stop_reason", None) == "max_tokens":
+        # Distinguish a truncated (paid, wasted) response from malformed JSON.
+        logger.warning("Feed summary hit max_tokens; response truncated")
     return parse_summary_response(_response_text(resp), items)

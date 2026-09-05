@@ -20,19 +20,23 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["feed"])
 
-_FEED_LIMIT = 50
-
 
 def _store(settings: Settings) -> FeedStore:
     return FeedStore(Path(settings.data_path) / settings.feed_db_name)
 
 
 def _fetch_recent(settings: Settings) -> list[dict[str, Any]]:
-    store = _store(settings)
+    """Never raises: a corrupt or locked feed db degrades to an empty feed
+    rather than a 500, matching how the briefing and daily sync treat it."""
     try:
-        return store.get_recent(limit=_FEED_LIMIT)
-    finally:
-        store.close()
+        store = _store(settings)
+        try:
+            return store.get_recent(limit=settings.feed_page_limit)
+        finally:
+            store.close()
+    except Exception:
+        logger.warning("Feed read failed; serving an empty feed", exc_info=True)
+        return []
 
 
 def _to_item(row: dict[str, Any]) -> FeedItemResponse:

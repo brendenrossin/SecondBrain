@@ -33,6 +33,7 @@ class FeedStore:
             self._conn.row_factory = sqlite3.Row
             self._conn.execute("PRAGMA journal_mode=WAL")
             self._conn.execute("PRAGMA busy_timeout=5000")
+            self._conn.execute("PRAGMA wal_autocheckpoint=1000")
             self._conn.execute("PRAGMA synchronous=NORMAL")
             self._init_schema()
         return self._conn
@@ -63,6 +64,10 @@ class FeedStore:
             self._reconnect()
             return self.conn.executemany(sql, rows)
 
+    def _count(self) -> int:
+        row = self._run("SELECT COUNT(*) AS n FROM feed_items").fetchone()
+        return int(row["n"])
+
     def _init_schema(self) -> None:
         """Initialize the database schema."""
         self.conn.executescript("""
@@ -86,14 +91,28 @@ class FeedStore:
         self.conn.commit()
 
     def add_items(self, items: list[FeedItem]) -> int:
-        """Insert items, ignoring URLs already stored. Returns the count newly inserted."""
+        """Upsert items keyed on URL. Returns the count of rows newly inserted.
+
+        A URL already stored has its score, freshness and text refreshed rather
+        than ignored: the ranking formula has a 48-hour recency half-life, so a
+        score frozen at first insert would let day-one items outrank fresh ones
+        for the whole 30-day retention window. Engagement columns (shown_at,
+        clicked_at) and the LLM summary are deliberately preserved.
+        """
         if not items:
             return 0
         now = datetime.now(UTC).isoformat()
-        cursor = self._run_many(
-            """INSERT OR IGNORE INTO feed_items
+        before = self._count()
+        self._run_many(
+            """INSERT INTO feed_items
                (url, source_label, type, title, snippet, published_at, fetched_at, score, summary)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(url) DO UPDATE SET
+                   score = excluded.score,
+                   fetched_at = excluded.fetched_at,
+                   title = excluded.title,
+                   snippet = excluded.snippet,
+                   published_at = excluded.published_at""",
             [
                 (
                     it.url,
@@ -110,7 +129,7 @@ class FeedStore:
             ],
         )
         self.conn.commit()
-        return cursor.rowcount
+        return self._count() - before
 
     def update_summaries(self, items: list[FeedItem]) -> None:
         """Write back the per-item take and final score for items that were summarized."""
@@ -121,11 +140,34 @@ class FeedStore:
         self.conn.commit()
 
     def get_recent(self, limit: int = 50) -> list[dict[str, Any]]:
-        """Highest-scoring items first, newest as the tiebreak."""
+        """Newest refresh first, best-scoring within it.
+
+        Ordering by score alone would let a high-scoring item from an earlier run
+        outrank everything fetched since, turning the feed into a museum.
+        """
         rows = self._run(
-            "SELECT * FROM feed_items ORDER BY score DESC, fetched_at DESC LIMIT ?", (limit,)
+            "SELECT * FROM feed_items ORDER BY fetched_at DESC, score DESC LIMIT ?", (limit,)
         ).fetchall()
         return [dict(row) for row in rows]
+
+    def get_summarized_since(self, since_iso: str, limit: int = 50) -> list[dict[str, Any]]:
+        """Summarized items from refreshes at or after `since_iso`.
+
+        Used for the daily digest count, which must reflect *this* refresh — not
+        an all-time top-N that would report the same numbers every morning.
+        """
+        rows = self._run(
+            """SELECT * FROM feed_items
+               WHERE summary IS NOT NULL AND fetched_at >= ?
+               ORDER BY fetched_at DESC, score DESC LIMIT ?""",
+            (since_iso, limit),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def last_fetched_at(self) -> str | None:
+        """ISO timestamp of the most recent refresh, or None if the store is empty."""
+        row = self._run("SELECT MAX(fetched_at) AS ts FROM feed_items").fetchone()
+        return str(row["ts"]) if row and row["ts"] else None
 
     def mark_shown(self, urls: list[str]) -> None:
         """Stamp first-seen time; a re-show keeps the original timestamp."""
@@ -158,6 +200,8 @@ class FeedStore:
         return cursor.rowcount
 
     def close(self) -> None:
+        """Always called from a finally — must never mask the original exception."""
         if self._conn is not None:
-            self._conn.close()
+            with contextlib.suppress(Exception):
+                self._conn.close()
             self._conn = None

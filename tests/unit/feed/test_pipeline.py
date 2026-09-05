@@ -1,3 +1,5 @@
+from datetime import UTC, datetime, timedelta
+
 from secondbrain.config import Settings
 from secondbrain.feed import pipeline as pipe
 from secondbrain.feed.models import FeedItem, FeedSection, FeedSummary
@@ -85,3 +87,57 @@ def test_dedup_happens_before_ranking(tmp_path, monkeypatch):
     )
     result = pipe.run_feed_pipeline(tmp_path, _settings(tmp_path))
     assert "2 fetched, 1 unique" in result
+
+
+class TestRefreshInterval:
+    """The deployed cron runs `daily_sync all` hourly; without a guard that is
+    24 LLM calls a day instead of one."""
+
+    def test_is_due_false_within_the_window(self):
+        recent = (datetime.now(UTC) - timedelta(hours=2)).isoformat()
+        assert pipe._is_due(recent, 20) is False
+
+    def test_is_due_true_past_the_window(self):
+        old = (datetime.now(UTC) - timedelta(hours=25)).isoformat()
+        assert pipe._is_due(old, 20) is True
+
+    def test_is_due_true_for_unparseable_timestamp(self):
+        """Better one extra refresh than a feed that silently never updates."""
+        assert pipe._is_due("not-a-timestamp", 20) is True
+
+    def test_is_due_treats_naive_timestamps_as_utc(self):
+        naive = (datetime.now(UTC) - timedelta(hours=2)).replace(tzinfo=None).isoformat()
+        assert pipe._is_due(naive, 20) is False
+
+    def test_second_run_within_the_window_spends_nothing(self, tmp_path, monkeypatch):
+        calls = []
+        monkeypatch.setattr(pipe, "fetch_all", lambda _sources: _items(4))
+        monkeypatch.setattr(
+            pipe,
+            "summarize_items",
+            lambda _t, _s, _u: calls.append(1) or FeedSummary(sections=[], generated=False),
+        )
+        settings = _settings(tmp_path)
+        first = pipe.run_feed_pipeline(tmp_path, settings)
+        second = pipe.run_feed_pipeline(tmp_path, settings)
+        assert "4 fetched" in first
+        assert "skipped" in second.lower()
+        assert len(calls) == 1  # the hourly re-run cost nothing
+
+    def test_refresh_proceeds_once_the_window_has_passed(self, tmp_path, monkeypatch):
+        calls = []
+        monkeypatch.setattr(pipe, "fetch_all", lambda _sources: _items(4))
+        monkeypatch.setattr(
+            pipe,
+            "summarize_items",
+            lambda _t, _s, _u: calls.append(1) or FeedSummary(sections=[], generated=False),
+        )
+        settings = _settings(tmp_path)
+        pipe.run_feed_pipeline(tmp_path, settings)
+        store = FeedStore(tmp_path / settings.feed_db_name)
+        stale = (datetime.now(UTC) - timedelta(hours=30)).isoformat()
+        store.conn.execute("UPDATE feed_items SET fetched_at = ?", (stale,))
+        store.conn.commit()
+        store.close()
+        assert "fetched" in pipe.run_feed_pipeline(tmp_path, settings)
+        assert len(calls) == 2

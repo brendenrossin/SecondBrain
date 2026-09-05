@@ -3,7 +3,7 @@
 from secondbrain.api.briefing import _build_digest, _feed_counts
 from secondbrain.config import Settings
 from secondbrain.feed.models import FeedItem
-from secondbrain.models import BriefingResponse
+from secondbrain.models import BriefingResponse, BriefingTask
 from secondbrain.stores.feed import FeedStore
 
 
@@ -48,8 +48,16 @@ class TestDigestWithFeed:
         assert "All clear" not in d.body
 
     def test_tasks_precede_feed_in_the_body(self):
-        d = _build_digest(_briefing(overdue_tasks=[], feed_counts={"ai": 1}))
-        assert d.body == "1 AI update"
+        task = BriefingTask(
+            text="ship it",
+            category="work",
+            sub_project="",
+            due_date="",
+            days_open=3,
+            first_date="2026-08-01",
+        )
+        d = _build_digest(_briefing(overdue_tasks=[task], feed_counts={"ai": 1}))
+        assert d.body == "1 overdue · 1 AI update"
 
     def test_unknown_feed_type_gets_a_catch_all_segment(self):
         """count > 0 must never yield an empty push body."""

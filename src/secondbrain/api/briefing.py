@@ -4,7 +4,7 @@ import asyncio
 import logging
 import time
 from dataclasses import asdict
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Annotated
 
@@ -58,11 +58,15 @@ def _feed_counts(settings: Settings) -> dict[str, int]:
     try:
         from secondbrain.stores.feed import FeedStore
 
+        # Only today's refresh counts. An all-time top-N would report the same
+        # numbers every morning — including on days the fetch failed entirely.
+        cutoff = (
+            datetime.now(UTC) - timedelta(hours=settings.feed_digest_window_hours)
+        ).isoformat()
         store = FeedStore(Path(settings.data_path) / settings.feed_db_name)
         try:
-            for row in store.get_recent(limit=settings.feed_top_n):
-                if row["summary"]:
-                    counts[row["type"]] = counts.get(row["type"], 0) + 1
+            for row in store.get_summarized_since(cutoff, limit=settings.feed_top_n):
+                counts[row["type"]] = counts.get(row["type"], 0) + 1
         finally:
             store.close()
     except Exception:

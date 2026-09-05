@@ -84,23 +84,31 @@ export function FeedLink({
  * Renders nothing when the feature is off or nothing has been summarized,
  * so the briefing stays clean.
  */
-export function FeedBlock(): React.JSX.Element | null {
-  const [data, setData] = useState<FeedResponse | null>(null);
+export function FeedBlock({
+  data: provided,
+}: {
+  /** Pass already-fetched data to avoid a second request. When omitted (the
+   *  briefing surface), the block fetches for itself. */
+  data?: FeedResponse;
+} = {}): React.JSX.Element | null {
+  const [fetched, setFetched] = useState<FeedResponse | null>(null);
 
   useEffect(() => {
+    if (provided) return;
     let cancelled = false;
     getFeed()
       .then((res) => {
-        if (!cancelled) setData(res);
+        if (!cancelled) setFetched(res);
       })
       .catch(() => {
-        if (!cancelled) setData(null);
+        if (!cancelled) setFetched(null);
       });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [provided]);
 
+  const data = provided ?? fetched;
   if (!data || data.sections.length === 0) return null;
 
   const byUrl = new Map<string, FeedItem>(data.items.map((i) => [i.url, i]));

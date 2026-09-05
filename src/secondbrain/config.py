@@ -77,8 +77,11 @@ class Settings(BaseSettings):
     feed_db_name: str = "feed.db"
     feed_retention_days: int = 30
     feed_summary_model: str = "claude-haiku-4-5"
-    feed_top_n: int = 10          # items sent to the one summary call
-    feed_min_per_type: int = 3    # guaranteed slots per type so one domain can't crowd out the other
+    feed_top_n: int = 10  # items sent to the one summary call
+    feed_min_per_type: int = 3  # guaranteed slots per type so one domain can't crowd out the other
+    feed_page_limit: int = 50  # rows returned by GET /feed
+    feed_digest_window_hours: int = 20  # digest counts only refreshes this recent
+    feed_min_interval_hours: int = 20  # skip a refresh this soon after the last one
 
 
 def get_settings() -> Settings:

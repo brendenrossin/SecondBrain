@@ -12,19 +12,25 @@ def _settings(key=None, model="claude-haiku-4-5"):
     return SimpleNamespace(anthropic_api_key=key, feed_summary_model=model)
 
 
-def test_prompt_includes_type_and_url():
-    p = summarize_mod.build_summary_prompt([_item(url="https://x/1", title="Agents", type="ai")])
-    assert "[ai]" in p and "https://x/1" in p and "Agents" in p
+def test_prompt_numbers_items_and_withholds_urls():
+    """URLs are withheld on purpose — the model substituted snippet links when asked
+    to echo them, silently losing those takes."""
+    p = summarize_mod.build_summary_prompt(
+        [_item(url="https://x/1", title="Agents", type="ai"), _item(url="https://x/2", title="B")]
+    )
+    assert "1. [ai]" in p and "2. [ai]" in p
+    assert "Agents" in p
+    assert "https://x/1" not in p and "https://x/2" not in p
 
 
 def test_parse_valid_json():
-    text = (
-        'prose {"sections":[{"heading":"AI","items":[{"url":"u","title":"t","take":"hot"}]}]} more'
-    )
-    s = summarize_mod.parse_summary_response(text, [_item()])
+    """Model JSON is embedded in prose; the index resolves against our items."""
+    text = 'prose {"sections":[{"heading":"AI","items":[{"i":1,"take":"hot"}]}]} more'
+    s = summarize_mod.parse_summary_response(text, [_item(url="u", title="t")])
     assert s.generated is True
     assert s.sections[0].heading == "AI"
     assert s.sections[0].items[0]["take"] == "hot"
+    assert s.sections[0].items[0]["url"] == "u"
 
 
 def test_parse_garbage_falls_back():
@@ -38,18 +44,23 @@ def test_parse_empty_sections_falls_back():
     assert s.generated is False
 
 
-def test_fallback_groups_by_type_and_truncates_take():
-    long_snippet = "x" * 500
+def test_fallback_groups_by_type():
     items = [
-        _item(url="a", type="ai", snippet=long_snippet),
+        _item(url="a", type="ai", snippet="x" * 500),
         _item(url="b", type="sports"),
         _item(url="c", type="ai"),
     ]
     s = summarize_mod.parse_summary_response("garbage", items)
     headings = {sec.heading: len(sec.items) for sec in s.sections}
     assert headings == {"AI": 2, "SPORTS": 1}
-    ai_section = next(sec for sec in s.sections if sec.heading == "AI")
-    assert len(ai_section.items[0]["take"]) == summarize_mod._FALLBACK_TAKE_MAX
+
+
+def test_fallback_leaves_takes_empty_so_generated_stays_honest():
+    """A snippet stored as a `take` would be persisted into `summary` and make
+    the API report generated=True for a run that never reached the model."""
+    s = summarize_mod.parse_summary_response("garbage", [_item(snippet="x" * 500)])
+    assert s.generated is False
+    assert all(i["take"] == "" for sec in s.sections for i in sec.items)
 
 
 def test_summarize_items_empty_returns_empty_summary():
@@ -66,21 +77,31 @@ def test_summarize_items_without_api_key_falls_back(monkeypatch):
     assert s.generated is False
 
 
-def _fake_client(text, in_tok=100, out_tok=50):
+def _fake_client(text, in_tok=100, out_tok=50, created=None):
+    """Records every messages.create call so the one-call guarantee can be asserted."""
     resp = SimpleNamespace(
         content=[SimpleNamespace(type="text", text=text)],
         usage=SimpleNamespace(input_tokens=in_tok, output_tokens=out_tok),
+        stop_reason="end_turn",
     )
-    messages = SimpleNamespace(create=lambda **_kwargs: resp)
-    return SimpleNamespace(messages=messages)
+    log = created if created is not None else []
+
+    def create(**kwargs):
+        log.append(kwargs)
+        return resp
+
+    return SimpleNamespace(messages=SimpleNamespace(create=create))
 
 
 def test_summarize_items_logs_usage_once(monkeypatch):
     calls = []
+    created = []
     monkeypatch.setattr(
         summarize_mod.anthropic,
         "Anthropic",
-        lambda **_k: _fake_client('{"sections":[{"heading":"AI","items":[]}]}'),
+        lambda **_k: _fake_client(
+            '{"sections":[{"heading":"AI","items":[{"i":1,"take":"t"}]}]}', created=created
+        ),
     )
     store = SimpleNamespace(log_usage=lambda **kw: calls.append(kw))
     s = summarize_mod.summarize_items([_item()], _settings(key="sk-x"), usage_store=store)
@@ -90,6 +111,7 @@ def test_summarize_items_logs_usage_once(monkeypatch):
     assert calls[0]["model"] == "claude-haiku-4-5"
     assert calls[0]["input_tokens"] == 100 and calls[0]["output_tokens"] == 50
     assert calls[0]["cost_usd"] > 0
+    assert len(created) == 1  # cost discipline: exactly one LLM call per refresh
 
 
 def test_summarize_items_llm_error_falls_back_without_logging_usage(monkeypatch):
@@ -111,3 +133,88 @@ def test_summarize_items_empty_content_falls_back(monkeypatch):
     monkeypatch.setattr(summarize_mod.anthropic, "Anthropic", lambda **_k: client)
     s = summarize_mod.summarize_items([_item()], _settings(key="sk-x"))
     assert s.generated is False
+
+
+class TestCostDiscipline:
+    """Exactly one Anthropic call per refresh — the ticket's hard constraint."""
+
+    def test_no_retry_on_a_failed_call(self, monkeypatch):
+        created = []
+
+        def create(**kwargs):
+            created.append(kwargs)
+            raise RuntimeError("api down")
+
+        client = SimpleNamespace(messages=SimpleNamespace(create=create))
+        monkeypatch.setattr(summarize_mod.anthropic, "Anthropic", lambda **_k: client)
+        s = summarize_mod.summarize_items([_item()], _settings(key="sk-x"))
+        assert s.generated is False
+        assert len(created) == 1  # failed once, did not retry
+
+    def test_no_call_at_all_without_items_or_key(self, monkeypatch):
+        created = []
+        monkeypatch.setattr(
+            summarize_mod.anthropic,
+            "Anthropic",
+            lambda **_k: _fake_client("{}", created=created),
+        )
+        summarize_mod.summarize_items([], _settings(key="sk-x"))
+        summarize_mod.summarize_items([_item()], _settings(key=None))
+        assert created == []
+
+    def test_prompt_is_bounded_by_snippet_cap(self):
+        item = _item(snippet="x" * 5000)
+        prompt = summarize_mod.build_summary_prompt([item])
+        assert len(prompt) < 5000  # snippet trimmed before it reaches the model
+
+
+class TestPartialResponses:
+    def test_truncated_json_falls_back(self):
+        """max_tokens truncation lands mid-object; must not raise."""
+        truncated = '{"sections":[{"heading":"AI","items":[{"url":"u","title":"t","ta'
+        s = summarize_mod.parse_summary_response(truncated, [_item()])
+        assert s.generated is False
+
+    def test_items_the_model_omits_simply_get_no_take(self):
+        items = [_item(url="a"), _item(url="b")]
+        text = '{"sections":[{"heading":"AI","items":[{"i":1,"take":"hot"}]}]}'
+        s = summarize_mod.parse_summary_response(text, items)
+        assert s.generated is True
+        returned = {i["url"] for sec in s.sections for i in sec.items}
+        assert returned == {"a"}  # "b" is absent, not fabricated
+
+
+class TestIndexResolution:
+    """Items are keyed by index, and url/title always come from our own data."""
+
+    def test_url_and_title_come_from_our_items_not_the_model(self):
+        items = [_item(url="https://real/1", title="Real Title")]
+        text = '{"sections":[{"heading":"AI","items":[{"i":1,"take":"hot","url":"https://evil","title":"Fake"}]}]}'
+        s = summarize_mod.parse_summary_response(text, items)
+        entry = s.sections[0].items[0]
+        assert entry["url"] == "https://real/1"  # model's url ignored entirely
+        assert entry["title"] == "Real Title"
+        assert entry["take"] == "hot"
+
+    def test_out_of_range_index_is_dropped(self):
+        items = [_item(url="a")]
+        text = '{"sections":[{"heading":"AI","items":[{"i":1,"take":"ok"},{"i":99,"take":"bad"}]}]}'
+        s = summarize_mod.parse_summary_response(text, items)
+        assert [i["url"] for i in s.sections[0].items] == ["a"]
+
+    def test_repeated_index_is_used_once(self):
+        items = [_item(url="a"), _item(url="b")]
+        text = '{"sections":[{"heading":"AI","items":[{"i":1,"take":"x"},{"i":1,"take":"y"}]}]}'
+        s = summarize_mod.parse_summary_response(text, items)
+        assert len(s.sections[0].items) == 1
+
+    def test_non_numeric_index_is_dropped(self):
+        items = [_item(url="a")]
+        text = '{"sections":[{"heading":"AI","items":[{"i":"not-a-number","take":"x"}]}]}'
+        s = summarize_mod.parse_summary_response(text, items)
+        assert s.generated is False  # nothing usable -> fallback
+
+    def test_sections_with_no_usable_items_fall_back(self):
+        text = '{"sections":[{"heading":"AI","items":[{"i":42,"take":"x"}]}]}'
+        s = summarize_mod.parse_summary_response(text, [_item()])
+        assert s.generated is False

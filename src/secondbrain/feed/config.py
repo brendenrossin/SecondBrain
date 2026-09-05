@@ -15,6 +15,10 @@ from secondbrain.feed.models import FeedConfig, FeedSource
 
 logger = logging.getLogger(__name__)
 
+_DEFAULT_TRUST = 0.5
+_MAX_SOURCES = 50  # each source is a sequential network fetch inside the cron job
+_MAX_INTEREST_WEIGHT = 10.0  # one runaway weight must not monopolise every slot
+
 SEED_DEFAULTS = FeedConfig(
     sources=[
         # AI — blogs + newsletters (free RSS, high signal). All verified live 2026-09-05;
@@ -56,8 +60,21 @@ SEED_DEFAULTS = FeedConfig(
 )
 
 
+def _as_weight(value: object, default: float, *, lo: float, hi: float) -> float:
+    """Coerce and clamp one numeric field. A bad value degrades that field only —
+    it must never discard the user's whole config."""
+    try:
+        return min(hi, max(lo, float(value)))  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
+
+
 def parse_feed_config(text: str) -> FeedConfig:
-    """Parse frontmatter text into a FeedConfig, falling back to defaults on any problem."""
+    """Parse frontmatter text into a FeedConfig, falling back to defaults on any problem.
+
+    Field-level coercion is deliberate: one mistyped ``trust`` should not throw
+    away every source the user listed and silently serve someone else's feed.
+    """
     try:
         post = frontmatter.loads(text)
         raw_sources = post.get("sources")
@@ -68,19 +85,20 @@ def parse_feed_config(text: str) -> FeedConfig:
                 url=str(s["url"]),
                 label=str(s.get("label", s["url"])),
                 type=str(s.get("type", "general")),
-                trust=float(s.get("trust", 0.5)),
+                trust=_as_weight(s.get("trust", _DEFAULT_TRUST), _DEFAULT_TRUST, lo=0.0, hi=1.0),
             )
             for s in raw_sources
             if isinstance(s, dict) and s.get("url")
-        ]
+        ][:_MAX_SOURCES]
         if not sources:
             return SEED_DEFAULTS
         raw_interests = post.get("interests")
-        interests = (
-            {str(k): float(v) for k, v in raw_interests.items()}
-            if isinstance(raw_interests, dict)
-            else {}
-        )
+        interests: dict[str, float] = {}
+        if isinstance(raw_interests, dict):
+            for key, value in raw_interests.items():
+                weight = _as_weight(value, 0.0, lo=0.0, hi=_MAX_INTEREST_WEIGHT)
+                if weight:
+                    interests[str(key)] = weight
         return FeedConfig(sources=sources, interests=interests)
     except Exception:
         logger.warning("Feed config parse failed; using seed defaults", exc_info=True)

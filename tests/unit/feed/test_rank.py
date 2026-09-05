@@ -1,3 +1,5 @@
+import pytest
+
 from secondbrain.feed.models import FeedItem
 from secondbrain.feed.rank import (
     dedup_items,
@@ -49,6 +51,53 @@ def test_recency_decay_favors_recent():
     old = recency_decay(NOW - 3600 * 96, NOW)  # 96h old
     assert recent > old
     assert recency_decay(None, NOW) == 0.5  # unknown date -> neutral-ish
+
+
+def test_recency_decay_halves_at_the_half_life():
+    """Pin the actual curve — `recent > old` would pass for any decreasing function."""
+    assert recency_decay(NOW, NOW) == pytest.approx(1.0)
+    assert recency_decay(NOW - 48 * 3600, NOW) == pytest.approx(0.5)
+    assert recency_decay(NOW - 96 * 3600, NOW) == pytest.approx(0.25)
+
+
+def test_future_dated_items_do_not_get_maximum_freshness():
+    """A broken publisher clock must not pin an item at the top forever."""
+    assert recency_decay(NOW + 3600, NOW) == pytest.approx(1.0)  # small skew tolerated
+    assert recency_decay(NOW + 365 * 24 * 3600, NOW) == 0.5  # implausible -> unknown
+
+
+def test_interest_matching_is_word_bounded():
+    """ "rag" must not match "storage", "eval" must not match "medieval"."""
+    interests = {"rag": 1.5, "eval": 1.2}
+    hit = FeedItem(url="a", source_label="s", type="ai", title="RAG pipelines", snippet="")
+    miss = FeedItem(url="b", source_label="s", type="ai", title="Cheap storage", snippet="")
+    assert score_item(hit, interests, NOW) > score_item(miss, interests, NOW)
+    assert score_item(miss, interests, NOW) == pytest.approx(miss.trust * 1.0 * 0.5)
+
+
+def test_title_dedup_is_scoped_per_source():
+    """Recurring column titles across sources are distinct stories."""
+    items = [
+        FeedItem(
+            url="https://a/1",
+            source_label="MGoBlog",
+            type="sports",
+            title="Weekly Recap",
+            snippet="",
+        ),
+        FeedItem(
+            url="https://b/1", source_label="ESPN", type="sports", title="Weekly Recap", snippet=""
+        ),
+        FeedItem(
+            url="https://a/2",
+            source_label="MGoBlog",
+            type="sports",
+            title="Weekly Recap",
+            snippet="",
+        ),
+    ]
+    out = dedup_items(items)
+    assert [i.source_label for i in out] == ["MGoBlog", "ESPN"]
 
 
 def test_score_rewards_interest_hits():

@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { Rss } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { getFeed } from "@/lib/api";
 import { FeedBlock, FeedLink } from "@/components/feed/FeedBlock";
 import type { FeedResponse } from "@/lib/types";
@@ -72,7 +71,7 @@ export default function FeedPage(): React.JSX.Element {
 
         {!loading && !error && (data?.items.length ?? 0) > 0 && (
           <>
-            <FeedBlock />
+            <FeedBlock data={data ?? undefined} />
 
             {rest.length > 0 && (
               <div className="glass-card p-5">
@@ -87,10 +86,9 @@ export default function FeedPage(): React.JSX.Element {
                       url={item.url}
                       title={item.title}
                       take={item.snippet || null}
-                      source={cn(
-                        item.source_label,
+                      source={`${item.source_label}${
                         TYPE_LABEL[item.type] ? ` · ${TYPE_LABEL[item.type]}` : ""
-                      )}
+                      }`}
                     />
                   ))}
                 </div>
