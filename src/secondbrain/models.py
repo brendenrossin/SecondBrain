@@ -163,6 +163,7 @@ class BriefingResponse(BaseModel):
     today_context: DailyContext | None
     today_events: list["EventResponse"]
     total_open: int
+    feed_counts: dict[str, int] = {}  # {"ai": 5, "sports": 3}; empty when feed off or unsummarized
 
 
 class DigestResponse(BaseModel):
