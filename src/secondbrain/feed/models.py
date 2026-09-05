@@ -33,7 +33,7 @@ class FeedItem:
 @dataclass
 class FeedSection:
     heading: str  # "AI" | "Sports"
-    items: list[dict] = field(default_factory=list)  # {title, url, take}
+    items: list[dict[str, str]] = field(default_factory=list)  # {title, url, take}
 
 
 @dataclass

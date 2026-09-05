@@ -29,10 +29,21 @@ SEED_DEFAULTS = FeedConfig(
     ],
     interests={
         # AI
-        "agents": 2.0, "anthropic": 2.0, "claude": 1.8, "llm": 1.5, "rag": 1.5,
-        "openai": 1.2, "model": 1.0, "eval": 1.2, "prompt": 1.0,
+        "agents": 2.0,
+        "anthropic": 2.0,
+        "claude": 1.8,
+        "llm": 1.5,
+        "rag": 1.5,
+        "openai": 1.2,
+        "model": 1.0,
+        "eval": 1.2,
+        "prompt": 1.0,
         # Sports
-        "padres": 2.0, "michigan": 2.0, "wolverines": 1.8, "nfl": 1.2, "playoff": 1.2,
+        "padres": 2.0,
+        "michigan": 2.0,
+        "wolverines": 1.8,
+        "nfl": 1.2,
+        "playoff": 1.2,
     },
 )
 

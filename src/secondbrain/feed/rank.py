@@ -1,5 +1,6 @@
 """Heuristic feed ranking — deterministic, no LLM. score = trust * interest * recency."""
 
+import math
 import re
 from datetime import UTC, datetime
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -53,7 +54,7 @@ def recency_decay(published_ts_or_iso: float | str | None, now_ts: float) -> flo
     if ts is None:
         return 0.5
     age_hours = max(0.0, (now_ts - ts) / 3600.0)
-    return 0.5 ** (age_hours / _RECENCY_HALFLIFE_HOURS)
+    return math.pow(0.5, age_hours / _RECENCY_HALFLIFE_HOURS)
 
 
 def score_item(item: FeedItem, interests: dict[str, float], now_ts: float) -> float:
@@ -62,7 +63,9 @@ def score_item(item: FeedItem, interests: dict[str, float], now_ts: float) -> fl
     return item.trust * interest_match * recency_decay(item.published_at, now_ts)
 
 
-def rank_items(items: list[FeedItem], interests: dict[str, float], now_ts: float | None = None) -> list[FeedItem]:
+def rank_items(
+    items: list[FeedItem], interests: dict[str, float], now_ts: float | None = None
+) -> list[FeedItem]:
     now = now_ts if now_ts is not None else datetime.now(UTC).timestamp()
     for it in items:
         it.score = score_item(it, interests, now)

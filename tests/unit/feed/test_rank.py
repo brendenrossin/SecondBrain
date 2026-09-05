@@ -13,8 +13,15 @@ NOW = 1_700_000_000.0  # fixed reference epoch seconds
 
 
 def _item(url, title, type="ai", trust=0.5, snippet="", published=None):
-    return FeedItem(url=url, source_label="s", type=type, title=title,
-                    snippet=snippet, published_at=published, trust=trust)
+    return FeedItem(
+        url=url,
+        source_label="s",
+        type=type,
+        title=title,
+        snippet=snippet,
+        published_at=published,
+        trust=trust,
+    )
 
 
 def test_normalize_url_strips_tracking_and_trailing_slash():
@@ -29,8 +36,8 @@ def test_normalize_title_lowercases_and_collapses_space():
 def test_dedup_by_url_and_title():
     items = [
         _item("https://x.com/a/", "Hello"),
-        _item("https://x.com/a", "Hello"),        # same after normalize
-        _item("https://x.com/b", "Hello"),         # same title, different url -> dup
+        _item("https://x.com/a", "Hello"),  # same after normalize
+        _item("https://x.com/b", "Hello"),  # same title, different url -> dup
         _item("https://x.com/c", "Different"),
     ]
     out = dedup_items(items)
@@ -38,10 +45,10 @@ def test_dedup_by_url_and_title():
 
 
 def test_recency_decay_favors_recent():
-    recent = recency_decay(NOW - 3600, NOW)     # 1h old
-    old = recency_decay(NOW - 3600 * 96, NOW)   # 96h old
+    recent = recency_decay(NOW - 3600, NOW)  # 1h old
+    old = recency_decay(NOW - 3600 * 96, NOW)  # 96h old
     assert recent > old
-    assert recency_decay(None, NOW) == 0.5      # unknown date -> neutral-ish
+    assert recency_decay(None, NOW) == 0.5  # unknown date -> neutral-ish
 
 
 def test_score_rewards_interest_hits():
