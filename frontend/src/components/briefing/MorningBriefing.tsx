@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getBriefing } from "@/lib/api";
+import { FeedBlock } from "@/components/feed/FeedBlock";
 import type { BriefingResponse, BriefingTask, CalendarEvent } from "@/lib/types";
 
 function getGreeting(): string {
@@ -366,6 +367,9 @@ function BriefingContent({ data }: { data: BriefingResponse }): React.JSX.Elemen
         titleColor="text-warning"
         borderStyle={{ borderColor: "rgba(251, 191, 36, 0.2)" }}
       />
+
+      {/* Feed — renders nothing when the feature is off or nothing summarized */}
+      <FeedBlock />
 
       {/* Yesterday's context */}
       {data.yesterday_context && (

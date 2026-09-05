@@ -10,6 +10,7 @@ import {
   Calendar,
   Feather,
   Lightbulb,
+  Rss,
   Shield,
   Settings,
   ChevronRight,
@@ -55,6 +56,13 @@ const NAV_COLORS: Record<string, {
     borderActive: "border-warning/15",
     glowActive: "shadow-[0_0_16px_rgba(251,191,36,0.1)]",
   },
+  "/feed": {
+    icon: "text-warning/60",
+    iconActive: "text-warning drop-shadow-[0_0_6px_rgba(251,191,36,0.4)]",
+    bgActive: "bg-warning/12",
+    borderActive: "border-warning/15",
+    glowActive: "shadow-[0_0_16px_rgba(251,191,36,0.1)]",
+  },
   "/insights": {
     icon: "text-purple/60",
     iconActive: "text-purple drop-shadow-[0_0_6px_rgba(167,139,250,0.4)]",
@@ -94,6 +102,7 @@ const coreNavItems = [
 ];
 
 const toolsNavItems = [
+  { href: "/feed", label: "Feed", icon: Rss },
   { href: "/insights", label: "Insights", icon: Lightbulb },
   { href: "/admin", label: "Admin", icon: Shield },
   { href: "/settings", label: "Settings", icon: Settings },
