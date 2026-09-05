@@ -86,6 +86,7 @@ disallow_untyped_defs = false
 [[tool.mypy.overrides]]
 module = [
     "frontmatter",
+    "feedparser",
     "chromadb.*",
     "sentence_transformers",
     "gradio",
