@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 from opentelemetry.sdk.trace.export import SpanExportResult
 
 from secondbrain.config import Settings
-from secondbrain.tracing import FileSpanExporter, init_tracing
+from secondbrain.tracing import FileSpanExporter, _langfuse_reachable, init_tracing
 
 
 def test_tracing_disabled_by_default():
@@ -218,3 +218,66 @@ def test_inbox_processor_calls_init_tracing():
     )
     source = source_path.read_text()
     assert "init_tracing" in source, "inbox_processor.py must call init_tracing"
+
+
+class TestLangfuseReachability:
+    """The Langfuse exporter must not attach when its collector is unreachable.
+
+    Langfuse is a trace *viewer*; the JSONL file exporter is the source of truth.
+    A `BatchSpanProcessor` pointed at a dead endpoint logs a full stack trace per
+    flush from its own background thread — which `init_tracing`'s try/except
+    cannot catch — flooding every daily-sync log with ConnectionError.
+    """
+
+    def _settings(self, tmp_path):
+        return Settings(
+            _env_file=None,
+            vault_path="/tmp/fake",
+            tracing_enabled=True,
+            data_path=tmp_path,
+            langfuse_public_key="pk-lf-test",
+            langfuse_secret_key="sk-lf-test",
+            langfuse_host="http://localhost:3000",
+        )
+
+    def test_skips_exporter_when_collector_is_down(self, tmp_path):
+        with (
+            patch("secondbrain.tracing.Traceloop"),
+            patch("secondbrain.tracing._langfuse_reachable", return_value=False),
+            patch("secondbrain.tracing._create_langfuse_otlp_processor") as mock_create,
+        ):
+            init_tracing(self._settings(tmp_path))
+            mock_create.assert_not_called()
+
+    def test_attaches_exporter_when_collector_is_up(self, tmp_path):
+        with (
+            patch("secondbrain.tracing.Traceloop"),
+            patch("secondbrain.tracing._langfuse_reachable", return_value=True),
+            patch("secondbrain.tracing._create_langfuse_otlp_processor") as mock_create,
+            patch("secondbrain.tracing.trace") as mock_trace,
+        ):
+            provider = MagicMock()
+            mock_trace.get_tracer_provider.return_value = provider
+            init_tracing(self._settings(tmp_path))
+            provider.add_span_processor.assert_called_once_with(mock_create.return_value)
+
+    def test_down_collector_does_not_log_an_error(self, tmp_path, caplog):
+        # Docker not running is an ordinary state on a laptop, not a fault.
+        with (
+            patch("secondbrain.tracing.Traceloop"),
+            patch("secondbrain.tracing._langfuse_reachable", return_value=False),
+        ):
+            init_tracing(self._settings(tmp_path))
+        assert not [r for r in caplog.records if r.levelname in ("ERROR", "CRITICAL")]
+
+    def test_reachability_check_reports_false_on_refused_connection(self):
+        # Port 1 is reserved and never listening.
+        assert _langfuse_reachable("http://127.0.0.1:1") is False
+
+    def test_reachability_check_never_raises_on_a_junk_host(self):
+        assert _langfuse_reachable("not-a-url://///") is False
+
+    def test_reachability_check_accepts_any_http_response(self):
+        # A 401/404 still proves something is listening and will accept spans.
+        with patch("secondbrain.tracing.httpx.get", return_value=MagicMock(status_code=404)):
+            assert _langfuse_reachable("http://localhost:3000") is True
