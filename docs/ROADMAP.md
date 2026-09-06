@@ -39,7 +39,7 @@ OPS-3 (Cloud migration) ─► EMAIL-1 (Gmail ingestion)
 ENGAGE-1 (Today surface + daily push plumbing) ◄── done
   ├─► ENGAGE-2 (Resurfacing: spaced-repetition + on-this-day)
   ├─► ENGAGE-3 (Related-notes panel — absorbs RETRIEVAL-2)
-  └─► FEED-1 (RSS attention router: AI + sports) ── delivered via ENGAGE-1 push
+  └─► FEED-1 (RSS attention router: AI + sports) ◄── done
         ├─► FEED-2 (Engagement learning + save-to-vault via KLIB-1)
         ├─► FEED-3 (Google Calendar read-only)
         └─► FEED-4 (Gmail — absorbs EMAIL-1)
@@ -84,7 +84,6 @@ _ENGAGE-1 delivered — see [DELIVERED.md](DELIVERED.md)._
 
 | ID | Ticket | Est. | Status | Spec |
 |----|--------|------|--------|------|
-| FEED-1 | RSS attention router trial: ~10 sources (AI + Padres/Michigan/NFL), heuristic ranking, one batched daily summary, Feed page + brief block | 2-3d | **PR** | [spec](features/feed-attention-router.md) |
 | FEED-2 | Engagement learning (click/thumbs → interest-weight tuning) + "save to vault" via KLIB-1 | 2d | Backlog | — |
 | FEED-3 | Google Calendar read-only → real events in the daily brief | 1-2d | Backlog | [exploration](features/EXPLORATION-calendar-integration.md) |
 | FEED-4 | Gmail read-only (absorbs EMAIL-1): trusted-sender summaries, recruiter/family detection, newsletter ingestion | 5-7d | Backlog | [spec](features/email-ingestion.md) |

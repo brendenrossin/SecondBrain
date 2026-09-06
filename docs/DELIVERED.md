@@ -4,6 +4,14 @@ Completed work, moved here after PR merge. Grouped by epic, ordered by completio
 
 ---
 
+## Epic: FEED — Personalized Attention Router
+
+| ID | Ticket | Completed | PR |
+|----|--------|-----------|----|
+| FEED-1 | RSS attention router: ~10 sources (AI + Padres/Michigan/NFL), free heuristic ranking (trust x interests x 48h recency decay), one batched Haiku call (~$0.10/mo), Feed page + Today block, vault-configured sources | 2026-09-05 | [#13](https://github.com/brendenrossin/SecondBrain/pull/13) |
+
+---
+
 ## Epic: ENGAGE — Proactive Resurfacing & Daily Habit
 
 | ID | Ticket | Completed | PR |
