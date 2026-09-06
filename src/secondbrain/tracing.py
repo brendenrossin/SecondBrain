@@ -9,6 +9,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
+import httpx
 from opentelemetry import trace
 from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter, SpanExportResult
@@ -17,6 +18,8 @@ from traceloop.sdk import Traceloop
 from secondbrain.config import Settings
 
 logger = logging.getLogger(__name__)
+
+_LANGFUSE_PROBE_TIMEOUT = 1.5
 
 
 class FileSpanExporter(SpanExporter):
@@ -40,6 +43,24 @@ class FileSpanExporter(SpanExporter):
 
     def shutdown(self) -> None:
         pass
+
+
+def _langfuse_reachable(host: str) -> bool:
+    """Whether anything is listening at `host`.
+
+    Any HTTP response counts, including 401 or 404: the check is for a live
+    listener, not a working route. Only a transport failure means "down".
+
+    Worth the round trip because there is no cheaper signal. A
+    `BatchSpanProcessor` aimed at a dead collector logs a full stack trace per
+    flush from its own background thread, so it cannot be caught at the call
+    site — and Langfuse runs in Docker, which is routinely not running.
+    """
+    try:
+        httpx.get(host, timeout=_LANGFUSE_PROBE_TIMEOUT)
+    except Exception:
+        return False
+    return True
 
 
 def _create_langfuse_otlp_processor(
@@ -80,6 +101,15 @@ def init_tracing(settings: Settings) -> None:
 
     # Add Langfuse OTLP exporter if keys are configured (dual-write)
     if settings.langfuse_public_key and settings.langfuse_secret_key:
+        if not _langfuse_reachable(settings.langfuse_host):
+            # Info, not warning: Langfuse is a viewer over the JSONL spans we
+            # already wrote, and its Docker stack being down is an ordinary
+            # state — nothing is lost and nothing needs doing.
+            logger.info(
+                "Langfuse not reachable at %s — tracing to JSONL only",
+                settings.langfuse_host,
+            )
+            return
         try:
             processor = _create_langfuse_otlp_processor(
                 public_key=settings.langfuse_public_key,
