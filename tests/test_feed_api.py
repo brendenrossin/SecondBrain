@@ -125,3 +125,38 @@ class TestFeedClick:
             resp = client.post("/api/v1/feed/99999/click")
         assert resp.status_code == 404
         assert "not found" in resp.json()["detail"].lower()
+
+
+def _seed_overviews(data_path, overviews):
+    store = FeedStore(data_path / get_settings().feed_db_name)
+    try:
+        store.replace_section_overviews(overviews)
+    finally:
+        store.close()
+
+
+class TestSectionOverviews:
+    def test_overview_is_returned_on_the_matching_section(self, client, seeded):
+        _seed_overviews(seeded, {"ai": "Agents everywhere today."})
+        with override_feed_settings(enabled=True, data_path=seeded):
+            body = client.get("/api/v1/feed").json()
+        assert body["sections"][0]["overview"] == "Agents everywhere today."
+
+    def test_overview_is_null_when_none_was_stored(self, client, seeded):
+        with override_feed_settings(enabled=True, data_path=seeded):
+            body = client.get("/api/v1/feed").json()
+        assert body["sections"][0]["overview"] is None
+
+    def test_blank_overview_is_normalized_to_null(self, client, seeded):
+        _seed_overviews(seeded, {"ai": ""})
+        with override_feed_settings(enabled=True, data_path=seeded):
+            body = client.get("/api/v1/feed").json()
+        assert body["sections"][0]["overview"] is None
+
+    def test_overview_for_a_type_with_no_summarized_items_creates_no_section(self, client, seeded):
+        # The sports item in `seeded` is unsummarized, so it earns no section.
+        _seed_overviews(seeded, {"sports": "Orphaned sports overview."})
+        with override_feed_settings(enabled=True, data_path=seeded):
+            body = client.get("/api/v1/feed").json()
+        assert [s["heading"] for s in body["sections"]] == ["AI"]
+        assert body["sections"][0]["overview"] is None

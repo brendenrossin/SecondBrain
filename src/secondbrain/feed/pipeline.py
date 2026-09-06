@@ -5,6 +5,7 @@ top-N survivors reach the single batched LLM call.
 """
 
 import logging
+from collections import Counter
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -33,6 +34,38 @@ def _is_due(last_fetched_at: str, min_interval_hours: int) -> bool:
     if last.tzinfo is None:
         last = last.replace(tzinfo=UTC)
     return datetime.now(UTC) - last >= timedelta(hours=min_interval_hours)
+
+
+def _section_overviews(top: list[FeedItem], summary: FeedSummary) -> dict[str, str]:
+    """Map each section overview onto the item type it actually describes.
+
+    A section's heading is model-authored free text ("Sports", "AI news", "AI/ML"),
+    while the read path groups by our own `type` column. Joining on the types of
+    the section's resolved items avoids depending on the model spelling a heading
+    the same way twice.
+
+    Only type-pure sections are trusted. A section spanning types means the model
+    ignored the grouping instruction, and filing it under the majority type would
+    print a sports paragraph under the AI header — confidently wrong reads worse
+    than absent. Where the model splits one type across sections ("AI Research",
+    "AI Industry"), the overview covering the most items wins rather than
+    whichever happened to come last.
+    """
+    types = {it.url: it.type for it in top}
+    best: dict[str, tuple[int, str]] = {}
+    for section in summary.sections:
+        if not section.overview:
+            continue
+        counts = Counter(types[i["url"]] for i in section.items if i["url"] in types)
+        if len(counts) != 1:
+            if counts:
+                logger.info("Feed: skipping overview for mixed-type section %r", section.heading)
+            continue
+        item_type, matched = next(iter(counts.items()))  # exactly one, per the check above
+        incumbent = best.get(item_type)
+        if incumbent is None or matched > incumbent[0]:
+            best[item_type] = (matched, section.overview)
+    return {item_type: text for item_type, (_, text) in best.items()}
 
 
 def _attach_takes(top: list[FeedItem], summary: FeedSummary) -> None:
@@ -83,6 +116,7 @@ def run_feed_pipeline(vault_path: Path, settings: Settings) -> str:
 
         _attach_takes(top, summary)
         store.update_summaries(top)
+        store.replace_section_overviews(_section_overviews(top, summary))
         store.mark_shown([it.url for it in top])
         pruned = store.prune_old(settings.feed_retention_days)
     finally:

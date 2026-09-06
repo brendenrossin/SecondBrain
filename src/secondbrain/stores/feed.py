@@ -13,8 +13,11 @@ from pathlib import Path
 from typing import Any
 
 from secondbrain.feed.models import FeedItem
+from secondbrain.feed.text import strip_html
 
 logger = logging.getLogger(__name__)
+
+_SCHEMA_VERSION = 1
 
 
 class FeedStore:
@@ -87,8 +90,69 @@ class FeedStore:
             );
             CREATE INDEX IF NOT EXISTS idx_feed_score ON feed_items(score DESC);
             CREATE INDEX IF NOT EXISTS idx_feed_fetched ON feed_items(fetched_at);
+
+            CREATE TABLE IF NOT EXISTS feed_section_overviews (
+                type TEXT PRIMARY KEY,
+                overview TEXT NOT NULL,
+                generated_at TEXT NOT NULL
+            );
         """)
         self.conn.commit()
+        self._migrate()
+
+    def _migrate(self) -> None:
+        """Run one-time data fixes, tracked in PRAGMA user_version.
+
+        v1 strips HTML from rows stored before `fetch` cleaned text at ingestion.
+        A refresh only rewrites items still present in their source feed, so an
+        article that has since aged out of its RSS window would otherwise keep
+        raw markup on screen until the 30-day prune reached it.
+
+        Uses `self.conn` directly rather than the `_run` helpers on purpose: this
+        runs inside `_init_schema`, and `_run`'s reconnect would re-enter the
+        `conn` property and recurse until the stack blew.
+        """
+        try:
+            version = int(self.conn.execute("PRAGMA user_version").fetchone()[0])
+            if version >= _SCHEMA_VERSION:
+                return
+            self._backfill_plain_text()
+            # PRAGMA user_version is transactional, so it commits with the rows
+            # it describes — never a bumped version over unwritten data.
+            self.conn.execute(f"PRAGMA user_version = {_SCHEMA_VERSION}")
+            self.conn.commit()
+        except sqlite3.Error:
+            # Roll back, or the half-finished pass stays pending on this
+            # connection: it holds a write lock the other process blocks on, and
+            # the next unrelated commit() would persist it under version 0 —
+            # leaving the retry to strip already-stripped rows a second time.
+            with contextlib.suppress(Exception):
+                self.conn.rollback()
+            logger.warning("FeedStore: plain-text backfill failed", exc_info=True)
+
+    def _backfill_plain_text(self) -> None:
+        """Rewrite any title/snippet still holding markup or HTML entities."""
+        rows = self.conn.execute(
+            """SELECT id, title, snippet FROM feed_items
+               WHERE title LIKE '%<%' OR title LIKE '%&%'
+                  OR snippet LIKE '%<%' OR snippet LIKE '%&%'"""
+        ).fetchall()
+        updates: list[tuple[str, str | None, int]] = []
+        for row in rows:
+            stored_snippet = row["snippet"] or ""
+            title = strip_html(row["title"])
+            snippet = strip_html(stored_snippet)
+            if title == row["title"] and snippet == stored_snippet:
+                continue
+            # Keep the original when stripping empties a field — markup-only
+            # text is still better than a blank row, and these rewrites are
+            # in place with no copy of the original to recover from.
+            updates.append((title or row["title"], snippet or row["snippet"], row["id"]))
+        if updates:
+            self.conn.executemany(
+                "UPDATE feed_items SET title = ?, snippet = ? WHERE id = ?", updates
+            )
+            logger.info("FeedStore: stripped markup from %d rows", len(updates))
 
     def add_items(self, items: list[FeedItem]) -> int:
         """Upsert items keyed on URL. Returns the count of rows newly inserted.
@@ -138,6 +202,31 @@ class FeedStore:
             return
         self._run_many("UPDATE feed_items SET summary = ?, score = ? WHERE url = ?", rows)
         self.conn.commit()
+
+    def replace_section_overviews(self, overviews: dict[str, str]) -> None:
+        """Swap in this run's section overviews, keyed by item type.
+
+        A full replace, not an upsert: an overview describes one refresh's
+        stories, so a type that produced nothing today must not keep yesterday's
+        paragraph sitting above today's headlines.
+        """
+        now = datetime.now(UTC).isoformat()
+        self._run("DELETE FROM feed_section_overviews")
+        if overviews:
+            # OR REPLACE, not plain INSERT: `_run_many` reconnects and retries
+            # once on a database error, and reconnecting rolls the DELETE back —
+            # so the retry meets the rows it thought it had just removed.
+            self._run_many(
+                """INSERT OR REPLACE INTO feed_section_overviews
+                   (type, overview, generated_at) VALUES (?, ?, ?)""",
+                [(t, text, now) for t, text in overviews.items()],
+            )
+        self.conn.commit()
+
+    def get_section_overviews(self) -> dict[str, str]:
+        """Stored overviews by item type, e.g. {"ai": "...", "sports": "..."}."""
+        rows = self._run("SELECT type, overview FROM feed_section_overviews").fetchall()
+        return {str(row["type"]): str(row["overview"]) for row in rows}
 
     def get_recent(self, limit: int = 50) -> list[dict[str, Any]]:
         """Newest refresh first, best-scoring within it.

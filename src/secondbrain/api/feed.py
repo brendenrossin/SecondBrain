@@ -25,18 +25,36 @@ def _store(settings: Settings) -> FeedStore:
     return FeedStore(Path(settings.data_path) / settings.feed_db_name)
 
 
-def _fetch_recent(settings: Settings) -> list[dict[str, Any]]:
-    """Never raises: a corrupt or locked feed db degrades to an empty feed
-    rather than a 500, matching how the briefing and daily sync treat it."""
+def _read_overviews(store: FeedStore) -> dict[str, str]:
+    """Section overviews, or none of them.
+
+    Overviews are decoration. Losing them must not cost the reader a feed that
+    was otherwise read successfully.
+    """
+    try:
+        return store.get_section_overviews()
+    except Exception:
+        logger.warning("Feed section overviews unreadable", exc_info=True)
+        return {}
+
+
+def _fetch_recent(settings: Settings) -> tuple[list[dict[str, Any]], dict[str, str]]:
+    """Ranked rows plus the stored per-type section overviews.
+
+    Never raises: a corrupt or locked feed db degrades to an empty feed rather
+    than a 500, matching how the briefing and daily sync treat it. Both reads
+    share one connection so the page costs a single open.
+    """
     try:
         store = _store(settings)
         try:
-            return store.get_recent(limit=settings.feed_page_limit)
+            rows = store.get_recent(limit=settings.feed_page_limit)
+            return rows, _read_overviews(store)
         finally:
             store.close()
     except Exception:
         logger.warning("Feed read failed; serving an empty feed", exc_info=True)
-        return []
+        return [], {}
 
 
 def _to_item(row: dict[str, Any]) -> FeedItemResponse:
@@ -53,7 +71,9 @@ def _to_item(row: dict[str, Any]) -> FeedItemResponse:
     )
 
 
-def _to_sections(rows: list[dict[str, Any]]) -> list[FeedSectionResponse]:
+def _to_sections(
+    rows: list[dict[str, Any]], overviews: dict[str, str]
+) -> list[FeedSectionResponse]:
     """Group summarized items by type; unsummarized items appear only in `items`."""
     by_type: dict[str, list[dict[str, str]]] = {}
     for row in rows:
@@ -61,7 +81,10 @@ def _to_sections(rows: list[dict[str, Any]]) -> list[FeedSectionResponse]:
             by_type.setdefault(row["type"], []).append(
                 {"url": row["url"], "title": row["title"], "take": row["summary"]}
             )
-    return [FeedSectionResponse(heading=t.upper(), items=v) for t, v in by_type.items()]
+    return [
+        FeedSectionResponse(heading=t.upper(), items=v, overview=overviews.get(t) or None)
+        for t, v in by_type.items()
+    ]
 
 
 @router.get("/feed", response_model=FeedResponse)
@@ -69,8 +92,8 @@ async def get_feed(settings: Annotated[Settings, Depends(get_settings)]) -> Feed
     """Ranked feed items, plus summarized sections when the daily pass produced takes."""
     if not settings.feed_enabled:
         return FeedResponse(generated=False, sections=[], items=[])
-    rows = await asyncio.to_thread(_fetch_recent, settings)
-    sections = _to_sections(rows)
+    rows, overviews = await asyncio.to_thread(_fetch_recent, settings)
+    sections = _to_sections(rows, overviews)
     return FeedResponse(
         generated=bool(sections),
         sections=sections,

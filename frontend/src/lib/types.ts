@@ -205,6 +205,8 @@ export interface FeedSectionItem {
 export interface FeedSection {
   heading: string;
   items: FeedSectionItem[];
+  /** The section's throughline. Null when the LLM pass fell back to headlines. */
+  overview: string | null;
 }
 
 export interface FeedResponse {

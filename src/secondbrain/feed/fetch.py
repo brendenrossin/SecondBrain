@@ -15,10 +15,15 @@ import feedparser
 import httpx
 
 from secondbrain.feed.models import FeedItem, FeedSource
+from secondbrain.feed.text import strip_html
 
 logger = logging.getLogger(__name__)
 
 _SNIPPET_MAX = 400
+# Titles are attacker-controlled and were the one unbounded field: an entry
+# could carry megabytes of "title" straight into the summarizer prompt, which
+# is the single call the whole cost budget rests on.
+_TITLE_MAX = 300
 # Feed content is attacker-influenced: anyone who can land an entry in a
 # subscribed feed controls the link. Only ever store navigable web URLs so a
 # "javascript:" or "data:" href can never reach the UI.
@@ -99,14 +104,15 @@ def fetch_source(source: FeedSource) -> list[FeedItem]:
         return []
     items: list[FeedItem] = []
     for entry in parsed.entries:
-        title = (getattr(entry, "title", "") or "").strip()
+        # Titles carry entities ("&amp;", "&#8217;") and the odd inline tag.
+        title = strip_html(getattr(entry, "title", "") or "")[:_TITLE_MAX]
         link = (getattr(entry, "link", "") or "").strip()
         if not title or not link:
             continue
         if not _is_safe_link(link):
             logger.warning("Skipping entry with unsafe link scheme from %s", source.label)
             continue
-        snippet = (getattr(entry, "summary", "") or "")[:_SNIPPET_MAX]
+        snippet = strip_html(getattr(entry, "summary", "") or "")[:_SNIPPET_MAX]
         items.append(
             FeedItem(
                 url=link,

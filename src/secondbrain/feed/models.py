@@ -34,6 +34,7 @@ class FeedItem:
 class FeedSection:
     heading: str  # "AI" | "Sports"
     items: list[dict[str, str]] = field(default_factory=list)  # {title, url, take}
+    overview: str = ""  # 1-2 sentences on the section as a whole; "" when not generated
 
 
 @dataclass

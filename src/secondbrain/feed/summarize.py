@@ -18,13 +18,17 @@ logger = logging.getLogger(__name__)
 
 _SYSTEM = (
     "You are a terse news editor. Group the numbered items into sections by their "
-    "type (AI, Sports). For each item write a one-line take (<=20 words). "
+    "type (AI, Sports). Give each section an `overview`: 1-2 sentences (<=40 words) "
+    "on what actually matters across that section today — the throughline, not a "
+    "list of the headlines. For each item write a one-line take (<=20 words). "
     "Refer to each item ONLY by its number `i` — never invent or copy a URL. "
     "Respond with ONLY JSON: "
-    '{"sections":[{"heading":"AI","items":[{"i":1,"take":"..."}]}]}'
+    '{"sections":[{"heading":"AI","overview":"...","items":[{"i":1,"take":"..."}]}]}'
 )
 
 _PROMPT_SNIPPET_MAX = 200  # prompt-cost trim; fetch.py already caps snippets at 400
+_PROMPT_TITLE_MAX = 200  # prompt-cost trim; fetch.py already caps titles at 300
+_OVERVIEW_MAX = 400  # model-authored prose: bound what we persist and render
 
 
 def build_summary_prompt(items: list[FeedItem]) -> str:
@@ -37,7 +41,8 @@ def build_summary_prompt(items: list[FeedItem]) -> str:
     keep model-controlled text out of anything that becomes an href.
     """
     lines = [
-        f"{n}. [{it.type}] ({it.source_label}) {it.title} :: {it.snippet[:_PROMPT_SNIPPET_MAX]}"
+        f"{n}. [{it.type}] ({it.source_label}) {it.title[:_PROMPT_TITLE_MAX]} "
+        f":: {it.snippet[:_PROMPT_SNIPPET_MAX]}"
         for n, it in enumerate(items, start=1)
     ]
     return "Items:\n" + "\n".join(lines)
@@ -49,7 +54,7 @@ def _fallback(items: list[FeedItem]) -> FeedSummary:
     The `take` is deliberately empty rather than a truncated snippet: the pipeline
     persists takes into `summary`, and a snippet stored there would be
     indistinguishable from a real LLM take, making `generated` report True for a
-    run that never reached the model. The UI already falls back to the snippet.
+    run that never reached the model. The UI falls back to the item's snippet.
     """
     by_type: dict[str, list[dict[str, str]]] = {}
     for it in items:
@@ -78,7 +83,11 @@ def _section_from_json(raw: Any, items: list[FeedItem]) -> FeedSection:
         seen.add(idx)
         item = items[idx]
         resolved.append({"url": item.url, "title": item.title, "take": str(entry.get("take", ""))})
-    return FeedSection(heading=str(raw.get("heading", "")), items=resolved)
+    return FeedSection(
+        heading=str(raw.get("heading", "")),
+        items=resolved,
+        overview=str(raw.get("overview", "")).strip()[:_OVERVIEW_MAX],
+    )
 
 
 def parse_summary_response(text: str, items: list[FeedItem]) -> FeedSummary:

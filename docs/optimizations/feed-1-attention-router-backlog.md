@@ -57,3 +57,39 @@ but not worth blocking the merge. Ordered by expected value.
 
 - **`anthropic_api_key` as `SecretStr`.** Pre-existing project-wide pattern in
   `config.py`, not FEED-1's to change.
+
+## Round 2 — feed polish (source metadata, section overviews, HTML stripping)
+
+Tri-review of the polish pass. High-confidence findings were fixed in the same
+commit; the items below were judged not worth the change now.
+
+### Deferred
+
+- **`strip_html` parses the full raw summary before the 400-char trim.**
+  Measured 41 ms for 200 KB; a full-content feed at ~20 KB x 160 entries is
+  ~0.5 s per refresh. Bounded above by the 5 MB `_MAX_BYTES` download cap and it
+  runs once per 20 h, so the cost is invisible. Optional belt if feeds get
+  fatter: `strip_html(raw[:20_000])[:400]`.
+- **Prose containing a real element name between angle brackets still loses it**
+  — `"a<b and c>d"` -> `"a d"`, because `<b ...>` is indistinguishable from a
+  bold tag. The allowlist already rescues the common cases (`x<y matters > 3`,
+  `3<4`); disambiguating further needs context this function does not have.
+- **Double-encoded entities are not idempotent across two passes**
+  — `AT&amp;amp;T` -> `AT&amp;T` -> `AT&T`. Reachable only if the backfill runs
+  twice, which the `rollback()` fix now prevents.
+- **No frontend test runner**, so `timeAgo`, `sourceMeta`, `groupByType` and the
+  `RestGroup` show-more toggle have no automated coverage. Pre-existing gap;
+  `timeAgo` is the first genuinely branchy pure function in `utils.ts` and is
+  the natural place to start if a runner is ever added.
+- **`get_recent`'s `ORDER BY fetched_at DESC, score DESC`** uses one index plus a
+  temp b-tree. Irrelevant at a few hundred rows; a composite index is premature.
+
+### Flagged for FEED-2
+
+- **A hostile feed entry can steer the model's `overview` text.** It is persisted
+  and rendered as section-level editorial with no "generated" marker of its own
+  (the `headlines only` badge does not cover it). Ceiling today is text-only
+  spoofing inside the user's own reader — the model never controls an `href`,
+  since URLs are withheld from the prompt and reattached by index. Capped at 400
+  chars. Revisit when FEED-2 pushes this text to a phone notification or writes
+  it into a vault note, where the escaping guarantees differ.

@@ -217,3 +217,46 @@ def test_published_at_is_none_without_a_date(monkeypatch):
     monkeypatch.setattr(fetch_mod.feedparser, "parse", lambda _raw: _fake_parsed([entry]))
     items = fetch_mod.fetch_source(FeedSource("https://u.example/f", "L", "ai"))
     assert items[0].published_at is None
+
+
+class TestFetchSourceCleansText:
+    def _fetch(self, monkeypatch, *, title, summary):
+        entry = SimpleNamespace(title=title, link="https://x.com/a", summary=summary)
+        monkeypatch.setattr(fetch_mod.feedparser, "parse", lambda _raw: _fake_parsed([entry]))
+        return fetch_mod.fetch_source(FeedSource("https://u.example/f", "Lbl", "ai", 0.9))
+
+    @pytest.mark.usefixtures("downloads")
+    def test_snippet_is_stripped(self, monkeypatch):
+        items = self._fetch(monkeypatch, title="T", summary="<p>Hello <em>world</em></p>")
+        assert items[0].snippet == "Hello world"
+
+    @pytest.mark.usefixtures("downloads")
+    def test_title_is_stripped(self, monkeypatch):
+        items = self._fetch(monkeypatch, title="Ben &amp; Jerry", summary="s")
+        assert items[0].title == "Ben & Jerry"
+
+    @pytest.mark.usefixtures("downloads")
+    def test_strips_before_truncating_so_the_cap_buys_prose(self, monkeypatch):
+        # 400 chars of markup would otherwise consume the whole snippet budget.
+        raw = "<span>" * 120 + "real prose starts here" + "</span>" * 120
+        items = self._fetch(monkeypatch, title="T", summary=raw)
+        assert items[0].snippet == "real prose starts here"
+
+    @pytest.mark.usefixtures("downloads")
+    def test_snippet_still_capped_after_stripping(self, monkeypatch):
+        items = self._fetch(monkeypatch, title="T", summary="x" * 900)
+        assert len(items[0].snippet) == fetch_mod._SNIPPET_MAX
+
+    @pytest.mark.usefixtures("downloads")
+    def test_entry_whose_title_is_only_markup_is_skipped(self, monkeypatch):
+        assert self._fetch(monkeypatch, title="<p></p>", summary="s") == []
+
+
+class TestTitleCap:
+    @pytest.mark.usefixtures("downloads")
+    def test_title_is_capped(self, monkeypatch):
+        # An uncapped title flows straight into the single budgeted LLM call.
+        entry = SimpleNamespace(title="t" * 5000, link="https://x.com/a", summary="s")
+        monkeypatch.setattr(fetch_mod.feedparser, "parse", lambda _raw: _fake_parsed([entry]))
+        items = fetch_mod.fetch_source(FeedSource("https://u.example/f", "L", "ai", 0.9))
+        assert len(items[0].title) == fetch_mod._TITLE_MAX

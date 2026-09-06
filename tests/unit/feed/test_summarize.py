@@ -218,3 +218,44 @@ class TestIndexResolution:
         text = '{"sections":[{"heading":"AI","items":[{"i":42,"take":"x"}]}]}'
         s = summarize_mod.parse_summary_response(text, [_item()])
         assert s.generated is False
+
+
+class TestSectionOverview:
+    def _parse(self, payload, items=None):
+        return summarize_mod.parse_summary_response(payload, items or [_item(url="u1")])
+
+    def test_overview_is_parsed(self):
+        summary = self._parse(
+            '{"sections":[{"heading":"AI","overview":"Agents everywhere.",'
+            '"items":[{"i":1,"take":"hot"}]}]}'
+        )
+        assert summary.sections[0].overview == "Agents everywhere."
+
+    def test_missing_overview_defaults_to_empty(self):
+        summary = self._parse('{"sections":[{"heading":"AI","items":[{"i":1,"take":"hot"}]}]}')
+        assert summary.sections[0].overview == ""
+
+    def test_overview_is_trimmed(self):
+        summary = self._parse(
+            '{"sections":[{"heading":"AI","overview":"  spaced  ","items":[{"i":1,"take":"t"}]}]}'
+        )
+        assert summary.sections[0].overview == "spaced"
+
+    def test_non_string_overview_is_coerced_not_fatal(self):
+        summary = self._parse(
+            '{"sections":[{"heading":"AI","overview":42,"items":[{"i":1,"take":"t"}]}]}'
+        )
+        assert summary.generated is True
+        assert summary.sections[0].overview == "42"
+
+    def test_fallback_sections_carry_no_overview(self):
+        summary = summarize_mod._fallback([_item(url="u1")])
+        assert summary.sections[0].overview == ""
+        assert summary.generated is False
+
+    def test_overview_is_capped(self):
+        summary = self._parse(
+            '{"sections":[{"heading":"AI","overview":"%s","items":[{"i":1,"take":"t"}]}]}'
+            % ("x" * 900)
+        )
+        assert len(summary.sections[0].overview) == summarize_mod._OVERVIEW_MAX

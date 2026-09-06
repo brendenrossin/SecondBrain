@@ -201,6 +201,7 @@ class FeedSectionResponse(BaseModel):
 
     heading: str
     items: list[dict[str, str]]  # {url, title, take}
+    overview: str | None = None  # the section's throughline; None when not generated
 
 
 class FeedResponse(BaseModel):

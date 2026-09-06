@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Rss, ExternalLink } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, timeAgo } from "@/lib/utils";
 import { getFeed, recordFeedClick } from "@/lib/api";
 import type { FeedResponse, FeedItem } from "@/lib/types";
 
@@ -29,8 +29,13 @@ const HEADING_COLOR: Record<string, string> = {
   SPORTS: "text-success",
 };
 
-function headingColor(heading: string): string {
+export function headingColor(heading: string): string {
   return HEADING_COLOR[heading] ?? "text-purple";
+}
+
+/** "Simon Willison · 3h" — either half may be missing, and both may be. */
+function sourceMeta(source?: string, publishedAt?: string | null): string {
+  return [source, timeAgo(publishedAt)].filter(Boolean).join(" · ");
 }
 
 export function FeedLink({
@@ -39,6 +44,7 @@ export function FeedLink({
   title,
   take,
   source,
+  publishedAt,
   className,
 }: {
   id?: number;
@@ -46,8 +52,10 @@ export function FeedLink({
   title: string;
   take?: string | null;
   source?: string;
+  publishedAt?: string | null;
   className?: string;
 }): React.JSX.Element {
+  const meta = sourceMeta(source, publishedAt);
   const href = safeHref(url);
 
   // An unsafe or unparseable URL still shows its title — it just isn't clickable.
@@ -72,8 +80,10 @@ export function FeedLink({
       <ExternalLink className="w-3.5 h-3.5 text-text-dim shrink-0 mt-0.5 group-hover:text-accent transition-colors" />
       <div className="flex-1 min-w-0">
         <p className="text-[13px] text-text font-medium break-words leading-snug">{title}</p>
-        {take && <p className="text-[12px] text-text-muted mt-0.5 break-words">{take}</p>}
-        {source && <p className="text-[10px] text-text-dim mt-1">{source}</p>}
+        {take && (
+          <p className="text-[12px] text-text-muted mt-0.5 break-words line-clamp-2">{take}</p>
+        )}
+        {meta && <p className="text-[10px] text-text-dim mt-1">{meta}</p>}
       </div>
     </Wrapper>
   );
@@ -133,15 +143,27 @@ export function FeedBlock({
             >
               {section.heading}
             </p>
-            {section.items.map((item) => (
-              <FeedLink
-                key={item.url}
-                id={byUrl.get(item.url)?.id}
-                url={item.url}
-                title={item.title}
-                take={item.take}
-              />
-            ))}
+            {section.overview && (
+              <p className="text-[12px] text-text-muted leading-relaxed mt-1 mb-1.5">
+                {section.overview}
+              </p>
+            )}
+            {section.items.map((item) => {
+              const stored = byUrl.get(item.url);
+              return (
+                <FeedLink
+                  key={item.url}
+                  id={stored?.id}
+                  url={item.url}
+                  title={item.title}
+                  // On a fallback run the take is empty by design; the snippet
+                  // keeps the day readable instead of a column of bare headlines.
+                  take={item.take || stored?.snippet || null}
+                  source={stored?.source_label}
+                  publishedAt={stored?.published_at}
+                />
+              );
+            })}
           </div>
         ))}
       </div>

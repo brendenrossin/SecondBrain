@@ -230,3 +230,177 @@ class TestSummarizedSince:
         store = _store(tmp_path)
         store.add_items([_item("u1")])
         assert store.last_fetched_at() == store.get_recent()[0]["fetched_at"]
+
+
+class TestSectionOverviews:
+    def test_roundtrip(self, tmp_path):
+        store = _store(tmp_path)
+        store.replace_section_overviews({"ai": "Agents everywhere.", "sports": "Padres win."})
+        assert store.get_section_overviews() == {
+            "ai": "Agents everywhere.",
+            "sports": "Padres win.",
+        }
+        store.close()
+
+    def test_empty_when_never_written(self, tmp_path):
+        store = _store(tmp_path)
+        assert store.get_section_overviews() == {}
+        store.close()
+
+    def test_replace_drops_types_absent_from_the_new_run(self, tmp_path):
+        # Yesterday's sports paragraph must not sit above today's AI-only feed.
+        store = _store(tmp_path)
+        store.replace_section_overviews({"ai": "old ai", "sports": "old sports"})
+        store.replace_section_overviews({"ai": "new ai"})
+        assert store.get_section_overviews() == {"ai": "new ai"}
+        store.close()
+
+    def test_replace_with_empty_dict_clears_everything(self, tmp_path):
+        store = _store(tmp_path)
+        store.replace_section_overviews({"ai": "something"})
+        store.replace_section_overviews({})
+        assert store.get_section_overviews() == {}
+        store.close()
+
+    def test_overviews_survive_reopening_the_db(self, tmp_path):
+        store = _store(tmp_path)
+        store.replace_section_overviews({"ai": "persisted"})
+        store.close()
+        reopened = _store(tmp_path)
+        assert reopened.get_section_overviews() == {"ai": "persisted"}
+        reopened.close()
+
+    def test_table_is_created_on_a_preexisting_feed_db(self, tmp_path):
+        # Databases written before this table existed must not need a migration.
+        store = _store(tmp_path)
+        store.add_items([_item("https://x/1")])
+        store.close()
+        reopened = _store(tmp_path)
+        reopened.replace_section_overviews({"ai": "fine"})
+        assert reopened.get_section_overviews() == {"ai": "fine"}
+        reopened.close()
+
+
+class TestPlainTextBackfill:
+    def _seed_raw(self, tmp_path, title, snippet):
+        """Insert a row the way an older build would have — markup intact."""
+        store = _store(tmp_path)
+        store.add_items([_item("https://x/1")])
+        store.conn.execute(
+            "UPDATE feed_items SET title = ?, snippet = ? WHERE url = ?",
+            (title, snippet, "https://x/1"),
+        )
+        store.conn.execute("PRAGMA user_version = 0")
+        store.conn.commit()
+        store.close()
+        return _store(tmp_path)
+
+    def test_strips_markup_left_by_an_older_build(self, tmp_path):
+        store = self._seed_raw(tmp_path, "Ben &amp; Jerry", "<p>Hello <b>world</b></p>")
+        row = store.get_recent()[0]
+        assert row["title"] == "Ben & Jerry"
+        assert row["snippet"] == "Hello world"
+        store.close()
+
+    def test_marks_the_database_migrated(self, tmp_path):
+        store = self._seed_raw(tmp_path, "<p>x</p>", "<p>y</p>")
+        store.get_recent()
+        assert int(store.conn.execute("PRAGMA user_version").fetchone()[0]) == 1
+        store.close()
+
+    def test_does_not_rerun_once_migrated(self, tmp_path):
+        store = self._seed_raw(tmp_path, "T", "<p>clean me</p>")
+        store.get_recent()
+        # Markup written *after* the migration is left alone — no repeat pass.
+        store.conn.execute("UPDATE feed_items SET snippet = '<p>later</p>'")
+        store.conn.commit()
+        store.close()
+        reopened = _store(tmp_path)
+        assert reopened.get_recent()[0]["snippet"] == "<p>later</p>"
+        reopened.close()
+
+    def test_title_that_is_only_markup_keeps_its_original(self, tmp_path):
+        # Blanking the title would leave an unreadable row in the UI.
+        store = self._seed_raw(tmp_path, "<p></p>", "body")
+        assert store.get_recent()[0]["title"] == "<p></p>"
+        store.close()
+
+    def test_clean_rows_are_untouched(self, tmp_path):
+        store = self._seed_raw(tmp_path, "Plain title", "Plain body")
+        row = store.get_recent()[0]
+        assert (row["title"], row["snippet"]) == ("Plain title", "Plain body")
+        store.close()
+
+    def test_null_snippet_survives_the_backfill(self, tmp_path):
+        store = self._seed_raw(tmp_path, "Ben &amp; Jerry", None)
+        row = store.get_recent()[0]
+        assert row["title"] == "Ben & Jerry"
+        assert row["snippet"] is None
+        store.close()
+
+    def test_fresh_database_is_marked_current(self, tmp_path):
+        store = _store(tmp_path)
+        store.get_recent()
+        assert int(store.conn.execute("PRAGMA user_version").fetchone()[0]) == 1
+        store.close()
+
+
+class TestBackfillFailureSafety:
+    def test_failure_leaves_no_open_transaction_and_no_partial_write(self, tmp_path):
+        """A swallowed error must roll back: the half-done pass otherwise holds a
+        write lock the other process blocks on, and rides out on the next commit."""
+        store = _store(tmp_path)
+        store.add_items([_item("https://x/1")])
+        store.conn.execute(
+            "UPDATE feed_items SET title = ?, snippet = ? WHERE url = ?",
+            ("<p>dirty</p>", "<p>body</p>", "https://x/1"),
+        )
+        store.conn.execute("PRAGMA user_version = 0")
+        store.conn.commit()
+        store.close()
+
+        reopened = _store(tmp_path)
+
+        # Fail the backfill after its SELECT, mid-write.
+        original = FeedStore._backfill_plain_text
+
+        def half_then_fail(self):
+            self.conn.execute("UPDATE feed_items SET title = 'half'")
+            raise sqlite3.OperationalError("database is locked")
+
+        FeedStore._backfill_plain_text = half_then_fail
+        try:
+            reopened.get_recent()  # triggers connect -> _init_schema -> _migrate
+        finally:
+            FeedStore._backfill_plain_text = original
+
+        assert reopened.conn.in_transaction is False
+        assert reopened.get_recent()[0]["title"] == "<p>dirty</p>"
+        assert int(reopened.conn.execute("PRAGMA user_version").fetchone()[0]) == 0
+        reopened.close()
+
+    def test_a_second_connection_can_still_write_after_a_failed_backfill(self, tmp_path):
+        store = _store(tmp_path)
+        store.add_items([_item("https://x/1")])
+        store.conn.execute("PRAGMA user_version = 0")
+        store.conn.commit()
+        store.close()
+
+        original = FeedStore._backfill_plain_text
+
+        def half_then_fail(self):
+            self.conn.execute("UPDATE feed_items SET title = 'half'")
+            raise sqlite3.OperationalError("database is locked")
+
+        FeedStore._backfill_plain_text = half_then_fail
+        first = _store(tmp_path)
+        try:
+            first.get_recent()
+        finally:
+            FeedStore._backfill_plain_text = original
+
+        second = _store(tmp_path)
+        second.add_items([_item("https://x/2")])  # would raise "database is locked"
+        assert len(second.get_recent()) == 2
+        second.close()
+        first.close()

@@ -141,3 +141,118 @@ class TestRefreshInterval:
         store.close()
         assert "fetched" in pipe.run_feed_pipeline(tmp_path, settings)
         assert len(calls) == 2
+
+
+def _section(heading, urls, overview=""):
+    return FeedSection(
+        heading=heading,
+        items=[{"url": u, "title": "t", "take": "k"} for u in urls],
+        overview=overview,
+    )
+
+
+class TestSectionOverviews:
+    def test_maps_model_heading_onto_our_type(self):
+        # The model writes "Sports"; the read path groups on our own "sports".
+        top = [FeedItem(url="u0", source_label="s", type="sports", title="t", snippet="")]
+        summary = FeedSummary(sections=[_section("Sports", ["u0"], "Padres win.")], generated=True)
+        assert pipe._section_overviews(top, summary) == {"sports": "Padres win."}
+
+    def test_tolerates_a_heading_we_never_specified(self):
+        top = [FeedItem(url="u0", source_label="s", type="ai", title="t", snippet="")]
+        summary = FeedSummary(sections=[_section("AI/ML News", ["u0"], "Agents.")], generated=True)
+        assert pipe._section_overviews(top, summary) == {"ai": "Agents."}
+
+    def test_mixed_type_section_is_skipped_rather_than_guessed(self):
+        # Filing it under the majority type would print this under the AI header.
+        top = [
+            FeedItem(url="u0", source_label="s", type="ai", title="t", snippet=""),
+            FeedItem(url="u1", source_label="s", type="ai", title="t", snippet=""),
+            FeedItem(url="u2", source_label="s", type="sports", title="t", snippet=""),
+        ]
+        summary = FeedSummary(
+            sections=[_section("Sports", ["u0", "u1", "u2"], "Padres clinch.")], generated=True
+        )
+        assert pipe._section_overviews(top, summary) == {}
+
+    def test_evenly_split_section_is_skipped(self):
+        top = [
+            FeedItem(url="u0", source_label="s", type="ai", title="t", snippet=""),
+            FeedItem(url="u1", source_label="s", type="sports", title="t", snippet=""),
+        ]
+        summary = FeedSummary(sections=[_section("Mixed", ["u0", "u1"], "Both.")], generated=True)
+        assert pipe._section_overviews(top, summary) == {}
+
+    def test_two_sections_of_one_type_keep_the_larger_overview(self):
+        # Haiku routinely splits AI into "AI Research" / "AI Industry".
+        top = [
+            FeedItem(url=f"u{i}", source_label="s", type="ai", title="t", snippet="")
+            for i in range(3)
+        ]
+        summary = FeedSummary(
+            sections=[
+                _section("AI Industry", ["u0"], "Funding rounds."),
+                _section("AI Research", ["u1", "u2"], "Big lab releases."),
+            ],
+            generated=True,
+        )
+        assert pipe._section_overviews(top, summary) == {"ai": "Big lab releases."}
+
+    def test_neither_colliding_overview_is_lost_to_ordering(self):
+        # Same two sections in the other order must give the same answer.
+        top = [
+            FeedItem(url=f"u{i}", source_label="s", type="ai", title="t", snippet="")
+            for i in range(3)
+        ]
+        summary = FeedSummary(
+            sections=[
+                _section("AI Research", ["u1", "u2"], "Big lab releases."),
+                _section("AI Industry", ["u0"], "Funding rounds."),
+            ],
+            generated=True,
+        )
+        assert pipe._section_overviews(top, summary) == {"ai": "Big lab releases."}
+
+    def test_sections_without_an_overview_are_skipped(self):
+        top = [FeedItem(url="u0", source_label="s", type="ai", title="t", snippet="")]
+        summary = FeedSummary(sections=[_section("AI", ["u0"])], generated=True)
+        assert pipe._section_overviews(top, summary) == {}
+
+    def test_section_whose_urls_are_all_unknown_is_skipped(self):
+        top = [FeedItem(url="u0", source_label="s", type="ai", title="t", snippet="")]
+        summary = FeedSummary(sections=[_section("AI", ["ghost"], "Orphan.")], generated=True)
+        assert pipe._section_overviews(top, summary) == {}
+
+    def test_no_sections_yields_no_overviews(self):
+        assert pipe._section_overviews([], FeedSummary(sections=[], generated=False)) == {}
+
+    def test_pipeline_persists_overviews(self, tmp_path, monkeypatch):
+        items = _items(2)
+        monkeypatch.setattr(pipe, "fetch_all", lambda _sources: items)
+        monkeypatch.setattr(
+            pipe,
+            "summarize_items",
+            lambda top, _s, _u: FeedSummary(
+                sections=[_section("AI", [i.url for i in top], "Today in AI.")], generated=True
+            ),
+        )
+        settings = _settings(tmp_path)
+        pipe.run_feed_pipeline(tmp_path, settings)
+        store = FeedStore(tmp_path / settings.feed_db_name)
+        assert store.get_section_overviews() == {"ai": "Today in AI."}
+        store.close()
+
+    def test_a_run_without_overviews_clears_the_previous_ones(self, tmp_path, monkeypatch):
+        settings = _settings(tmp_path)
+        store = FeedStore(tmp_path / settings.feed_db_name)
+        store.replace_section_overviews({"ai": "stale from yesterday"})
+        store.close()
+
+        monkeypatch.setattr(pipe, "fetch_all", lambda _sources: _items(2))
+        monkeypatch.setattr(
+            pipe, "summarize_items", lambda _t, _s, _u: FeedSummary(sections=[], generated=False)
+        )
+        pipe.run_feed_pipeline(tmp_path, settings)
+        store = FeedStore(tmp_path / settings.feed_db_name)
+        assert store.get_section_overviews() == {}
+        store.close()
