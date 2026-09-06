@@ -16,6 +16,14 @@ SecondBrain is a semantic memory system built on top of an Obsidian vault. It co
 
 Phases 0–4 are complete. The system has vault ingestion, chunking, hybrid search (BM25 + vectors), LLM reranking, answer synthesis, metadata extraction, a Next.js frontend ("Mission Control" dashboard), task aggregation with bi-directional vault sync, and secure remote access via Tailscale. The Gradio UI is deprecated.
 
+The FEED-1 attention router adds a daily RSS feed (AI + sports) behind the
+`feed_enabled` flag: free heuristic filtering (source trust x interest keywords x
+48h recency decay), then exactly one batched Haiku call over the top-N items
+(~$0.15/mo). Sources and interest weights live in a vault note (`_config/feed.md`) —
+see `docs/setup/feed-config-example.md`. The `daily_sync feed` step runs last and
+swallows its own exceptions so a network or LLM failure can never abort the core
+vault sync.
+
 ## Build & Development Commands
 
 ```bash
@@ -30,7 +38,7 @@ make typecheck # Run mypy type checker
 make check     # Run all checks (lint + typecheck + test)
 make eval      # Run RAG evaluation harness
 make reindex   # Reindex vault standalone (no server needed)
-make daily-sync # Run full daily sync (inbox + tasks + reindex)
+make daily-sync # Run full daily sync (inbox + tasks + reindex + feed)
 make clean     # Remove build artifacts
 ```
 
@@ -47,6 +55,8 @@ SECONDBRAIN_EMBEDDING_PROVIDER=local                   # "local" or "openai"
 SECONDBRAIN_EMBEDDING_MODEL=BAAI/bge-base-en-v1.5     # Local embedding model
 SECONDBRAIN_OPENAI_EMBEDDING_MODEL=text-embedding-3-small  # OpenAI embedding model
 SECONDBRAIN_OPENAI_EMBEDDING_DIMENSIONS=               # Optional dimension override
+SECONDBRAIN_FEED_ENABLED=false                         # RSS attention router (FEED-1)
+SECONDBRAIN_FEED_CONFIG_PATH=_config/feed.md           # Vault note with sources + interests
 ```
 
 ## Project Structure
@@ -62,6 +72,7 @@ src/secondbrain/
 ├── stores/              # Vector (ChromaDB), lexical (FTS5), conversation
 ├── retrieval/           # Hybrid search + reranker
 ├── synthesis/           # LLM answer generation
+├── feed/                # FEED-1: RSS fetch, heuristic rank, batched summary, pipeline
 ├── eval/                # RAG evaluation harness + metrics
 ├── api/                 # FastAPI routes (/ask, /index)
 ├── scripts/             # Daily sync, inbox processor, task aggregator
@@ -115,7 +126,8 @@ Read docs in this order for full context:
 - **RAG Quality & Performance** — RAG-1 through RAG-3 (contextual retrieval, caching, topic manifests)
 - **Operations & Infrastructure** — OPS-2 (public demo). OPS-1 delivered.
 - **Smarter Retrieval & Discovery** — RETRIEVAL-2, RETRIEVAL-3 (capture connections, insights dashboard)
-- **Email Ingestion** — EMAIL-1 (Gmail read-only)
+- **Personalized Feed** — FEED-2 through FEED-5 (engagement learning, Calendar, Gmail, podcasts). FEED-1 delivered.
+- **Email Ingestion** — EMAIL-1 (Gmail read-only, absorbed by FEED-4)
 - **Voice Chat** — VOICE-1 (OpenAI Realtime API)
 - **Knowledge Graph** — KG-1 (V2, graph store + entity resolution)
 - **Write-Back Workflow** — WRITEBACK-1 (V2+, changeset workflow)

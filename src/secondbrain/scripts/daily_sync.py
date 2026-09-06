@@ -130,7 +130,7 @@ def main() -> None:
         "command",
         nargs="?",
         default="all",
-        choices=["inbox", "tasks", "projects", "index", "extract", "weekly", "all"],
+        choices=["inbox", "tasks", "projects", "index", "extract", "weekly", "feed", "all"],
         help="Which sync to run (default: all)",
     )
     parser.add_argument(
@@ -231,6 +231,21 @@ def main() -> None:
 
             summary = generate_weekly_review(vault_path)
             logger.info("  %s", summary)
+
+        # Feed last, and never fatal: it is discretionary and depends on the
+        # network + an LLM, so a failure must not abort the core vault sync.
+        if args.command in ("feed", "all"):
+            logger.info("--- Refreshing feed ---")
+            step_start = time.time()
+            try:
+                from secondbrain.feed.pipeline import run_feed_pipeline
+
+                feed_summary = run_feed_pipeline(vault_path, settings)
+                elapsed = int((time.time() - step_start) * 1000)
+                logger.info("  %s", feed_summary)
+                _log_structured("feed_complete", summary=feed_summary, duration_ms=elapsed)
+            except Exception:
+                logger.warning("Feed refresh failed", exc_info=True)
 
         # Write sync completion marker
         total_elapsed = int((time.time() - sync_start) * 1000)

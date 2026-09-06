@@ -53,6 +53,27 @@ export function toDateStr(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+/**
+ * Compact relative age ("3h", "2d") for a timestamp, or "" when it is missing
+ * or unparseable — feed publishers get their dates wrong often enough that a
+ * bad value must render as nothing rather than "NaNh" or "Invalid Date".
+ */
+export function timeAgo(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return "";
+  // floor, not round: rounding maps a timestamp 20s in the future to -0, which
+  // is not < 0, so the future-clock branch below was unreachable for 30s either
+  // side of now and both cases rendered as "0m".
+  const minutes = Math.floor((Date.now() - then) / 60000);
+  if (minutes < 0) return "just now"; // a publisher clock running ahead
+  if (minutes < 1) return "now";
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  return `${Math.floor(hours / 24)}d`;
+}
+
 /** Extract the display title from a vault note path (strips folder and .md extension). */
 export function extractTitle(notePath: string): string {
   const filename = notePath.split("/").pop() || notePath;

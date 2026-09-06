@@ -163,6 +163,7 @@ class BriefingResponse(BaseModel):
     today_context: DailyContext | None
     today_events: list["EventResponse"]
     total_open: int
+    feed_counts: dict[str, int] = {}  # {"ai": 5, "sports": 3}; empty when feed off or unsummarized
 
 
 class DigestResponse(BaseModel):
@@ -176,6 +177,39 @@ class DigestResponse(BaseModel):
     title: str
     body: str
     count: int
+
+
+# --- FEED-1: Attention Router ---
+
+
+class FeedItemResponse(BaseModel):
+    """One ranked feed item. Transient derived data, not vault content."""
+
+    id: int
+    url: str
+    source_label: str
+    type: str  # "ai" | "sports" | "general"
+    title: str
+    snippet: str
+    summary: str | None  # the LLM's one-line take, None when unsummarized
+    score: float
+    published_at: str | None
+
+
+class FeedSectionResponse(BaseModel):
+    """Summarized items grouped for display, e.g. "AI" / "SPORTS"."""
+
+    heading: str
+    items: list[dict[str, str]]  # {url, title, take}
+    overview: str | None = None  # the section's throughline; None when not generated
+
+
+class FeedResponse(BaseModel):
+    """``generated`` is False when the LLM path fell back to headlines."""
+
+    generated: bool
+    sections: list[FeedSectionResponse]
+    items: list[FeedItemResponse]
 
 
 # --- Phase 3: Metadata Extraction + Suggestions ---

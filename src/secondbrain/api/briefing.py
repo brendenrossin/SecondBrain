@@ -4,7 +4,8 @@ import asyncio
 import logging
 import time
 from dataclasses import asdict
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -46,6 +47,31 @@ def _to_briefing_task(t: AggregatedTask) -> BriefingTask:
         days_open=t.days_open,
         first_date=t.first_date,
     )
+
+
+def _feed_counts(settings: Settings) -> dict[str, int]:
+    """Summarized items per type from today's feed pass. Never raises — the
+    briefing must render even if the feed db is missing or corrupt."""
+    if not settings.feed_enabled:
+        return {}
+    counts: dict[str, int] = {}
+    try:
+        from secondbrain.stores.feed import FeedStore
+
+        # Only today's refresh counts. An all-time top-N would report the same
+        # numbers every morning — including on days the fetch failed entirely.
+        cutoff = (
+            datetime.now(UTC) - timedelta(hours=settings.feed_digest_window_hours)
+        ).isoformat()
+        store = FeedStore(Path(settings.data_path) / settings.feed_db_name)
+        try:
+            for row in store.get_summarized_since(cutoff, limit=settings.feed_top_n):
+                counts[row["type"]] = counts.get(row["type"], 0) + 1
+        finally:
+            store.close()
+    except Exception:
+        logger.warning("Feed count lookup failed", exc_info=True)
+    return counts
 
 
 def _build_briefing(settings: Settings) -> BriefingResponse:
@@ -118,6 +144,7 @@ def _build_briefing(settings: Settings) -> BriefingResponse:
         today_context=today_context,
         today_events=today_events,
         total_open=len(open_tasks),
+        feed_counts=_feed_counts(settings),
     )
 
     _cache["data"] = result
@@ -143,7 +170,8 @@ def _build_digest(briefing: BriefingResponse) -> DigestResponse:
     overdue = len(briefing.overdue_tasks)
     due = len(briefing.due_today_tasks)
     aging = len(briefing.aging_followups)
-    count = overdue + due + aging
+    feed_total = sum(briefing.feed_counts.values())
+    count = overdue + due + aging + feed_total
 
     title = f"SecondBrain · {_short_date(briefing.today)}"
 
@@ -157,6 +185,17 @@ def _build_digest(briefing: BriefingResponse) -> DigestResponse:
         segments.append(f"{due} due today")
     if aging:
         segments.append(f"{aging} aging follow-up{'s' if aging != 1 else ''}")
+    ai = briefing.feed_counts.get("ai", 0)
+    sports = briefing.feed_counts.get("sports", 0)
+    if ai:
+        segments.append(f"{ai} AI update{'s' if ai != 1 else ''}")
+    if sports:
+        segments.append(f"{sports} sports")
+    # Catch-all so any other feed type still earns a segment: without it a
+    # "general" item would raise count above zero with an empty body.
+    other = sum(c for t, c in briefing.feed_counts.items() if t not in ("ai", "sports"))
+    if other:
+        segments.append(f"{other} more")
 
     return DigestResponse(title=title, body=" · ".join(segments), count=count)
 

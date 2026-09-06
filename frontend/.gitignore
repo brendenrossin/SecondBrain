@@ -3,3 +3,6 @@ out/
 node_modules/
 npm-debug.log*
 .env*.local
+
+# Build artifact — churns on every build
+tsconfig.tsbuildinfo

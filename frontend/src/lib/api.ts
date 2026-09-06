@@ -13,6 +13,7 @@ import type {
   TaskResponse,
   TaskCategory,
   TaskUpdateRequest,
+  FeedResponse,
   CostSummaryResponse,
   DailyCostsResponse,
   AdminStatsResponse,
@@ -198,6 +199,17 @@ export async function updateTask(
 
 export async function getBriefing(): Promise<BriefingResponse> {
   return fetchJSON(`${BASE}/briefing`);
+}
+
+// --- Feed ---
+
+export async function getFeed(): Promise<FeedResponse> {
+  return fetchJSON(`${BASE}/feed`);
+}
+
+/** Fire-and-forget: a failed click record must never block opening the link. */
+export function recordFeedClick(itemId: number): void {
+  void fetch(`${BASE}/feed/${itemId}/click`, { method: "POST" }).catch(() => {});
 }
 
 // --- Index ---

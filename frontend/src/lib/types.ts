@@ -179,6 +179,40 @@ export interface BriefingResponse {
   today_context: DailyContext | null;
   today_events: CalendarEvent[];
   total_open: number;
+  feed_counts: Record<string, number>;
+}
+
+// --- Feed (FEED-1 attention router) ---
+
+export interface FeedItem {
+  id: number;
+  url: string;
+  source_label: string;
+  type: string;
+  title: string;
+  snippet: string;
+  summary: string | null;
+  score: number;
+  published_at: string | null;
+}
+
+export interface FeedSectionItem {
+  url: string;
+  title: string;
+  take: string;
+}
+
+export interface FeedSection {
+  heading: string;
+  items: FeedSectionItem[];
+  /** The section's throughline. Null when the LLM pass fell back to headlines. */
+  overview: string | null;
+}
+
+export interface FeedResponse {
+  generated: boolean;
+  sections: FeedSection[];
+  items: FeedItem[];
 }
 
 // --- Admin / Cost Tracking ---

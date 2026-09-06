@@ -10,6 +10,7 @@ import {
   CheckSquare,
   Calendar,
   Lightbulb,
+  Rss,
   Shield,
   Settings,
   MoreHorizontal,
@@ -25,6 +26,7 @@ const primaryTabs = [
 ];
 
 const moreItems = [
+  { href: "/feed", label: "Feed", icon: Rss, color: "text-warning" },
   { href: "/calendar", label: "Calendar", icon: Calendar, color: "text-warning" },
   { href: "/insights", label: "Insights", icon: Lightbulb, color: "text-purple" },
   { href: "/admin", label: "Admin", icon: Shield, color: "text-text-muted" },
