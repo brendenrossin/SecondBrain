@@ -8,6 +8,7 @@ from secondbrain.api.dependencies import (
     get_link_expander,
     get_query_logger,
     get_retriever,
+    get_settings,
 )
 from secondbrain.main import app
 from secondbrain.models import RetrievalLabel
@@ -62,6 +63,23 @@ class TestWarmupEndpoint:
             resp = client.post("/api/v1/warmup")
         assert resp.status_code == 200
         assert resp.json() == {"status": "warming"}
+
+    def test_warmup_preloads_rerank_and_synthesis_models(self, client):
+        settings = MagicMock(
+            ollama_base_url="http://127.0.0.1:11434/v1",
+            ollama_model="gemma4:26b-a4b-it-qat",
+            ollama_rerank_model="llama3.2:3b",
+        )
+        client.app.dependency_overrides[get_settings] = lambda: settings
+        try:
+            with patch("secondbrain.api.ask.OpenAI") as mock_openai:
+                resp = client.post("/api/v1/warmup")
+        finally:
+            client.app.dependency_overrides.pop(get_settings, None)
+        assert resp.status_code == 200
+        create = mock_openai.return_value.chat.completions.create
+        warmed = [c.kwargs["model"] for c in create.call_args_list]
+        assert warmed == ["llama3.2:3b", "gemma4:26b-a4b-it-qat"]
 
     def test_warmup_handles_ollama_down(self, client):
         with patch("secondbrain.api.ask.OpenAI") as mock_openai:

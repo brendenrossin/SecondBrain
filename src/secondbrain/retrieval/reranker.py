@@ -7,7 +7,7 @@ import logging
 import re
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from anthropic import Anthropic
 from openai import OpenAI
@@ -19,6 +19,19 @@ if TYPE_CHECKING:
     from secondbrain.stores.usage import UsageStore
 
 logger = logging.getLogger(__name__)
+
+
+def local_extra_body(base_url: str | None) -> dict[str, Any]:
+    """Extra request body fields for local models (a ``base_url`` means Ollama).
+
+    Gemma 4 and other local reasoning models spend their entire token budget
+    on internal reasoning unless it is switched off, leaving
+    ``message.content`` empty. Only ``reasoning_effort`` reaches Ollama's
+    OpenAI-compatible endpoint — ``think`` and ``chat_template_kwargs`` are
+    accepted but silently ignored there. Cloud models get an empty dict so
+    their own reasoning behaviour is untouched.
+    """
+    return {"reasoning_effort": "none"} if base_url else {}
 
 
 @dataclass
@@ -199,6 +212,7 @@ The array MUST have exactly the same number of elements as chunks provided."""
                     ],
                     temperature=0,
                     max_tokens=rerank_max_tokens,
+                    extra_body=local_extra_body(self.base_url),
                 )
                 content = oai_response.choices[0].message.content or "[]"
                 provider_name = "ollama" if self.base_url else "openai"

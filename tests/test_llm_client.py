@@ -308,3 +308,23 @@ class TestAllProvidersFail:
         # Verify the OpenAI fallback used the class constant
         call_kwargs = mock_openai.chat.completions.create.call_args
         assert call_kwargs.kwargs["model"] == LLMClient.OPENAI_FALLBACK_MODEL
+
+
+class TestOllamaFallbackDisablesReasoning:
+    """The Ollama fallback must switch Gemma 4's reasoning off, or it returns ""."""
+
+    @patch("secondbrain.scripts.llm_client.get_settings")
+    @patch("secondbrain.scripts.llm_client.OpenAI")
+    def test_ollama_request_sends_reasoning_effort_none(self, mock_openai_cls, mock_settings):
+        mock_settings.return_value = _make_settings(anthropic_api_key=None)
+        mock_ollama = MagicMock()
+        mock_openai_cls.return_value = mock_ollama
+        mock_ollama.chat.completions.create.return_value = _make_openai_response("Ollama response")
+
+        from secondbrain.scripts.llm_client import LLMClient
+
+        result = LLMClient().chat("system prompt", "user prompt")
+
+        assert result == "Ollama response"
+        kwargs = mock_ollama.chat.completions.create.call_args.kwargs
+        assert kwargs["extra_body"] == {"reasoning_effort": "none"}
