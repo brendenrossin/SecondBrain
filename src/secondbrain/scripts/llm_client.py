@@ -12,6 +12,7 @@ from openai import OpenAI
 from openai.types.chat import ChatCompletionMessageParam
 
 from secondbrain.config import get_settings
+from secondbrain.retrieval.reranker import local_extra_body
 
 if TYPE_CHECKING:
     from secondbrain.stores.usage import UsageStore
@@ -111,6 +112,7 @@ class LLMClient:
                 messages=messages,
                 temperature=0.2,
                 max_tokens=2000,
+                extra_body=local_extra_body(self._settings.ollama_base_url),
             )
             content = oai_response.choices[0].message.content or ""
             logger.info("Ollama responded successfully")

@@ -195,7 +195,7 @@ def get_local_reranker() -> LLMReranker:
     """Get cached reranker instance (local Ollama)."""
     settings = get_settings()
     return LLMReranker(
-        model=settings.ollama_model,
+        model=settings.ollama_rerank_model,
         base_url=settings.ollama_base_url,
         provider="openai",
         usage_store=get_usage_store(),
