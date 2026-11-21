@@ -59,9 +59,11 @@ suggestion-only, and the vault is the single source of truth.
    Chroma + FTS5.
 
 **Indexing has one owner: the API process.** ChromaDB `PersistentClient` is single-process. The
-daily sync writes `data/.reindex_needed` and pings the API, and the API reindexes incrementally
-(mtime + sha1 via `index_tracker`) under `data/.reindex_lock`. Never open the stores from a second
-process.
+daily sync and `make index` call `POST /api/v1/index` → `_run_indexing` (`api/index.py`), which
+reindexes incrementally (mtime + sha1 via `index_tracker`) and takes **no** lock.
+`check_and_reindex` (`api/dependencies.py`, which uses the `.reindex_needed` trigger and
+`.reindex_lock`) is only called from the deprecated Gradio `ui.py`. Never open the stores from a
+second process.
 
 ## Current state
 - Phases 0–4 are delivered: ENGAGE-1 (PR #12) and FEED-1 (PR #13), with the Langfuse skip fix in PR #14.
