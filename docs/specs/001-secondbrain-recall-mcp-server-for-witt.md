@@ -1082,7 +1082,8 @@ Feature: existing contracts (must-pass, verify-time)
 3. Add `HF_HUB_OFFLINE=1` to the API plist's `EnvironmentVariables`, in both the repo copy and
    `~/Library/LaunchAgents`. Set `SECONDBRAIN_EMBEDDER_WARMUP=true` in `.env`. Restart
    `com.secondbrain.api`.
-4. Run `make index`, or a full reindex if the pre-check was non-zero. Then verify
+4. Run `make index`, or a full reindex if the pre-check was non-zero (**pre-check run 2026-11-21:
+   0 → plain `make index`**; 247 `Witt/` chunks, all `note_folder='Witt'`, logs included). Then verify
    `sqlite3 data/lexical.db "select count(*) from chunks where note_path like 'Witt/Logs/%'"` = 0.
 5. Run `uv run python -m secondbrain.eval.recall_eval`. Any gate failure stops here and goes to Brent.
 6. Run the trace-eval must-pass.
@@ -1140,24 +1141,25 @@ metadata extraction see Witt logs again.
 > - If the spec and the code disagree, stop and propose a spec edit. Don't improvise.
 
 ### Phase 1 — Preconditions and baseline
-- [ ] 1.1 Brent commits or stashes `uv.lock` and `frontend/package*.json`. Then `fix/local-gemma4-reasoning`
+- [x] 1.1 Brent commits or stashes `uv.lock` and `frontend/package*.json`. Then `fix/local-gemma4-reasoning`
   (Gemma fix plus the Witt specs) is merged to `main` via PR, and `feat/001-recall` is branched off
   `main` — files: none — done when: `git status --short` is empty on `feat/001-recall` and
   `docs/specs/001-*.md` exists there.
-- [ ] 1.2 Run the lexical-only pre-check from Data, read-only (`sqlite3 -readonly data/lexical.db …`),
+- [x] 1.2 Run the lexical-only pre-check from Data, read-only (`sqlite3 -readonly data/lexical.db …`),
   and record the count in this spec's Rollout step 4 — files: this spec — done when: the count is
   written down (0 → `make index`; non-zero → full reindex).
-- [ ] 1.3 Add `mcp>=2.3,<3` and `httpx` to main `dependencies`, add `[project.scripts] secondbrain-mcp =
+- [x] 1.3 Add `mcp>=2.3,<3` and `httpx` to main `dependencies`, add `[project.scripts] secondbrain-mcp =
   "secondbrain.mcp_server:main"`, run `uv lock && uv sync` — files: `pyproject.toml`, `uv.lock` — done
   when: `uv run python -c "from mcp.server.mcpserver import MCPServer"` exits 0 and the full suite is
-  still 918 passed.
-- [ ] 1.4 Fixture kit: fixture markdown (the Background notes, crowding notes and a Learning), a
+  still 918 passed. *(Done: mcp 2.3.0. Main's baseline is 924, since PR #15 added 6 tests after 918 was
+  counted; 924 passed.)*
+- [x] 1.4 Fixture kit: fixture markdown (the Background notes, crowding notes and a Learning), a
   deterministic stub embedder that maps text to unit vectors with controllable cosines, and a
   session-scoped conftest fixture that builds real `VectorStore` and `LexicalStore` into `tmp_path`
   through the real `Chunker`, plus a per-test copy for writers — files: `tests/fixtures/recall/`,
   `tests/conftest.py` — done when: `test_fixture_index_builds` passes and `git status` is clean after
   the test run.
-- [ ] 1.5 Capture goldens on unchanged code: `capture_goldens.py` writes JSON for `retrieve`,
+- [x] 1.5 Capture goldens on unchanged code: `capture_goldens.py` writes JSON for `retrieve`,
   `VectorStore.search` and `LexicalStore.search`. Add `test_existing_callers_unaffected`, which also
   asserts no `where` key and today's SQL text and params, captured via a sqlite trace callback. **Commit
   alone** — files: `tests/fixtures/recall/goldens.json`, `capture_goldens.py`,

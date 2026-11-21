@@ -29,7 +29,13 @@ dependencies = [
     "watchdog>=4.0.0",
     "pyyaml>=6.0.0",
     "feedparser>=6.0.14",
+    # MCP server (spec 001)
+    "mcp>=2.3,<3",
+    "httpx>=0.28.0",
 ]
+
+[project.scripts]
+secondbrain-mcp = "secondbrain.mcp_server:main"
 
 [project.optional-dependencies]
 dev = [
