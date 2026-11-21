@@ -1254,7 +1254,7 @@ metadata extraction see Witt logs again.
   - timeout
   - import hygiene
   - base URL
-- [ ] 6.2 Stdio round-trip through the installed `secondbrain-mcp` console script — files: tests — done
+- [x] 6.2 Stdio round-trip through the installed `secondbrain-mcp` console script — files: tests — done
   when: "stdio round-trip is clean" passes.
 
 ### Phase 7 — Recall eval
