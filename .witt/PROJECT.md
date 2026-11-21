@@ -40,7 +40,7 @@ suggestion-only, and the vault is the single source of truth.
 | `com.secondbrain.api` | `caffeinate -ims uv run uvicorn secondbrain.main:app` on **127.0.0.1:8000** | KeepAlive. `caffeinate` stops the Mac Studio sleeping so Tailscale stays up. Health: `GET /health`. Routes under `/api/v1`. |
 | `com.secondbrain.ui` | `npm run start` in `frontend/` on **127.0.0.1:7860** | Next.js prod build. After frontend edits: `npm run build`, then restart. |
 | `com.secondbrain.daily-sync` | `uv run python -m secondbrain.scripts.daily_sync all` every 3600s | inbox → tasks → projects → index → extract → weekly → feed. Feed runs last and swallows its own errors. |
-| `com.secondbrain.langfuse` | `docker compose up --wait` in `etc/langfuse/` (Langfuse UI on :3000) | RunAtLoad only, no KeepAlive. Optional trace viewer. Plist is **not in the repo**. |
+| `com.secondbrain.langfuse` | `etc/langfuse/start.sh`: starts Docker Desktop if needed → `compose up -d --wait` → waits for :3000 health → kickstarts the API | KeepAlive `SuccessfulExit=false` (retries failures every 60s, stays down after success). Optional trace viewer. Logs to `data/langfuse.log`. Spec 002. |
 
 **Data** (`data/`, gitignored):
 - ChromaDB `PersistentClient` at `data/chroma/`, collection `chunks`.
@@ -73,10 +73,9 @@ second process.
 
 ## Domain notes
 **Known issues (2026-11-21):**
-- **Langfuse exits 1.** `com.secondbrain.langfuse` runs at login before Docker Desktop's daemon is
-  up (`Cannot connect to the Docker daemon`), and with no KeepAlive it never retries. Tracing still
-  works: the API checks reachability at startup and falls back to JSONL only (PR #14). Nothing may
-  depend on Langfuse.
+- **Langfuse is optional.** Fixed by spec 002 (start script plus retries). The API still probes
+  Langfuse only at its own startup and falls back to JSONL only (PR #14), so the script restarts
+  the API once Langfuse is healthy. Nothing may depend on Langfuse.
 - **Repo `com.secondbrain.ui.plist` is stale.** It still launches Gradio (`python -m secondbrain.ui`).
   The installed copy runs `npm run start` in `frontend/`. Reconcile before anyone re-installs from the repo.
 - **Witt notes are indexed today.** `Witt/` isn't excluded, so log, hub and ADR chunks are in the index.

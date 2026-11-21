@@ -3,8 +3,8 @@ id: '002'
 title: Langfuse starts reliably at login
 project: second-brain
 tier: quick
-status: Draft
-version: 0.1.0
+status: Implemented
+version: 0.1.1
 created: '2026-11-21'
 updated: '2026-11-21'
 tags: []
@@ -12,6 +12,12 @@ history:
 - status: Draft
   date: '2026-11-21'
   note: created
+- status: Approved
+  date: '2026-11-21'
+  note: gate passed
+- status: Implemented
+  date: '2026-11-21'
+  note: gate passed
 ---
 # 002 — Langfuse starts reliably at login
 
@@ -91,7 +97,8 @@ Feature: Langfuse start script
     Given the new plist is installed and loaded, and Docker Desktop is quit
     When `launchctl kickstart -k gui/$(id -u)/com.secondbrain.langfuse` runs
     Then within 5 minutes `curl -s localhost:3000/api/public/health` returns 200
-    And data/logs/api.stderr.log shows "Langfuse tracing enabled" after the restart
+    And after one POST /api/v1/ask, Langfuse's /api/public/traces totalItems increases
+    # (the app never configures logging, so the "Langfuse tracing enabled" INFO line is not in the API logs)
     And `launchctl list | grep langfuse` shows exit status 0
 ```
 

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.secondbrain.langfuse</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/brentrossin/code/second-brain/etc/langfuse/start.sh</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/brentrossin/code/second-brain/etc/langfuse</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <!-- Retry failures (Docker not up yet, Langfuse not healthy); stay down after success. -->
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    <key>ThrottleInterval</key>
+    <integer>60</integer>
+    <key>StandardOutPath</key>
+    <string>/Users/brentrossin/code/second-brain/data/langfuse.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/brentrossin/code/second-brain/data/langfuse.log</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/Applications/Docker.app/Contents/Resources/bin:/usr/bin:/bin:/usr/sbin</string>
+    </dict>
+</dict>
+</plist>
