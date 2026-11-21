@@ -3,7 +3,7 @@ id: '001'
 title: SecondBrain recall MCP server for Witt
 project: second-brain
 tier: full
-status: Review
+status: Approved
 version: 0.5.0
 created: '2026-11-21'
 updated: '2026-11-21'
@@ -31,6 +31,9 @@ history:
   date: '2026-11-21'
   note: gate passed
 - status: Review
+  date: '2026-11-21'
+  note: gate passed
+- status: Approved
   date: '2026-11-21'
   note: gate passed
 ---
