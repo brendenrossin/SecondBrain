@@ -24,6 +24,7 @@ from secondbrain.api.events import router as events_router
 from secondbrain.api.feed import router as feed_router
 from secondbrain.api.index import router as index_router
 from secondbrain.api.metadata import router as metadata_router
+from secondbrain.api.recall import router as recall_router
 from secondbrain.api.settings import router as settings_router
 from secondbrain.api.tasks import router as tasks_router
 from secondbrain.api.wiki import router as wiki_router
@@ -93,6 +94,7 @@ app.include_router(events_router)
 app.include_router(feed_router)
 app.include_router(index_router)
 app.include_router(metadata_router)
+app.include_router(recall_router)
 app.include_router(settings_router)
 app.include_router(tasks_router)
 app.include_router(wiki_router)

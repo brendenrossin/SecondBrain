@@ -4,7 +4,7 @@ title: SecondBrain recall MCP server for Witt
 project: second-brain
 tier: full
 status: Approved
-version: 0.5.0
+version: 0.5.3
 created: '2026-11-21'
 updated: '2026-11-21'
 tags: []
@@ -39,6 +39,20 @@ history:
 ---
 # 001 — SecondBrain recall MCP server for Witt
 
+> **v0.5.3** (implement, Brent's call 2026-11-21): `VectorStore` now creates its chromadb client and
+> collection under a double-checked lock (Decision 1). Concurrent first use from worker threads raced
+> chromadb's client setup ("Could not connect to tenant default_tenant") in ~1 of 6 runs of the
+> 8-concurrent-recalls scenario. That race was pre-existing, and `/ask` could hit it after a restart too.
+>
+> **v0.5.2** (implement, Brent's call 2026-11-21): the unreachable-Langfuse startup bound now
+> excludes time spent inside `Traceloop.init`. That call alone takes ~3.4–3.9 s on the Mac Studio
+> (it instruments every installed library; pre-existing), so the old absolute 2.5 s bound could never pass.
+> The Langfuse probe's share is still bounded by `_LANGFUSE_PROBE_TIMEOUT + 1` s.
+>
+> **v0.5.1** (implement, Brent's call 2026-11-21): the exclude_paths case-variant scenario now keeps
+> the `Witt/` prefix (`…/adr-001-overrides.md`). The old lowercase `witt/…` path would have been
+> rejected with a 422 by the `exclude_paths` validator, so the scenario contradicted Interfaces.
+>
 > **v0.5.0** addresses round 4 (skeptic + tester, `docs/specs/reviews/001-*.r4.md`, 3 BLOCKERs) with
 > precision fixes only:
 > - `latency_ms` and `witt_chunk_count` are added to the response.
@@ -166,6 +180,10 @@ This rule applies to **every** step in this spec, including implement-time check
 "concurrent recalls" or "recall during a reindex" fails or is flaky, recall gets its own read-only
 connection (`file:…lexical.db?mode=ro` URI). Recall never changes locking in the shared store that
 `/ask` depends on.
+
+**Vector store lazy init (v0.5.3).** `VectorStore.client` and `.collection` are created under a
+double-checked `threading.RLock`, because concurrent first use from worker threads races chromadb's
+client setup. This is the only locking change in a shared store, and it guards creation only, not queries.
 
 **Decision 2: a new endpoint, not `/ask`.** Recall needs no LLM, conversation store or query log.
 
@@ -599,7 +617,7 @@ Feature: recall endpoint
     When I POST /api/v1/recall with filters {"exclude_paths": ["Witt/Projects/witt/decisions/ADR-001-overrides.md"]}
     Then that path is not among the hits
     And the limit is still filled from the remaining notes
-    When exclude_paths is ["witt/projects/witt/decisions/ADR-001-overrides.md"] (different case)
+    When exclude_paths is ["Witt/Projects/witt/decisions/adr-001-overrides.md"] (different case)
     Then ADR-001-overrides is still among the hits
 
   Scenario: unknown project slug short-circuits with a warning
@@ -745,7 +763,7 @@ Feature: recall endpoint
   Scenario: an unreachable Langfuse does not slow startup or recall
     Given tracing_enabled is true and the Langfuse host is a non-routable address
     When the app lifespan starts
-    Then startup completes within _LANGFUSE_PROBE_TIMEOUT + 1 second
+    Then startup, excluding the time spent inside Traceloop.init, completes within _LANGFUSE_PROBE_TIMEOUT + 1 second
     And a POST /api/v1/recall then arrives in under 1 second
 
   Scenario: concurrent recalls are consistent on real stores
@@ -1108,7 +1126,7 @@ metadata extraction see Witt logs again.
 | `src/secondbrain/config.py` | Update | `recall_min_similarity`, `embedder_warmup` |
 | `src/secondbrain/main.py` | Update | include the recall router; warmup task |
 | `src/secondbrain/retrieval/hybrid.py` | Update | `retrieve(..., *, include_folders)` |
-| `src/secondbrain/stores/vector.py` | Update | `include_folders` → `where`, both branches |
+| `src/secondbrain/stores/vector.py` | Update | `include_folders` → `where`, both branches; locked lazy client/collection init (v0.5.3) |
 | `src/secondbrain/stores/lexical.py` | Update | `include_folders` → rowid JOIN + `IN`; new `count_chunks` |
 | `src/secondbrain/indexing/embedder.py` | Update | locked lazy model load |
 | `src/secondbrain/vault/connector.py` | Update | add `WITT_LOG_EXCLUDE` to `DEFAULT_EXCLUDES` |
@@ -1196,31 +1214,34 @@ metadata extraction see Witt logs again.
   skip, background, failure).
 
 ### Phase 5 — Recall endpoint
-- [ ] 5.1 Models `RecallFilters`, `RecallRequest`, `RecallHit` and `RecallResponse` (with `latency_ms`
+- [x] 5.1 Models `RecallFilters`, `RecallRequest`, `RecallHit` and `RecallResponse` (with `latency_ms`
   and `witt_chunk_count`), plus a router stub — files: `models.py`, `api/recall.py`,
   `tests/test_recall_api.py` — done when: the 422 table and the boundary-accepted table pass.
-- [ ] 5.2 Pipeline steps 1–4: non-local 503 with its log line, the project check (unknown slug, missing
+- [x] 5.2 Pipeline steps 1–4: non-local 503 with its log line, the project check (unknown slug, missing
   vault, no Projects dir) and `count_chunks` (empty index → notice) — files: `api/recall.py`, tests —
   done when: those scenarios pass.
-- [ ] 5.3 Steps 5–11: a per-request retriever (k_vec table) under `suppress_instrumentation` in a worker
+- [x] 5.3 Steps 5–11: a per-request retriever (k_vec table) under `suppress_instrumentation` in a worker
   thread; drop keyword-only and out-of-scope; classify; filters (project, kinds, exclude_paths); dedupe
   by highest RRF; sort; slice; snippet — files: `api/recall.py`, tests — done when: the endpoint
   scenarios for ordering, window table, configured floor, BM25 reorder, limit, kinds (both), project
   (3), intersect, exclude, floor/keyword-only, out-of-scope, snippet table and applied filters pass.
-- [ ] 5.4 Recall log (`threading.Lock`, open-append-close), X-Request-ID handling, the catch-all 503 and
+- [x] 5.4 Recall log (`threading.Lock`, open-append-close), X-Request-ID handling, the catch-all 503 and
   `latency_ms` — files: `api/recall.py`, tests — done when: the log-schema (values), write-failure,
   X-Request-ID and 503-table scenarios pass.
-- [ ] 5.5 Register the router in `main.py`. Tests: no LLM calls or writes, no network once loaded —
+- [x] 5.5 Register the router in `main.py`. Tests: no LLM calls or writes, no network once loaded —
   files: `main.py`, tests — done when: both pass.
-- [ ] 5.6 Tracing isolation tests: zero spans (subprocess), the Langfuse listener receives 0 requests,
+- [x] 5.6 Tracing isolation tests: zero spans (subprocess), the Langfuse listener receives 0 requests,
   and an unreachable Langfuse doesn't slow startup or recall — files: tests — done when: all 3 pass.
-- [ ] 5.7 Concurrency on real stores: 8 concurrent recalls, and 20 recalls during a reindex. Run them 5×
+- [x] 5.7 Concurrency on real stores: 8 concurrent recalls, and 20 recalls during a reindex. Run them 5×
   (`pytest --count 5` or a loop). If either is flaky, apply the Decision 1 fallback (a read-only
   lexical connection for recall) — files: tests (maybe `api/recall.py`) — done when: 5 consecutive
-  green runs.
+  green runs. *(Done: 8 concurrent recalls on the shared connection hit `sqlite3.InterfaceError` in
+  ~4 of 6 runs, so the fallback was applied as `_ReadOnlyLexicalStore` in `api/recall.py`, one
+  `mode=ro` connection per request. Then 15/15 green. A second race, in chromadb's lazy client setup
+  on a cold `VectorStore`, then showed up in ~1 of 6 runs. Fixed with a locked init in v0.5.3.)*
 
 ### Phase 6 — MCP server
-- [ ] 6.1 `mcp_server.py`: `PINNED_DESCRIPTION` verbatim, the base URL from Settings, an injectable
+- [x] 6.1 `mcp_server.py`: `PINNED_DESCRIPTION` verbatim, the base URL from Settings, an injectable
   `httpx.AsyncClient(timeout=10.0)`, the typed `recall` handler (RecallRequest pre-validation, catch-all,
   sent request id wins, sparse-200 defaults) and `main()` running stdio — files:
   `src/secondbrain/mcp_server.py`, `tests/test_mcp_server.py` — done when: these pass, through an

@@ -34,8 +34,13 @@ def marker_similarity(text: str) -> float:
     return 0.50 + (_text_hash(text) % 30) / 100
 
 
+# float32 storage can land a hair below the marker (0.40 -> 0.39999998), which would drop a
+# chunk sitting exactly at a floor. Aim slightly above; this stays well inside 5-decimal rounding.
+_FLOAT32_HEADROOM = 2e-6
+
+
 def _doc_vector(text: str) -> NDArray[np.float32]:
-    sim = marker_similarity(text)
+    sim = min(1.0, marker_similarity(text) + _FLOAT32_HEADROOM)
     axis = 1 + _text_hash(text) % (DIM - 1)
     vec = np.zeros(DIM, dtype=np.float64)
     vec[0] = sim

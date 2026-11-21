@@ -256,3 +256,38 @@ def test_empty_folder_list_is_an_error():
     retriever = HybridRetriever(MagicMock(), MagicMock(), make_stub_embedder())
     with pytest.raises(ValueError, match="include_folders must be non-empty"):
         retriever.retrieve("q", include_folders=[])
+
+
+def test_concurrent_first_use_creates_one_chroma_client(recall_index, tmp_path):
+    """Concurrent first use of a cold VectorStore creates the client once (spec 001 v0.5.3)."""
+    import shutil
+    import threading
+
+    shutil.copytree(recall_index.data_path / "chroma", tmp_path / "chroma")
+    store = VectorStore(tmp_path / "chroma")
+    created: list[object] = []
+    real = __import__("chromadb").PersistentClient
+
+    def slow_client(*args, **kwargs):
+        import time
+
+        created.append(args or kwargs)
+        time.sleep(0.1)
+        return real(*args, **kwargs)
+
+    barrier = threading.Barrier(8)
+    results: list[int] = []
+
+    def worker() -> None:
+        barrier.wait()
+        results.append(len(store.search(_QUERY_VEC, top_k=50)))
+
+    with patch("secondbrain.stores.vector.chromadb.PersistentClient", side_effect=slow_client):
+        threads = [threading.Thread(target=worker) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+    assert len(created) == 1
+    assert results == [8] * 8

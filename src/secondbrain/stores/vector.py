@@ -2,6 +2,7 @@
 
 import contextlib
 import logging
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -33,6 +34,9 @@ class VectorStore:
         self.collection_name = collection_name
         self._client: ClientAPI | None = None
         self._collection: Collection | None = None
+        # Guards lazy client/collection creation: concurrent first use from worker threads
+        # races chromadb's client setup ("Could not connect to tenant default_tenant").
+        self._init_lock = threading.RLock()
         # Epoch-based invalidation: detect external reindex
         self._epoch_file = data_path.parent / ".reindex_epoch"
         self._last_epoch_check = 0.0
@@ -42,18 +46,22 @@ class VectorStore:
     def client(self) -> ClientAPI:
         """Lazy-load the ChromaDB client."""
         if self._client is None:
-            self.data_path.mkdir(parents=True, exist_ok=True)
-            self._client = chromadb.PersistentClient(path=str(self.data_path))
+            with self._init_lock:
+                if self._client is None:
+                    self.data_path.mkdir(parents=True, exist_ok=True)
+                    self._client = chromadb.PersistentClient(path=str(self.data_path))
         return self._client
 
     @property
     def collection(self) -> Collection:
         """Get or create the collection."""
         if self._collection is None:
-            self._collection = self.client.get_or_create_collection(
-                name=self.collection_name,
-                metadata={"hnsw:space": "cosine"},
-            )
+            with self._init_lock:
+                if self._collection is None:
+                    self._collection = self.client.get_or_create_collection(
+                        name=self.collection_name,
+                        metadata={"hnsw:space": "cosine"},
+                    )
         return self._collection
 
     def get_stored_model(self) -> str | None:
