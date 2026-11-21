@@ -5,6 +5,9 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+# Spec 001: kinds of Witt note that recall can return (see vault/witt.py).
+RecallKind = Literal["spec", "decision", "learning", "project", "other"]
+
 
 class RetrievalLabel(StrEnum):
     """Labels for retrieval evaluation."""

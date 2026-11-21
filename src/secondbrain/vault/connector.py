@@ -7,6 +7,7 @@ from pathlib import Path
 
 from secondbrain.models import Note
 from secondbrain.vault.parser import parse_markdown
+from secondbrain.vault.witt import WITT_LOG_EXCLUDE
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,7 @@ class VaultConnector:
         "Tasks/All Tasks.md",
         "Tasks/Completed Tasks.md",
         "90_Meta/Templates/*",
+        WITT_LOG_EXCLUDE,  # spec 001: Witt daily logs are breadcrumbs, not notes
     ]
 
     def __init__(

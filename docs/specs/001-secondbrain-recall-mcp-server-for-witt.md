@@ -1166,10 +1166,10 @@ metadata extraction see Witt logs again.
   `tests/test_recall_prefilter.py` — done when: that test passes and the commit touches no `src/` file.
 
 ### Phase 2 — Witt layout and ingestion
-- [ ] 2.1 Tests first, then `vault/witt.py` (`WITT_FOLDER`, `WITT_LOG_EXCLUDE`, `classify_witt_path`), with
+- [x] 2.1 Tests first, then `vault/witt.py` (`WITT_FOLDER`, `WITT_LOG_EXCLUDE`, `classify_witt_path`), with
   `RecallKind` in `models.py` — files: `src/secondbrain/vault/witt.py`, `src/secondbrain/models.py`,
   `tests/test_witt_layout.py` — done when: both path-classification scenarios pass.
-- [ ] 2.2 Add `WITT_LOG_EXCLUDE` to `DEFAULT_EXCLUDES`. Tests cover: logs excluded and others listed; logs
+- [x] 2.2 Add `WITT_LOG_EXCLUDE` to `DEFAULT_EXCLUDES`. Tests cover: logs excluded and others listed; logs
   removed by `_run_indexing` and nothing else; frontmatter and titles; malformed YAML — files:
   `vault/connector.py`, `tests/test_witt_ingestion.py` — done when: all 4 ingestion scenarios pass.
 
