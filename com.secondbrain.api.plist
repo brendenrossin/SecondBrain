@@ -19,7 +19,7 @@
         <string>8000</string>
     </array>
     <key>WorkingDirectory</key>
-    <string>/Users/brentrossin/SecondBrain</string>
+    <string>/Users/brentrossin/code/second-brain</string>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
@@ -27,9 +27,9 @@
     <key>ThrottleInterval</key>
     <integer>10</integer>
     <key>StandardOutPath</key>
-    <string>/Users/brentrossin/SecondBrain/data/logs/api.stdout.log</string>
+    <string>/Users/brentrossin/code/second-brain/data/logs/api.stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/brentrossin/SecondBrain/data/logs/api.stderr.log</string>
+    <string>/Users/brentrossin/code/second-brain/data/logs/api.stderr.log</string>
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>

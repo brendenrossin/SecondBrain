@@ -15,7 +15,7 @@
     </array>
 
     <key>WorkingDirectory</key>
-    <string>/Users/brentrossin/SecondBrain</string>
+    <string>/Users/brentrossin/code/second-brain</string>
 
     <key>EnvironmentVariables</key>
     <dict>
@@ -32,8 +32,8 @@
     <true/>
 
     <key>StandardOutPath</key>
-    <string>/Users/brentrossin/SecondBrain/data/logs/ui.stdout.log</string>
+    <string>/Users/brentrossin/code/second-brain/data/logs/ui.stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/brentrossin/SecondBrain/data/logs/ui.stderr.log</string>
+    <string>/Users/brentrossin/code/second-brain/data/logs/ui.stderr.log</string>
 </dict>
 </plist>
