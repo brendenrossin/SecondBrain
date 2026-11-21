@@ -1,6 +1,7 @@
 """Tests for the ask API endpoint — stream error handling, warmup, and empty answer guard."""
 
 import json
+import time
 from unittest.mock import MagicMock, patch
 
 from secondbrain.api.dependencies import (
@@ -74,10 +75,15 @@ class TestWarmupEndpoint:
         try:
             with patch("secondbrain.api.ask.OpenAI") as mock_openai:
                 resp = client.post("/api/v1/warmup")
+                create = mock_openai.return_value.chat.completions.create
+                # /warmup is fire-and-forget: wait for the background pings, with the patch
+                # still active, instead of racing them (flaky on slower CI runners).
+                deadline = time.monotonic() + 5
+                while create.call_count < 2 and time.monotonic() < deadline:
+                    time.sleep(0.01)
         finally:
             client.app.dependency_overrides.pop(get_settings, None)
         assert resp.status_code == 200
-        create = mock_openai.return_value.chat.completions.create
         warmed = [c.kwargs["model"] for c in create.call_args_list]
         assert warmed == ["llama3.2:3b", "gemma4:26b-a4b-it-qat"]
 

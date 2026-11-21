@@ -70,9 +70,7 @@ def test_docker_down_then_everything_comes_up(tmp_path):
     compose = [c for c in named(calls, "docker") if " compose " in c]
     assert compose == [f"docker {SCRIPT.parent} compose up -d --wait"]
     kick = named(calls, "launchctl")
-    assert kick == [
-        f"launchctl {SCRIPT.parent} kickstart -k gui/{os.getuid()}/com.secondbrain.api"
-    ]
+    assert kick == [f"launchctl {SCRIPT.parent} kickstart -k gui/{os.getuid()}/com.secondbrain.api"]
     assert calls.index(kick[0]) > max(calls.index(c) for c in named(calls, "curl"))
 
 
