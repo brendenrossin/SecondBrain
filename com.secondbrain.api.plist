@@ -34,6 +34,10 @@
     <dict>
         <key>PATH</key>
         <string>/Users/brentrossin/.local/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <!-- Spec 001: load the cached embedding model with no HF hub call. Unset it
+             temporarily when changing embedders (it also blocks new downloads). -->
+        <key>HF_HUB_OFFLINE</key>
+        <string>1</string>
     </dict>
 </dict>
 </plist>

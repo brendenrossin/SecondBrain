@@ -37,7 +37,7 @@ suggestion-only, and the vault is the single source of truth.
 
 | Label | What it runs | Notes |
 |---|---|---|
-| `com.secondbrain.api` | `caffeinate -ims uv run uvicorn secondbrain.main:app` on **127.0.0.1:8000** | KeepAlive. `caffeinate` stops the Mac Studio sleeping so Tailscale stays up. Health: `GET /health`. Routes under `/api/v1`. |
+| `com.secondbrain.api` | `caffeinate -ims uv run uvicorn secondbrain.main:app` on **127.0.0.1:8000** | KeepAlive. `caffeinate` stops the Mac Studio sleeping so Tailscale stays up. Health: `GET /health`. Routes under `/api/v1`. Env `HF_HUB_OFFLINE=1` (spec 001): the cached embedder loads with no hub call. Unset it temporarily when changing embedders. |
 | `com.secondbrain.ui` | `npm run start` in `frontend/` on **127.0.0.1:7860** | Next.js prod build. After frontend edits: `npm run build`, then restart. |
 | `com.secondbrain.daily-sync` | `uv run python -m secondbrain.scripts.daily_sync all` every 3600s | inbox → tasks → projects → index → extract → weekly → feed. Feed runs last and swallows its own errors. |
 | `com.secondbrain.langfuse` | `etc/langfuse/start.sh`: starts Docker Desktop if needed → `compose up -d --wait` → waits for :3000 health → kickstarts the API | KeepAlive `SuccessfulExit=false` (retries failures every 60s, stays down after success). Optional trace viewer. Logs to `data/langfuse.log`. Spec 002. |
@@ -48,6 +48,22 @@ suggestion-only, and the vault is the single source of truth.
   `metadata.db`, `usage.db`, `feed.db`.
 - OTel spans are written as JSONL to `data/traces/YYYY-MM-DD.jsonl`.
 - Logs go to `data/logs/` and are rotated by `etc/newsyslog.d/secondbrain.conf`.
+- `data/recall_log.jsonl`: one line per served recall (200 or 503), rotated by the same conf.
+- `data/eval/recall-*.json`: recall eval reports.
+
+**Recall (spec 001):** `secondbrain-mcp` (`src/secondbrain/mcp_server.py`, console script in
+`.venv/bin/`) is a stdio MCP server with one typed `recall` tool. It's a thin httpx client over
+`POST /api/v1/recall` (`api/recall.py`) and never opens the stores. The base URL comes from `.env`
+host/port, which must match the plist. Recall is retrieval-only, over `Witt/` notes:
+- hybrid search with no rerank and no LLM
+- a fixed sanity floor, `SECONDBRAIN_RECALL_MIN_SIMILARITY` (default 0.40, min 0.3)
+- requires `embedding_provider=local`, else 503
+- zero spans
+- its own per-request read-only `lexical.db` connection
+
+`SECONDBRAIN_EMBEDDER_WARMUP=true` loads the model at API startup. Kind and project come from the
+Witt path layout (`vault/witt.py`). Quality is checked by `uv run python -m secondbrain.eval.recall_eval`
+against the live API.
 
 **Ingestion:**
 1. `VaultConnector` globs `**/*.md` under `SECONDBRAIN_VAULT_PATH` (`~/Obsidian-Vault/main-vault`) and
@@ -78,8 +94,10 @@ second process.
   the API once Langfuse is healthy. Nothing may depend on Langfuse.
 - **Repo `com.secondbrain.ui.plist` is stale.** It still launches Gradio (`python -m secondbrain.ui`).
   The installed copy runs `npm run start` in `frontend/`. Reconcile before anyone re-installs from the repo.
-- **Witt notes are indexed today.** `Witt/` isn't excluded, so log, hub and ADR chunks are in the index.
-  Spec 001 decides the policy.
+- **Witt indexing policy (spec 001):** `Witt/Logs/*` is excluded from the index. Every other Witt
+  note is indexed and recallable after the next hourly index run.
+- **Traceloop logs `Error initializing MCP instrumentor`** at API startup since `mcp` 2.x became a
+  dependency (spec 001). It's harmless: Traceloop's MCP instrumentor expects the 1.x API.
 - **FTS5:** never use content-sync triggers with `INSERT OR REPLACE`. Use an explicit `'rebuild'` after writes.
 - **Tailwind v4:** no custom CSS outside `@layer` in `globals.css`.
 - **`answer_stream()`** still blocks the event loop during token generation (acceptable for one user).
