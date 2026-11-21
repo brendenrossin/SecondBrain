@@ -10,7 +10,7 @@ import chromadb
 import numpy as np
 from chromadb.api import ClientAPI
 from chromadb.api.models.Collection import Collection
-from chromadb.api.types import Include, Metadata
+from chromadb.api.types import Metadata
 from chromadb.errors import ChromaError
 from numpy.typing import NDArray
 
@@ -165,6 +165,8 @@ class VectorStore:
         query_embedding: NDArray[np.float32],
         top_k: int = 30,
         min_similarity: float = 0.0,
+        *,
+        include_folders: list[str] | None = None,
     ) -> list[tuple[str, float, dict[str, Any], str]]:
         """Search for similar chunks.
 
@@ -172,29 +174,29 @@ class VectorStore:
             query_embedding: Query embedding vector.
             top_k: Number of results to return.
             min_similarity: Minimum cosine similarity threshold.
+            include_folders: If set, only chunks whose note_folder is in this list are
+                searched (a Chroma ``where`` filter applied inside the query, before the
+                top_k cut). None sends no ``where`` key at all.
 
         Returns:
             List of (chunk_id, similarity_score, metadata, document) tuples.
         """
         self._check_epoch()
 
-        query_emb = [query_embedding.tolist()]
-        includes: Include = ["distances", "metadatas", "documents"]
+        query_kwargs: dict[str, Any] = {
+            "query_embeddings": [query_embedding.tolist()],
+            "n_results": top_k,
+            "include": ["distances", "metadatas", "documents"],
+        }
+        if include_folders is not None:
+            query_kwargs["where"] = {"note_folder": {"$in": list(include_folders)}}
 
         try:
-            results = self.collection.query(
-                query_embeddings=query_emb,
-                n_results=top_k,
-                include=includes,
-            )
+            results = self.collection.query(**query_kwargs)
         except (ChromaError, RuntimeError):
             logger.warning("VectorStore: error on search, reconnecting")
             self._reconnect()
-            results = self.collection.query(
-                query_embeddings=query_emb,
-                n_results=top_k,
-                include=includes,
-            )
+            results = self.collection.query(**query_kwargs)
 
         # ChromaDB returns distances, convert to similarities
         # For cosine space, distance = 1 - similarity

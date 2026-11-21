@@ -1174,15 +1174,15 @@ metadata extraction see Witt logs again.
   `vault/connector.py`, `tests/test_witt_ingestion.py` — done when: all 4 ingestion scenarios pass.
 
 ### Phase 3 — Store folder pre-filter
-- [ ] 3.1 `VectorStore.search(…, *, include_folders)`: `where $in` on both branches, and no `where` when
+- [x] 3.1 `VectorStore.search(…, *, include_folders)`: `where $in` on both branches, and no `where` when
   None. Tests: filter received, retry branch, and the real-Chroma window test (12 among 150) — files:
   `stores/vector.py`, `tests/test_recall_prefilter.py` — done when: those scenarios and the goldens
   pass.
-- [ ] 3.2 `LexicalStore.search(…, *, include_folders)`: rowid JOIN plus a parameterized `IN`, with SQL
+- [x] 3.2 `LexicalStore.search(…, *, include_folders)`: rowid JOIN plus a parameterized `IN`, with SQL
   unchanged when None, on both branches. Add the new `count_chunks`. Tests: 55/5 before LIMIT, retry
   branch, `count_chunks` 7 of 47 — files: `stores/lexical.py`, tests — done when: those scenarios and
   the goldens pass.
-- [ ] 3.3 `HybridRetriever.retrieve(…, *, include_folders)` forwards to both stores and raises on `[]`.
+- [x] 3.3 `HybridRetriever.retrieve(…, *, include_folders)` forwards to both stores and raises on `[]`.
   Tests: crowding on real stores, empty list — files: `retrieval/hybrid.py`, tests — done when: the
   whole pre-filter feature passes, goldens included.
 

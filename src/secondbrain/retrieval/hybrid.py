@@ -56,16 +56,28 @@ class HybridRetriever:
         self.rrf_k = rrf_k
         self.min_similarity = min_similarity
 
-    def retrieve(self, query: str, top_k: int = 10) -> list[RetrievalCandidate]:
+    def retrieve(
+        self, query: str, top_k: int = 10, *, include_folders: list[str] | None = None
+    ) -> list[RetrievalCandidate]:
         """Retrieve candidates using hybrid search.
 
         Args:
             query: The search query.
             top_k: Number of final candidates to return.
+            include_folders: If set, both stores search only these note folders (a
+                pre-filter inside each query, so other folders can't crowd them out).
 
         Returns:
             List of RetrievalCandidate objects, sorted by RRF score.
+
+        Raises:
+            ValueError: If include_folders is an empty list.
         """
+        if include_folders is not None and not include_folders:
+            raise ValueError("include_folders must be non-empty")
+        # Only pass the new kwarg when set, so existing calls reach the stores unchanged.
+        folder_kwargs = {} if include_folders is None else {"include_folders": include_folders}
+
         # Get query embedding
         query_embedding = self.embedder.embed_single(query)
 
@@ -74,10 +86,11 @@ class HybridRetriever:
             query_embedding,
             top_k=self.k_vec,
             min_similarity=self.min_similarity,
+            **folder_kwargs,
         )
 
         # Lexical search
-        lexical_results = self.lexical_store.search(query, top_k=self.k_lex)
+        lexical_results = self.lexical_store.search(query, top_k=self.k_lex, **folder_kwargs)
 
         # Build lookup maps
         vector_scores: dict[str, float] = {}
