@@ -257,29 +257,33 @@ async def ask_stream(
 async def warmup_ollama(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict[str, str]:
-    """Send a minimal request to Ollama to preload the model into memory.
+    """Send a minimal request to Ollama to preload the local models into memory.
 
     Called by the frontend when the user opens the chat page or switches to
-    the Local provider, so the model is warm by the time they submit a query.
+    the Local provider, so both the rerank model (used first on every query)
+    and the synthesis model are warm by the time they submit a query.
     """
 
     async def _warmup() -> None:
-        try:
-            client = OpenAI(
-                api_key="ollama",
-                base_url=settings.ollama_base_url,
-                timeout=30.0,
+        client = OpenAI(
+            api_key="ollama",
+            base_url=settings.ollama_base_url,
+            timeout=30.0,
+        )
+
+        def _ping(model: str) -> None:
+            client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": "hi"}],
+                max_tokens=1,
             )
-            await asyncio.to_thread(
-                lambda: client.chat.completions.create(
-                    model=settings.ollama_model,
-                    messages=[{"role": "user", "content": "hi"}],
-                    max_tokens=1,
-                )
-            )
-            logger.info("Ollama model %s warmed up", settings.ollama_model)
-        except Exception as e:
-            logger.warning("Ollama warmup failed: %s", e)
+
+        for model in dict.fromkeys([settings.ollama_rerank_model, settings.ollama_model]):
+            try:
+                await asyncio.to_thread(_ping, model)
+                logger.info("Ollama model %s warmed up", model)
+            except Exception as e:
+                logger.warning("Ollama warmup failed for %s: %s", model, e)
 
     # Fire and forget — don't block the response. Store ref to avoid GC warning.
     _task = asyncio.create_task(_warmup())  # noqa: F841

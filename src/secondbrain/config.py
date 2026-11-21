@@ -42,7 +42,14 @@ class Settings(BaseSettings):
 
     # Ollama settings (local LLM)
     ollama_base_url: str = "http://127.0.0.1:11434/v1"
-    ollama_model: str = "gemma4"
+    # Synthesis model. The 26B MoE keeps ~4B active, so it generates faster than
+    # the dense 8B it replaces (52 vs 38 tok/s measured on an M1 Max).
+    ollama_model: str = "gemma4:26b-a4b-it-qat"
+    # Rerank model. Defaults to the synthesis model: on a 32 GB Mac both models
+    # can't stay loaded, so a separate rerank model forces Ollama to swap models
+    # on every query (~18-23s vs ~9s measured). Gemma reranks as fast as
+    # llama3.2:3b once resident. Point this elsewhere only with RAM to spare.
+    ollama_rerank_model: str = "gemma4:26b-a4b-it-qat"
 
     # API keys (loaded from env or .env file)
     openai_api_key: str | None = None

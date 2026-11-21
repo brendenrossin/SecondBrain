@@ -1,8 +1,10 @@
 """Tests for the ask API endpoint — stream error handling, warmup, and empty answer guard."""
 
+import asyncio
 import json
 from unittest.mock import MagicMock, patch
 
+from secondbrain.api.ask import warmup_ollama
 from secondbrain.api.dependencies import (
     get_conversation_store,
     get_link_expander,
@@ -62,6 +64,30 @@ class TestWarmupEndpoint:
             resp = client.post("/api/v1/warmup")
         assert resp.status_code == 200
         assert resp.json() == {"status": "warming"}
+
+    def test_warmup_preloads_rerank_and_synthesis_models(self):
+        # /warmup is fire-and-forget. Each un-contexted TestClient request runs on its own
+        # event loop, and tearing that loop down cancels the background task, so going
+        # through HTTP races it (it failed on CI). Call the handler on a loop we own and
+        # await the task it spawned.
+        settings = MagicMock(
+            ollama_base_url="http://127.0.0.1:11434/v1",
+            ollama_model="gemma4:26b-a4b-it-qat",
+            ollama_rerank_model="llama3.2:3b",
+        )
+
+        async def run() -> dict[str, str]:
+            result = await warmup_ollama(settings)
+            background = asyncio.all_tasks() - {asyncio.current_task()}
+            await asyncio.gather(*background)
+            return result
+
+        with patch("secondbrain.api.ask.OpenAI") as mock_openai:
+            result = asyncio.run(run())
+        assert result == {"status": "warming"}
+        create = mock_openai.return_value.chat.completions.create
+        warmed = [c.kwargs["model"] for c in create.call_args_list]
+        assert warmed == ["llama3.2:3b", "gemma4:26b-a4b-it-qat"]
 
     def test_warmup_handles_ollama_down(self, client):
         with patch("secondbrain.api.ask.OpenAI") as mock_openai:

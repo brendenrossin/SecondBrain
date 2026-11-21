@@ -12,7 +12,7 @@ from openai import OpenAI
 
 from secondbrain.models import ConversationMessage, RetrievalLabel
 from secondbrain.retrieval.link_expander import LinkedContext
-from secondbrain.retrieval.reranker import RankedCandidate
+from secondbrain.retrieval.reranker import RankedCandidate, local_extra_body
 
 if TYPE_CHECKING:
     from secondbrain.stores.usage import UsageStore
@@ -162,6 +162,7 @@ You might want to:
                     messages=oai_messages,  # type: ignore[arg-type]
                     temperature=0.3,
                     max_tokens=1000,
+                    extra_body=local_extra_body(self.base_url),
                 )
                 if oai_response.usage:
                     self._log_usage(
@@ -276,6 +277,8 @@ You might want to:
                 }
                 if not self.base_url:
                     stream_kwargs["stream_options"] = {"include_usage": True}
+                else:
+                    stream_kwargs["extra_body"] = local_extra_body(self.base_url)
 
                 oai_stream = self.openai_client.chat.completions.create(**stream_kwargs)
 
