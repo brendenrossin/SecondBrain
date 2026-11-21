@@ -1258,19 +1258,19 @@ metadata extraction see Witt logs again.
   when: "stdio round-trip is clean" passes.
 
 ### Phase 7 — Recall eval
-- [ ] 7.1 Dataset loading and validation: kinds, sub-minimums with named reasons, Witt-corpus scoping,
+- [x] 7.1 Dataset loading and validation: kinds, sub-minimums with named reasons, Witt-corpus scoping,
   exemptions — files: `eval/recall_eval.py`, `tests/test_recall_eval.py` — done when: the bad-dataset
   table and the exemptions scenario pass.
-- [ ] 7.2 Metrics (rank after co-hit removal), gates (`scope_isolation`, `expected_in_top5`,
+- [x] 7.2 Metrics (rank after co-hit removal), gates (`scope_isolation`, `expected_in_top5`,
   `floor_margin`, `latency` from the response, `stale_labels`, `mrr` behind `gate_mrr`), the recommend
   line, the report keys and API-down handling — files: `eval/recall_eval.py`, tests — done when: the
   metrics, gate-table, MRR-off and API-down scenarios pass.
-- [ ] 7.3 Write `recall_queries.yaml` against today's Witt notes to the dataset rules. It must not name
+- [x] 7.3 Write `recall_queries.yaml` against today's Witt notes to the dataset rules. It must not name
   topics in this spec — files: `eval/recall_queries.yaml` — done when: `test_recall_queries_yaml_validates`
   (skipped if the vault is absent) passes on this machine.
 
 ### Phase 8 — Ops files
-- [ ] 8.1 `HF_HUB_OFFLINE=1` in the repo API plist, `recall_log.jsonl` in the newsyslog conf, and the
+- [x] 8.1 `HF_HUB_OFFLINE=1` in the repo API plist, `recall_log.jsonl` in the newsyslog conf, and the
   PROJECT.md update — files: `com.secondbrain.api.plist`, `etc/newsyslog.d/secondbrain.conf`,
   `.witt/PROJECT.md` — done when: `plutil -lint` is OK and the conf line matches the existing format.
 
