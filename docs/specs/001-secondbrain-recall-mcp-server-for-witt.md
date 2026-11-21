@@ -1187,11 +1187,11 @@ metadata extraction see Witt logs again.
   whole pre-filter feature passes, goldens included.
 
 ### Phase 4 — Settings and embedder
-- [ ] 4.1 Settings `recall_min_similarity` (ge 0.3) and `embedder_warmup`, plus the double-checked locked
+- [x] 4.1 Settings `recall_min_similarity` (ge 0.3) and `embedder_warmup`, plus the double-checked locked
   lazy load in `SentenceTransformerProvider` — files: `config.py`, `indexing/embedder.py`,
   `tests/test_embedder_warmup.py` — done when: "floor cannot go below the retriever's cut" and
   "concurrent first calls load the model once" pass.
-- [ ] 4.2 Lifespan warmup task on `app.state.warmup_task`, skipped unless the provider is local, with
+- [x] 4.2 Lifespan warmup task on `app.state.warmup_task`, skipped unless the provider is local, with
   failures logged — files: `main.py`, tests — done when: the 4 warmup scenarios pass (off, non-local
   skip, background, failure).
 

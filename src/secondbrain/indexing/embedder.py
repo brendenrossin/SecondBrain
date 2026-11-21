@@ -2,6 +2,7 @@
 
 import logging
 import re
+import threading
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 import numpy as np
@@ -94,14 +95,19 @@ class SentenceTransformerProvider:
     def __init__(self, model_name: str = "all-MiniLM-L6-v2") -> None:
         self._model_name = model_name
         self._model: SentenceTransformer | None = None
+        self._model_lock = threading.Lock()
         self._is_bge = any(model_name.startswith(p) for p in _BGE_MODEL_PREFIXES)
 
     @property
     def _st_model(self) -> "SentenceTransformer":
+        # Double-checked lock: concurrent first calls (warmup + a request, or several
+        # recalls in worker threads) load the model once.
         if self._model is None:
-            from sentence_transformers import SentenceTransformer
+            with self._model_lock:
+                if self._model is None:
+                    from sentence_transformers import SentenceTransformer
 
-            self._model = SentenceTransformer(self._model_name)
+                    self._model = SentenceTransformer(self._model_name)
         return self._model
 
     def embed(self, texts: list[str]) -> NDArray[np.float32]:
