@@ -1,15 +1,15 @@
 """Tests for the ask API endpoint — stream error handling, warmup, and empty answer guard."""
 
+import asyncio
 import json
-import time
 from unittest.mock import MagicMock, patch
 
+from secondbrain.api.ask import warmup_ollama
 from secondbrain.api.dependencies import (
     get_conversation_store,
     get_link_expander,
     get_query_logger,
     get_retriever,
-    get_settings,
 )
 from secondbrain.main import app
 from secondbrain.models import RetrievalLabel
@@ -65,25 +65,27 @@ class TestWarmupEndpoint:
         assert resp.status_code == 200
         assert resp.json() == {"status": "warming"}
 
-    def test_warmup_preloads_rerank_and_synthesis_models(self, client):
+    def test_warmup_preloads_rerank_and_synthesis_models(self):
+        # /warmup is fire-and-forget. Each un-contexted TestClient request runs on its own
+        # event loop, and tearing that loop down cancels the background task, so going
+        # through HTTP races it (it failed on CI). Call the handler on a loop we own and
+        # await the task it spawned.
         settings = MagicMock(
             ollama_base_url="http://127.0.0.1:11434/v1",
             ollama_model="gemma4:26b-a4b-it-qat",
             ollama_rerank_model="llama3.2:3b",
         )
-        client.app.dependency_overrides[get_settings] = lambda: settings
-        try:
-            with patch("secondbrain.api.ask.OpenAI") as mock_openai:
-                resp = client.post("/api/v1/warmup")
-                create = mock_openai.return_value.chat.completions.create
-                # /warmup is fire-and-forget: wait for the background pings, with the patch
-                # still active, instead of racing them (flaky on slower CI runners).
-                deadline = time.monotonic() + 5
-                while create.call_count < 2 and time.monotonic() < deadline:
-                    time.sleep(0.01)
-        finally:
-            client.app.dependency_overrides.pop(get_settings, None)
-        assert resp.status_code == 200
+
+        async def run() -> dict[str, str]:
+            result = await warmup_ollama(settings)
+            background = asyncio.all_tasks() - {asyncio.current_task()}
+            await asyncio.gather(*background)
+            return result
+
+        with patch("secondbrain.api.ask.OpenAI") as mock_openai:
+            result = asyncio.run(run())
+        assert result == {"status": "warming"}
+        create = mock_openai.return_value.chat.completions.create
         warmed = [c.kwargs["model"] for c in create.call_args_list]
         assert warmed == ["llama3.2:3b", "gemma4:26b-a4b-it-qat"]
 
