@@ -1275,10 +1275,10 @@ metadata extraction see Witt logs again.
   `.witt/PROJECT.md` — done when: `plutil -lint` is OK and the conf line matches the existing format.
 
 ### Verification
-- [ ] ruff clean (`make lint`), and mypy clean on new modules (`make typecheck`)
-- [ ] pytest green — paste the summary line (918 + new, 0 failed)
-- [ ] import smoke: `uv run python -c "import secondbrain.mcp_server, secondbrain.api.recall, secondbrain.vault.witt, secondbrain.eval.recall_eval"`
-- [ ] `git diff --numstat main -- tests/` shows 0 deleted lines for every file that exists on `main`
+- [x] ruff clean (`make lint`), and mypy clean on new modules (`make typecheck`) — *all 82 source files clean*
+- [x] pytest green — paste the summary line (918 + new, 0 failed) — *`1090 passed, 8 warnings in 48.27s` (main baseline 924)*
+- [x] import smoke: `uv run python -c "import secondbrain.mcp_server, secondbrain.api.recall, secondbrain.vault.witt, secondbrain.eval.recall_eval"`
+- [x] `git diff --numstat main -- tests/` shows 0 deleted lines for every file that exists on `main`
 
 ### Phase 9 — Live rollout (after merge; spec Rollout 2–10)
 - [ ] 9.1 `uv sync`, then install the updated API plist to `~/Library/LaunchAgents`, set
