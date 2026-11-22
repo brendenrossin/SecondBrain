@@ -144,7 +144,7 @@ flowchart TD
 - One shared predicate, `_is_indexed_label(vault_path, expected) -> bool` (the file exists and is not `_is_excluded`). It's used by both the eval's `stale_labels` gate and `check_live_dataset`, so they can't disagree. In the eval, a stale label stays a `stale_labels` failure (exit 1); it is never added to `validate_dataset`.
 - New `check_live_dataset(dataset, vault_path) -> list[str]` in `recall_eval`. It returns `corpus_problems(...)` followed by `expected file missing: <path>` for each labelled query that fails `_is_indexed_label`, in dataset order.
   - It issues one `RecallDatasetDriftWarning` (a `UserWarning` subclass) per problem, in the same order.
-  - Each warning names the offending term or path, for example `null contamination: 'tanstack' in Witt/...md`. The returned strings stay exactly as `corpus_problems` and the missing-file rule produce them.
+  - Each warning names the offending term or path, for example `null contamination: 'some-guard-term' in Witt/...md`. The returned strings stay exactly as `corpus_problems` and the missing-file rule produce them.
   - It never raises. With a `vault_path` that doesn't exist, or a vault with no `Witt/`, the corpus is empty and every labelled query is reported as `expected file missing: ...`.
 - Pytest:
   - `test_recall_queries_yaml_is_structurally_valid` asserts `structural_problems(committed dataset) == []` and needs no vault.
