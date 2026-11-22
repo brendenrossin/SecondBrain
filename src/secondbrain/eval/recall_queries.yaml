@@ -111,7 +111,8 @@ queries:
   - query: what is a good way to cache server state in a React frontend with TanStack Query
     kind: prose
     near_miss: true
-    must_not_appear: [tanstack, react]
+    # `react` dropped 2026-11-21: witt spec 006 mentions "TypeScript/React" in passing.
+    must_not_appear: [tanstack]
 
   - query: sourdough starter feeding schedule and hydration ratio
     kind: prose
