@@ -8,9 +8,9 @@ install:
 dev:
 	uv run uvicorn secondbrain.main:app --reload --host 127.0.0.1 --port 8000
 
-# Run Gradio UI
+# Run the Next.js frontend (production build) at http://127.0.0.1:7860
 ui:
-	uv run python -m secondbrain.ui
+	cd frontend && npm run start
 
 # Index the vault via API (requires running server)
 index:
