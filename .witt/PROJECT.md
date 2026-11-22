@@ -23,8 +23,12 @@ suggestion-only, and the vault is the single source of truth.
   plain `uv run pytest` resolves to Anaconda's pytest.
 - Frontend: Next.js 15 in `frontend/`, served as a production build (`npm run start`). Gradio
   (`secondbrain.ui`) is deprecated.
-- `test_cmd` = the full suite: 918 tests in about 12s (timed 2026-11-21), so it's safe for the
-  synchronous Implemented gate. `make check` = ruff + mypy + pytest.
+- `test_cmd` = the full suite: 1097 tests in about 50–70s (timed 2026-11-21, after spec 001). It's
+  still fine for the synchronous Implemented gate, but it's slower than before.
+  `make check` = ruff + mypy + pytest.
+- `tests/test_recall_eval.py::test_recall_queries_yaml_validates` reads the **live vault**. A new
+  Witt note that contains a null query's `must_not_appear` term fails the suite ("null
+  contamination"). Fix it in `recall_queries.yaml` (backlog item).
 - Settings come from `config.py` (pydantic-settings, `SECONDBRAIN_` prefix, `.env` at the repo root).
 - LLMs: Anthropic `claude-haiku-4-5` by default for rerank and answers, with an OpenAI option and a
   local Ollama option (`gemma4:26b-a4b-it-qat` for both rerank and synthesis, `reasoning_effort: "none"`).
@@ -82,10 +86,16 @@ reindexes incrementally (mtime + sha1 via `index_tracker`) and takes **no** lock
 second process.
 
 ## Current state
-- Phases 0–4 are delivered: ENGAGE-1 (PR #12) and FEED-1 (PR #13), with the Langfuse skip fix in PR #14.
-- Branch `fix/local-gemma4-reasoning` has the Gemma 4 empty-answer fix plus the path commit for
-  the move from `~/SecondBrain` to `~/code/second-brain`.
-- Witt adopted 2026-11-21. In flight: spec 001, the SecondBrain MCP `recall` tool for Witt.
+- Phases 0–4 are delivered: ENGAGE-1 (PR #12), FEED-1 (PR #13), the Langfuse skip fix (PR #14), and
+  the Gemma 4 fix with the Witt adoption (PR #15).
+- **Spec 001 (recall) is Implemented** (PRs #16–#18, 2026-11-21). `secondbrain` MCP is live at user scope.
+  The eval passes with the MRR gate on: recall@1 1.00, MRR 1.00, warm p95 about 85 ms.
+- Spec 002 (Langfuse at login) is Implemented.
+- `.env` `SECONDBRAIN_HOST` is now `127.0.0.1`, matching the API plist.
+- **Next:**
+  - Witt spec 005, where the Witt skills use `recall` for prior art. It's a Draft in `~/code/witt`,
+    uncommitted, and needs a spec-draft session.
+  - The deferred items in `docs/optimizations/001-recall-backlog.md`.
 
 ## Domain notes
 **Known issues (2026-11-21):**
