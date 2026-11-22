@@ -42,6 +42,8 @@ history:
 ---
 # 001 — SecondBrain recall MCP server for Witt
 
+> **Superseded in part by [004](004-recall-hardening-from-the-spec-001-backlog.md):** Decision 7 steps 3–6 and its catch-all sentence, the `RecallFilters` `exclude_paths` validation, the Evals MRR recommendation, and the dataset-validation test.
+
 > **v0.5.3** (implement, Brent's call 2026-11-21): `VectorStore` now creates its chromadb client and
 > collection under a double-checked lock (Decision 1). Concurrent first use from worker threads raced
 > chromadb's client setup ("Could not connect to tenant default_tenant") in ~1 of 6 runs of the
