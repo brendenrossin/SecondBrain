@@ -1053,3 +1053,17 @@ def test_rrf_ties_within_a_note_pick_the_lower_chunk_id(order):
     ranked = _rank(cands, RecallFilters())
 
     assert ranked.best[LEARNING][0].chunk_id == "a"
+
+
+# --- spec 004: recall goldens (captured on unchanged code) -------------------------
+
+
+def test_recall_endpoint_hits_match_goldens(recall_index, tmp_path):
+    """Scenario: recall endpoint hits are unchanged by this spec."""
+    from tests.fixtures.recall.capture_goldens import RECALL_GOLDENS_PATH, compute_recall_goldens
+    from tests.fixtures.recall.index import build_lexonly_index
+
+    goldens = json.loads(RECALL_GOLDENS_PATH.read_text(encoding="utf-8"))
+    lexonly = build_lexonly_index(tmp_path / "lexonly")
+
+    assert compute_recall_goldens(recall_index, lexonly, tmp_path / "recall") == goldens
