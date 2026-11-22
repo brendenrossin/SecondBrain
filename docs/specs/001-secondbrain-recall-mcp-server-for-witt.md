@@ -1281,16 +1281,18 @@ metadata extraction see Witt logs again.
 - [x] `git diff --numstat main -- tests/` shows 0 deleted lines for every file that exists on `main`
 
 ### Phase 9 — Live rollout (after merge; spec Rollout 2–10)
-- [ ] 9.1 `uv sync`, then install the updated API plist to `~/Library/LaunchAgents`, set
+- [x] 9.1 `uv sync`, then install the updated API plist to `~/Library/LaunchAgents`, set
   `SECONDBRAIN_EMBEDDER_WARMUP=true` and restart the API — done when: `/health` is ok and a curl to
-  `/api/v1/recall` returns 200.
-- [ ] 9.2 Run `make index` (or a full reindex per 1.2) — done when: the `Witt/Logs/%` chunk count is 0.
-- [ ] 9.3 Run `uv run python -m secondbrain.eval.recall_eval` — done when: it exits 0. Any gate failure
-  goes to Brent with the report.
-- [ ] 9.4 Run the trace-eval must-pass — done when: 9 passed, 0 skipped.
+  `/api/v1/recall` returns 200. *(Done 2026-11-21: health ok, recall 200 in 33–108 ms, warmup loaded bge offline.)*
+- [x] 9.2 Run `make index` (or a full reindex per 1.2) — done when: the `Witt/Logs/%` chunk count is 0.
+- [x] 9.3 Run `uv run python -m secondbrain.eval.recall_eval` — done when: it exits 0. Any gate failure
+  goes to Brent with the report. *(PASS: recall@1 1.00, MRR 1.00, warm p95 150 ms, min expected
+  similarity 0.549. It printed `recommend gate_mrr: true` (16-note corpus); that's Brent's call.)*
+- [x] 9.4 Run the trace-eval must-pass — done when: 9 passed, 0 skipped. *(9 passed in 4.0s.)*
 - [ ] 9.5 Brent installs the newsyslog conf (sudo).
-- [ ] 9.6 With Brent's OK, `claude mcp add --scope user …` — done when: a fresh session's `recall` call
-  returns ok true with cited hits.
+- [x] 9.6 With Brent's OK, `claude mcp add --scope user …` — done when: a fresh session's `recall` call
+  returns ok true with cited hits. *(A fresh `claude -p` session got ok true, ADR-001 first at 0.70; its
+  request_id is in recall_log.jsonl.)*
 - [ ] 9.7 Open the Witt follow-up spec, then witt-verify → Implemented.
 
 ### Key decisions
