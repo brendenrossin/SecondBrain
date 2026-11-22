@@ -3,7 +3,7 @@ id: '001'
 title: SecondBrain recall MCP server for Witt
 project: second-brain
 tier: full
-status: Approved
+status: Implemented
 version: 0.5.3
 created: '2026-11-21'
 updated: '2026-11-21'
@@ -34,6 +34,9 @@ history:
   date: '2026-11-21'
   note: gate passed
 - status: Approved
+  date: '2026-11-21'
+  note: gate passed
+- status: Implemented
   date: '2026-11-21'
   note: gate passed
 ---
@@ -1289,11 +1292,16 @@ metadata extraction see Witt logs again.
   goes to Brent with the report. *(PASS: recall@1 1.00, MRR 1.00, warm p95 150 ms, min expected
   similarity 0.549. It printed `recommend gate_mrr: true` (16-note corpus); that's Brent's call.)*
 - [x] 9.4 Run the trace-eval must-pass — done when: 9 passed, 0 skipped. *(9 passed in 4.0s.)*
-- [ ] 9.5 Brent installs the newsyslog conf (sudo).
+- [x] 9.5 Brent installs the newsyslog conf (sudo). *(Installed 2026-11-21: `/etc/newsyslog.d/secondbrain.conf`
+  is byte-identical to the repo copy; its recall_log path matches the API plist's WorkingDirectory.)*
 - [x] 9.6 With Brent's OK, `claude mcp add --scope user …` — done when: a fresh session's `recall` call
   returns ok true with cited hits. *(A fresh `claude -p` session got ok true, ADR-001 first at 0.70; its
   request_id is in recall_log.jsonl.)*
-- [ ] 9.7 Open the Witt follow-up spec, then witt-verify → Implemented.
+- [x] 9.7 Open the Witt follow-up spec, then witt-verify → Implemented. *(Witt spec 005 opened as a
+  Draft. witt-verify: 1097 passed; 69/72 scenarios map to tests by title, and the other 3 (suite green,
+  no test weakened, trace-eval green) are covered by the suite run, the Verification numstat, and 9.4.
+  No Interfaces drift. Null-query term `react` dropped from the dataset after witt spec 006
+  mentioned it; live eval re-run PASS, warm p95 88 ms.)*
 
 ### Key decisions
 | Decision | Rationale |
