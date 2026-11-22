@@ -640,11 +640,11 @@ Feature: Recall hardening
 - [x] 6.1 Update the backlog: tick the closed items, mark the MCP cache as cut at 004 triage, and add the "expose serving embedding model" line. Confirm 001's superseded note is present — files: `docs/optimizations/001-recall-backlog.md`, `docs/specs/001-secondbrain-recall-mcp-server-for-witt.md` — done when: `grep -c '\- \[x\]' docs/optimizations/001-recall-backlog.md` has gone up by the number of items closed, and 001's status/history are unchanged per `spec_index`.
 
 ### Verification
-- [ ] V.1 `uv run ruff check src tests` and `uv run ruff format --check src tests` are clean.
-- [ ] V.2 `uv run mypy src` is clean.
-- [ ] V.3 `uv run python -m pytest -q` is green; paste the summary line. The count should be the Phase 1.1 baseline plus the new tests.
-- [ ] V.4 Import smoke test: `uv run python -c "import secondbrain.api.recall, secondbrain.eval.recall_eval, secondbrain.stores.vector, secondbrain.main"` exits 0.
-- [ ] V.5 `git diff main --stat -- src/secondbrain/retrieval/hybrid.py` is empty.
+- [x] V.1 `uv run ruff check src tests` and `uv run ruff format --check src tests` are clean.
+- [x] V.2 `uv run mypy src` is clean.
+- [x] V.3 `uv run python -m pytest -q` is green; paste the summary line. The count should be the Phase 1.1 baseline plus the new tests. **2026-11-22: `1162 passed, 8 warnings in 53.75s` (baseline 1097 + 65 new).**
+- [x] V.4 Import smoke test: `uv run python -c "import secondbrain.api.recall, secondbrain.eval.recall_eval, secondbrain.stores.vector, secondbrain.main"` exits 0.
+- [x] V.5 `git diff main --stat -- src/secondbrain/retrieval/hybrid.py` is empty.
 
 ### Phase 7 — Rollout (after merge)
 - [ ] 7.1 PR merged. API restarted via `launchctl unload/load`. `curl -s http://127.0.0.1:8000/health` returns ok.
