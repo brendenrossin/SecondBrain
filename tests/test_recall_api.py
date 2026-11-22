@@ -108,6 +108,16 @@ _ELEVEN = [f"Witt/{c}.md" for c in "abcdefghijk"]
             "exclude_paths entries must start with 'Witt/'",
         ),
         ({"query": "x", "filters": {"exclude_paths": _ELEVEN}}, "exclude_paths", "at most 10"),
+        (
+            {"query": "x", "filters": {"exclude_paths": ["Witt/" + "a" * 508]}},
+            "exclude_paths",
+            "exclude_paths entries must be at most 512 characters",
+        ),
+        (
+            {"query": "x", "filters": {"exclude_paths": ["a" * 600]}},
+            "exclude_paths",
+            "exclude_paths entries must start with 'Witt/'",
+        ),
     ],
 )
 def test_invalid_requests_rejected_with_specific_messages(env, body, field, detail):
@@ -129,6 +139,7 @@ def test_invalid_requests_rejected_with_specific_messages(env, body, field, deta
         {"query": "x", "limit": 20},
         {"query": "x", "filters": {"exclude_paths": _ELEVEN[:10]}},
         {"query": "日本"},
+        {"query": "x", "filters": {"exclude_paths": ["Witt/" + "a" * 507]}},
     ],
 )
 def test_boundary_values_are_accepted(env, body):
@@ -259,8 +270,23 @@ def _sections(title: str, sections: list[tuple[str, float, str]]) -> str:
 
 
 def test_witt_only_recall_returns_best_decision_first(env, spies):
-    """Scenario: Witt-only recall returns the best decision first."""
+    """Scenario: Witt-only recall returns the best decision first, with its precondition."""
+    from secondbrain.retrieval.hybrid import HybridRetriever
+    from tests.fixtures.recall.index import GOLDENS_PATH
+
     _, embed_single = spies
+    # Precondition: without the Witt pre-filter, a non-Witt note ranks first. It ties the
+    # ADR on RRF, so rank with the golden's own tie-break (-round5(rrf), chunk_id).
+    goldens = json.loads(GOLDENS_PATH.read_text(encoding="utf-8"))
+    assert goldens["retrieve"][TEST_QUERY][0]["note_path"] == OUTSIDE
+    index = env.index
+    default = HybridRetriever(index.vector_store, index.lexical_store, index.embedder)
+    ranked = sorted(
+        default.retrieve(TEST_QUERY, top_k=10),
+        key=lambda c: (-round(c.rrf_score, 5), c.chunk_id),
+    )
+    assert ranked[0].note_path == OUTSIDE
+    embed_single.reset_mock()
 
     resp = env.post({"query": TEST_QUERY})
 
@@ -488,6 +514,10 @@ def test_out_of_scope_candidates_dropped_even_if_a_store_misbehaves(env, caplog)
         ("b" * 600, "b" * 600),
         ("word " * 200, "word " * 119 + "word"),
         ("c" * 700, "c" * 600),
+        # Spec 004: whitespace exactly at 600 cuts at 600 (a scan from 599 would give [:300]).
+        ("x" * 300 + " " + "x" * 299 + " " + "x" * 99, "x" * 300 + " " + "x" * 299),
+        # Spec 004: a run of spaces at 590-594 is found by the backward scan; no rstrip.
+        ("y" * 590 + " " * 5 + "y" * 105, "y" * 590 + " " * 4),
     ],
 )
 def test_snippets_truncated_on_a_word_boundary(env, text, expected):
@@ -579,7 +609,11 @@ def test_recall_log_write_failure_does_not_fail_the_request(env, caplog):
         resp = env.post()
 
     assert resp.status_code == 200 and resp.json()["hits"]
-    assert any("recall_log" in r.getMessage() for r in caplog.records if r.levelname == "WARNING")
+    assert any(
+        "recall_log write failed" in r.getMessage()
+        for r in caplog.records
+        if r.levelname == "WARNING"
+    )
 
 
 def test_x_request_id_is_honoured(env):
@@ -1359,3 +1393,99 @@ def test_a_503_after_counting_logs_a_window_that_depends_on_the_count(make_env, 
     assert resp.status_code == 503
     line = env.log_lines()[-1]
     assert (line["witt_chunk_count"], line["k_vec"]) == (120, 120)
+
+
+# --- spec 004 Goal 5: exclude_paths cap --------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("ch", "n", "code"),
+    [("a", 507, 200), ("a", 508, 422), ("\u00e9", 507, 200), ("\u00e9", 508, 422)],
+)
+def test_the_512_character_cap_counts_characters_not_bytes(env, ch, n, code):
+    """Scenario Outline: the 512-character cap counts characters, not bytes."""
+    entry = "Witt/" + ch * n
+
+    resp = env.post({"query": TEST_QUERY, "filters": {"exclude_paths": [entry]}})
+
+    assert resp.status_code == code
+
+
+# --- spec 004 Goal 6: recall log permissions ---------------------------------------------
+
+
+def test_a_new_recall_log_is_created_0600(env):
+    """Scenario: a new recall log is created 0600.
+
+    Not parallel-safe: os.umask is process-wide. It is restored in a finally.
+    """
+    import os
+    import stat
+
+    assert not env.log_path.exists()
+    old = os.umask(0o022)
+    try:
+        assert env.post().status_code == 200
+    finally:
+        os.umask(old)
+
+    assert stat.S_IMODE(env.log_path.stat().st_mode) == 0o600
+
+
+def test_an_existing_recall_log_keeps_its_mode_and_is_appended_to(env):
+    """Scenario: an existing recall log keeps its mode and is appended to."""
+    import stat
+
+    env.log_path.write_text('{"status": 200}\n')
+    env.log_path.chmod(0o644)
+
+    assert env.post().status_code == 200
+
+    assert len(env.log_path.read_text().splitlines()) == 2
+    assert stat.S_IMODE(env.log_path.stat().st_mode) == 0o644
+
+
+def test_a_failing_fdopen_closes_the_descriptor(env, caplog):
+    """Scenario: a failing fdopen closes the descriptor."""
+    import os
+    from unittest.mock import call
+
+    opened: list[tuple[Path, int]] = []
+    real_open = os.open
+
+    def open_spy(path, flags, mode=0o777):
+        fd = real_open(path, flags, mode)
+        opened.append((Path(path), fd))
+        return fd
+
+    with (
+        patch.object(recall_module.os, "open", open_spy),
+        patch.object(recall_module.os, "fdopen", side_effect=OSError("fdopen failed")),
+        patch.object(recall_module.os, "close", wraps=os.close) as close_spy,
+        caplog.at_level("WARNING"),
+    ):
+        resp = env.post()
+
+    assert resp.status_code == 200
+    assert any(
+        "recall_log write failed" in r.getMessage()
+        for r in caplog.records
+        if r.levelname == "WARNING"
+    )
+    [fd] = [fd for path, fd in opened if path == env.log_path]
+    assert close_spy.call_args_list.count(call(fd)) == 1
+
+
+def test_newsyslog_rotates_the_recall_log_at_mode_600():
+    """Scenario: newsyslog rotates the recall log at mode 600."""
+    conf = _REPO_ROOT / "etc" / "newsyslog.d" / "secondbrain.conf"
+    [fields] = [
+        line.split()
+        for line in conf.read_text().splitlines()
+        if line.strip()
+        and not line.startswith("#")
+        and line.split()[0].endswith("/recall_log.jsonl")
+    ]
+
+    # logfilename [owner:group] mode count size when flags
+    assert fields[2] == "600"

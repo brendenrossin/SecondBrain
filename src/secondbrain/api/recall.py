@@ -10,6 +10,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import os
 import sqlite3
 import threading
 import time
@@ -219,11 +220,21 @@ def _rank(candidates: list[RetrievalCandidate], filters: RecallFilters) -> _Rank
 
 
 def _append_log(log_path: Path, line: dict[str, Any]) -> None:
-    """Append one JSON line. A failure logs a WARNING and never reaches the response."""
+    """Append one JSON line. A failure logs a WARNING and never reaches the response.
+
+    A new file is created 0600 (it holds query text); an existing file keeps its mode.
+    """
     try:
         text = json.dumps(line) + "\n"
-        with _LOG_LOCK, open(log_path, "a", encoding="utf-8") as f:
-            f.write(text)
+        with _LOG_LOCK:
+            fd = os.open(log_path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+            try:
+                f = os.fdopen(fd, "a", encoding="utf-8")
+            except BaseException:
+                os.close(fd)
+                raise
+            with f:
+                f.write(text)
     except (OSError, TypeError, ValueError):
         logger.warning("recall_log write failed: %s", log_path, exc_info=True)
 

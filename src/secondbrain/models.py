@@ -454,6 +454,9 @@ RECALL_TEXT_POLICY: RecallTextPolicy = (
 )
 
 
+EXCLUDE_PATH_MAX = 512  # characters, not bytes (spec 004 Decision 3)
+
+
 class RecallFilters(BaseModel):
     """Filters for POST /api/v1/recall, combined with AND."""
 
@@ -467,8 +470,13 @@ class RecallFilters(BaseModel):
     @field_validator("exclude_paths")
     @classmethod
     def _witt_paths_only(cls, value: list[str] | None) -> list[str] | None:
-        if value is not None and any(not p.startswith("Witt/") for p in value):
+        if value is None:
+            return value
+        # The prefix rule is checked first, so an entry breaking both gets the prefix message.
+        if any(not p.startswith("Witt/") for p in value):
             raise ValueError("exclude_paths entries must start with 'Witt/'")
+        if any(len(p) > EXCLUDE_PATH_MAX for p in value):
+            raise ValueError(f"exclude_paths entries must be at most {EXCLUDE_PATH_MAX} characters")
         return value
 
 

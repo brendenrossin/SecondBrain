@@ -243,6 +243,7 @@ async def test_semantically_invalid_arguments_return_ok_false_without_api_call(
         {"query": "x", "filters": {"bogus": 1}},
         {"query": "x", "filters": {"exclude_paths": ["10_Notes/a.md"]}},
         {"query": "x", "filters": {"exclude_paths": [f"Witt/{c}.md" for c in "abcdefghijk"]}},
+        {"query": "x", "filters": {"exclude_paths": ["Witt/" + "a" * 508]}},  # spec 004 cap
     ],
 )
 async def test_schema_violations_are_sdk_tool_errors_not_exceptions(transport, arguments):
@@ -369,4 +370,15 @@ async def test_bad_settings_return_ok_false_not_an_exception(transport, monkeypa
     payload = _payload(await _call({"query": "x"}))
 
     assert payload["ok"] is False and "invalid secondbrain settings" in payload["error"]
+    assert recorder.requests == []
+
+
+async def test_the_mcp_tool_reports_the_exclude_paths_cap(transport):
+    """Scenario (spec 004 v0.3.1): the MCP tool reports the cap as an SDK tool error."""
+    recorder = transport(Recorder())
+
+    result = await _call({"query": "x", "filters": {"exclude_paths": ["Witt/" + "a" * 508]}})
+
+    assert result.is_error
+    assert "at most 512 characters" in result.content[0].text
     assert recorder.requests == []

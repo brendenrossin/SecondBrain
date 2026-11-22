@@ -4,7 +4,7 @@ title: Recall hardening from the spec 001 backlog
 project: second-brain
 tier: standard
 status: Approved
-version: 0.3.0
+version: 0.3.1
 created: '2026-11-22'
 updated: '2026-11-22'
 tags: []
@@ -129,7 +129,7 @@ flowchart TD
 **Decision 3: input and file hardening (Goals 5 and 6).**
 - **Entry length cap.** `RecallFilters._witt_paths_only` checks the `Witt/` prefix first, then rejects any entry over `EXCLUDE_PATH_MAX = 512` characters (characters, not bytes). The message is `exclude_paths entries must be at most 512 characters`.
   - An entry that is both too long and lacks the prefix gets the prefix message.
-  - The MCP tool shares `RecallFilters`, so it returns the same text inside `invalid arguments: …`.
+  - The MCP tool takes `filters: RecallFilters`, so the MCP SDK validates it before the handler runs. An over-long entry is an SDK tool error (`is_error: true`) whose text contains the same message, and no HTTP request is sent. That's how the `Witt/` prefix rule and the 10-entry limit already behave. (v0.3.1: corrected at build time; v0.3.0 said `ok: false` with `invalid arguments: …`, which only covers `query` and `limit`.)
   - This supersedes the `RecallFilters` contract in spec 001.
 - **Log file mode.** `_append_log` opens the file with `os.open(path, O_WRONLY | O_APPEND | O_CREAT, 0o600)` and wraps the fd with `os.fdopen`. If `fdopen` raises, the fd is closed first.
   - A newly created file is 0600 whatever the process umask.
@@ -331,7 +331,7 @@ Feature: Recall hardening
   Scenario: The MCP tool reports the cap
     Given the MCP recall tool
     When it is called with an exclude_paths entry of "Witt/" followed by 508 "a" characters
-    Then it returns ok false with error containing "invalid arguments" and "at most 512 characters"
+    Then it returns an SDK tool error (is_error true) whose text contains "at most 512 characters"
     And no HTTP request is sent
 
   # --- Goal 6: recall log permissions ------------------------------------------
@@ -593,7 +593,7 @@ Feature: Recall hardening
 | `tests/fixtures/recall/index.py` | Update | `LEXONLY_QUERY` and `build_lexonly_index()`: a separate vault and index. `FIXTURE_VAULT` is unchanged. |
 | `tests/test_recall_api.py` | Update | Goals 1–6 and 13 scenarios. Extend `test_retrieval_failures_return_503_without_leaking_internals` (count == 7), `test_recall_log_write_failure_does_not_fail_the_request` (`os.open` path), `test_snippets_truncated_on_a_word_boundary` (two rows), `test_witt_only_recall_returns_best_decision_first` (precondition), the 422/boundary tables (512 cap). Existing `spies` / `HybridRetriever` patches stay valid because `_retrieve` is unchanged and `build_retriever` looks up `HybridRetriever` at call time. Rename `_ReadOnlyLexicalStore` → `_VectorLedReader` with no alias at the import (line 13), `test_vector_window_covers_every_witt_chunk_up_to_500`, `_inject` (`fts`/`count`), and `test_recall_reads_lexical_db_through_its_own_read_only_connection`, which keeps its `OperationalError, match="readonly"` assert. |
 | `tests/test_recall_eval.py` | Update | Goals 9–12. `test_validation_exemptions_and_scoping` moves to `corpus_problems`. The live test calls `check_live_dataset` and only warns. New structural test. `Harness` gets a raw-content responder for the invalid-body rows. |
-| `tests/test_mcp_server.py` | Update | MCP row for the 512 cap. |
+| `tests/test_mcp_server.py` | Update | MCP row for the 512 cap, in `test_schema_violations_are_sdk_tool_errors_not_exceptions` (an SDK tool error, like the prefix rule). |
 | `tests/test_embedder_warmup.py` | Update | Goal 7 scenarios. `test_warmup_failure_is_logged_not_raised` captures the task inside the lifespan and keeps its assertion. The `not hasattr` assertions are unchanged. |
 | `tests/test_stores.py` | Update | Goal 8 scenarios, including read-once for both properties and `clear()` under the lock. |
 | `docs/specs/001-secondbrain-recall-mcp-server-for-witt.md` | Update | One-line "superseded in part by 004" note under the title; status and history untouched. |
@@ -627,10 +627,10 @@ Feature: Recall hardening
 - [x] 3.2 Tests first: the to_thread spy scenario, the close-once outline (4 rows), the zero-construction outline (2 rows), the cancelled-request scenario, the 503-after-counting outline (3 rows) plus count=120 and count-fails rows, and a PermissionError in the project check gives a logged 503. Then `_RecallState`, `_recall_work`, the `build_retriever` closure, step 3 inside the `try` via `to_thread`, and the `dropped_keyword_only` sum. Remove the handler's `reader.close()` — files: `api/recall.py`, `tests/test_recall_api.py` — done when: those scenarios, the full `tests/test_recall_api.py` (including the zero-spans and Langfuse tests) and the goldens all pass.
 
 ### Phase 4 — Input and log hardening (Goals 5, 6, 13)
-- [ ] 4.1 Tests first: the 512-cap outline (4 rows), the specific message, the prefix-wins rule, and the MCP row. Then `EXCLUDE_PATH_MAX` in `RecallFilters` — files: `src/secondbrain/models.py`, `tests/test_recall_api.py`, `tests/test_mcp_server.py` — done when: those scenarios and the existing 422/boundary tables pass.
-- [ ] 4.2 Tests first: new log created 0600 (umask restored, not parallel-safe), existing log keeps its mode, failing fdopen closes the fd, and a directory at the path still gives a 200. Then `os.open` / `os.fdopen` in `_append_log` — files: `api/recall.py`, `tests/test_recall_api.py` — done when: those 4 scenarios pass.
-- [ ] 4.3 Change the newsyslog mode to 600, plus its parse test — files: `etc/newsyslog.d/secondbrain.conf`, `tests/test_recall_api.py` — done when: "newsyslog rotates the recall log at mode 600" passes.
-- [ ] 4.4 Goal 13 rows: snippet whitespace at 300 and 600, the 590–594 run, and the precondition assert against `goldens.json["retrieve"]` — files: `tests/test_recall_api.py` — done when: those rows pass. No `src/` change is expected; if one is needed, `make_snippet` has a bug, so stop and report.
+- [x] 4.1 Tests first: the 512-cap outline (4 rows), the specific message, the prefix-wins rule, and the MCP row. Then `EXCLUDE_PATH_MAX` in `RecallFilters` — files: `src/secondbrain/models.py`, `tests/test_recall_api.py`, `tests/test_mcp_server.py` — done when: those scenarios and the existing 422/boundary tables pass.
+- [x] 4.2 Tests first: new log created 0600 (umask restored, not parallel-safe), existing log keeps its mode, failing fdopen closes the fd, and a directory at the path still gives a 200. Then `os.open` / `os.fdopen` in `_append_log` — files: `api/recall.py`, `tests/test_recall_api.py` — done when: those 4 scenarios pass.
+- [x] 4.3 Change the newsyslog mode to 600, plus its parse test — files: `etc/newsyslog.d/secondbrain.conf`, `tests/test_recall_api.py` — done when: "newsyslog rotates the recall log at mode 600" passes.
+- [x] 4.4 Goal 13 rows: snippet whitespace at 300 and 600, the 590–594 run, and the precondition assert against `goldens.json["retrieve"]` — files: `tests/test_recall_api.py` — done when: those rows pass. No `src/` change is expected; if one is needed, `make_snippet` has a bug, so stop and report.
 
 ### Phase 5 — Warmup cancellation and the Chroma race (Goals 7, 8)
 - [ ] 5.1 Tests first: still-running warmup cancelled, finished warmup not cancelled (cancel spied), disabled warmup leaves no attribute, failed warmup still observable. Update `test_warmup_failure_is_logged_not_raised` so it captures the task inside the lifespan. Then the lifespan change — files: `src/secondbrain/main.py`, `tests/test_embedder_warmup.py` — done when: all warmup tests pass with no hang (each test under 10 s).
