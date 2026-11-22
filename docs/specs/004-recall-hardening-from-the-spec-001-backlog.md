@@ -637,7 +637,7 @@ Feature: Recall hardening
 - [x] 5.2 Tests first: `_reconnect` waits for the lock, re-entrancy, the read-once outline (2 rows), `clear()` under the lock, and the concurrent smoke test. Then the locals, the `is None` double-check, and the locked `_reconnect` and `clear` — files: `src/secondbrain/stores/vector.py`, `tests/test_stores.py` — done when: those scenarios pass and `tests/test_stores.py` passes in full.
 
 ### Phase 6 — Docs
-- [ ] 6.1 Update the backlog: tick the closed items, mark the MCP cache as cut at 004 triage, and add the "expose serving embedding model" line. Confirm 001's superseded note is present — files: `docs/optimizations/001-recall-backlog.md`, `docs/specs/001-secondbrain-recall-mcp-server-for-witt.md` — done when: `grep -c '\- \[x\]' docs/optimizations/001-recall-backlog.md` has gone up by the number of items closed, and 001's status/history are unchanged per `spec_index`.
+- [x] 6.1 Update the backlog: tick the closed items, mark the MCP cache as cut at 004 triage, and add the "expose serving embedding model" line. Confirm 001's superseded note is present — files: `docs/optimizations/001-recall-backlog.md`, `docs/specs/001-secondbrain-recall-mcp-server-for-witt.md` — done when: `grep -c '\- \[x\]' docs/optimizations/001-recall-backlog.md` has gone up by the number of items closed, and 001's status/history are unchanged per `spec_index`.
 
 ### Verification
 - [ ] V.1 `uv run ruff check src tests` and `uv run ruff format --check src tests` are clean.
