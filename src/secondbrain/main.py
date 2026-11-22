@@ -1,6 +1,7 @@
 """FastAPI application entry point."""
 
 import asyncio
+import contextlib
 import logging
 import shutil
 import time
@@ -71,6 +72,23 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.error("VAULT PATH NOT CONFIGURED OR MISSING — APIs will return 503 errors")
     _start_warmup(app, s)
     yield
+    await _stop_warmup(app)
+
+
+async def _stop_warmup(app: FastAPI) -> None:
+    """Cancel an unfinished warmup task at shutdown (spec 004 Goal 7).
+
+    A model load already running in to_thread can't be interrupted; this only stops the
+    task cleanly. With warmup disabled app.state never gets a warmup_task and is untouched.
+    """
+    task: asyncio.Task[None] | None = getattr(app.state, "warmup_task", None)
+    if task is None:
+        return
+    if not task.done():
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+    app.state.warmup_task = None
 
 
 app = FastAPI(
