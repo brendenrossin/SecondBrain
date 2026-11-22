@@ -20,6 +20,7 @@ import re
 import subprocess
 import sys
 import time
+import warnings
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -61,6 +62,10 @@ EXIT_OK, EXIT_GATE, EXIT_DATASET, EXIT_UNREACHABLE = 0, 1, 2, 3
 
 class DatasetError(ValueError):
     """The dataset breaks a rule; the message names every reason."""
+
+
+class RecallDatasetDriftWarning(UserWarning):
+    """The committed dataset drifted from the live Witt corpus (spec 004 Decision 4)."""
 
 
 class ApiFailure(RuntimeError):
@@ -137,8 +142,8 @@ def _normalise(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip().lower()
 
 
-def validate_dataset(dataset: Dataset, corpus: dict[str, str]) -> None:
-    """Raise DatasetError naming every broken rule (spec 001 Evals, dataset validation)."""
+def structural_problems(dataset: Dataset) -> list[str]:
+    """Every rule that reads only the dataset: counts, kinds, filter coverage, duplicates."""
     reasons: list[str] = []
     labelled, nulls = dataset.labelled, dataset.nulls
 
@@ -167,18 +172,74 @@ def validate_dataset(dataset: Dataset, corpus: dict[str, str]) -> None:
     texts = [q.query for q in dataset.queries]
     if len(set(texts)) != len(texts):
         reasons.append("duplicate query")
+    return reasons
 
-    notes = [_normalise(t) for t in corpus.values()]
-    if any(
-        q.kind in ("prose", "long") and any(_normalise(q.query) in n for n in notes)
-        for q in dataset.queries
-    ):
-        reasons.append("verbatim query")
-    if any(_normalise(term) in n for q in nulls for term in q.must_not_appear for n in notes):
-        reasons.append("null contamination")
 
+def _corpus_findings(dataset: Dataset, corpus: dict[str, str]) -> list[tuple[str, str]]:
+    """(reason, detail) for each corpus rule broken; detail names the first offender."""
+    notes = {path: _normalise(text) for path, text in corpus.items()}
+    findings: list[tuple[str, str]] = []
+    verbatim = next(
+        (
+            (q.query, path)
+            for q in dataset.queries
+            if q.kind in ("prose", "long")
+            for path, n in notes.items()
+            if _normalise(q.query) in n
+        ),
+        None,
+    )
+    if verbatim:
+        findings.append(("verbatim query", f"{verbatim[0][:60]!r} in {verbatim[1]}"))
+    contaminated = next(
+        (
+            (term, path)
+            for q in dataset.nulls
+            for term in q.must_not_appear
+            for path, n in notes.items()
+            if _normalise(term) in n
+        ),
+        None,
+    )
+    if contaminated:
+        findings.append(("null contamination", f"{contaminated[0]!r} in {contaminated[1]}"))
+    return findings
+
+
+def corpus_problems(dataset: Dataset, corpus: dict[str, str]) -> list[str]:
+    """Rules that read the Witt corpus: "verbatim query", then "null contamination"."""
+    return [reason for reason, _detail in _corpus_findings(dataset, corpus)]
+
+
+def validate_dataset(dataset: Dataset, corpus: dict[str, str]) -> None:
+    """Raise DatasetError naming every broken structural and corpus rule (exit 2)."""
+    reasons = structural_problems(dataset) + corpus_problems(dataset, corpus)
     if reasons:
         raise DatasetError("; ".join(reasons))
+
+
+def check_live_dataset(dataset: Dataset, vault_path: Path) -> list[str]:
+    """Corpus problems plus missing expected files; one drift warning each. Never raises.
+
+    Returns corpus_problems(...) followed by "expected file missing: <path>" for each
+    labelled query whose expected file is not an indexed vault file, in dataset order.
+    A vault_path that doesn't exist, or has no Witt/, gives an empty corpus.
+    """
+    try:
+        corpus = witt_corpus(vault_path) if (vault_path / WITT_FOLDER).is_dir() else {}
+    except OSError:
+        logger.warning("recall eval: could not read the Witt corpus at %s", vault_path)
+        corpus = {}
+    findings = _corpus_findings(dataset, corpus)
+    for q in dataset.labelled:
+        assert q.expected is not None
+        if not _is_indexed_label(vault_path, q.expected):
+            missing = f"expected file missing: {q.expected}"
+            findings.append((missing, ""))
+    for reason, detail in findings:
+        message = f"{reason}: {detail}" if detail else reason
+        warnings.warn(message, RecallDatasetDriftWarning, stacklevel=2)
+    return [reason for reason, _detail in findings]
 
 
 # --- metrics and gates -----------------------------------------------------------
@@ -208,6 +269,14 @@ def p95(values: list[float]) -> float:
 
 def _is_excluded(path: str) -> bool:
     return any(fnmatch.fnmatch(path, p) for p in VaultConnector.DEFAULT_EXCLUDES)
+
+
+def _is_indexed_label(vault_path: Path, expected: str) -> bool:
+    """The expected file exists and isn't excluded from the index (stale_labels + drift)."""
+    try:
+        return (vault_path / expected).is_file() and not _is_excluded(expected)
+    except OSError:
+        return False
 
 
 def evaluate(
@@ -246,7 +315,7 @@ def evaluate(
                     "floor_margin",
                     f"{q.expected!r} similarity {sim:.3f} < {floor + FLOOR_MARGIN:.3f}",
                 )
-            if not (vault_path / q.expected).is_file() or _is_excluded(q.expected):
+            if not _is_indexed_label(vault_path, q.expected):
                 fail("stale_labels", f"{q.expected!r} is not an indexed vault file")
         else:
             row["top_similarity"] = max((h["similarity"] for h in hits), default=None)
@@ -262,8 +331,9 @@ def evaluate(
     if dataset.gate_mrr and mrr < MRR_THRESHOLD:
         fail("mrr", f"MRR {mrr:.3f} < {MRR_THRESHOLD}")
 
-    recommend = corpus_notes > RECOMMEND_CORPUS_NOTES or any(
-        r is not None and r > RECOMMEND_MAX_RANK for r in ranks
+    recommend = not dataset.gate_mrr and (
+        corpus_notes > RECOMMEND_CORPUS_NOTES
+        or any(r is not None and r > RECOMMEND_MAX_RANK for r in ranks)
     )
     gates = ["scope_isolation", "expected_in_top5", "floor_margin", "latency", "stale_labels"]
     if dataset.gate_mrr:
@@ -293,7 +363,14 @@ def _post(client: httpx.Client, url: str, body: dict[str, Any]) -> tuple[dict[st
     wall_ms = (time.perf_counter() - t0) * 1000
     if not resp.is_success:
         raise ApiFailure(f"recall api returned HTTP {resp.status_code}: {resp.text[:300]}")
-    payload: dict[str, Any] = resp.json()
+    try:
+        payload = resp.json()
+    except ValueError:
+        payload = None
+    if not isinstance(payload, dict):
+        raise ApiFailure(
+            "recall api returned an invalid body (expected a JSON object): " + resp.text[:300]
+        )
     return payload, wall_ms
 
 
@@ -360,6 +437,8 @@ def run_eval(
         "git_sha": _git_sha(),
         "embedding_model": settings.embedding_model,
         "hf_revision": _hf_revision(settings.embedding_model),
+        # Not the serving API's model: the API doesn't expose it (spec 004 Goal 10).
+        "model_fields_source": "eval process settings and local HF cache",
         "k_lex": K_LEX,
         "rrf_k": RRF_K,
         "recall_min_similarity": settings.recall_min_similarity,
