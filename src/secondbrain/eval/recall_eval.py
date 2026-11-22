@@ -254,6 +254,8 @@ def evaluate(
 
     latencies = [r["latency_ms"] for r in responses if isinstance(r.get("latency_ms"), int | float)]
     latency_p95 = p95(latencies)
+    if len(latencies) < len(responses):
+        fail("latency", f"{len(responses) - len(latencies)} responses had no latency_ms")
     if latency_p95 >= LATENCY_P95_MS:
         fail("latency", f"warm p95 {latency_p95:.0f} ms >= {LATENCY_P95_MS} ms")
     mrr = mean_reciprocal_rank(ranks)

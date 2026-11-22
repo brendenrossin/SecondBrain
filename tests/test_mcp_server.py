@@ -359,3 +359,14 @@ def test_stdio_round_trip_is_clean(tmp_path):
     payload = json.loads(result["content"][0]["text"])
     assert payload["ok"] is False and "unreachable" in payload["error"]
     assert str(free_port) in payload["error"]
+
+
+async def test_bad_settings_return_ok_false_not_an_exception(transport, monkeypatch):
+    """Fix E: a bad .env value becomes ok false; the handler never raises."""
+    recorder = transport(Recorder())
+    monkeypatch.setenv("SECONDBRAIN_PORT", "not-a-port")
+
+    payload = _payload(await _call({"query": "x"}))
+
+    assert payload["ok"] is False and "invalid secondbrain settings" in payload["error"]
+    assert recorder.requests == []

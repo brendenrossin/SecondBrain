@@ -991,3 +991,65 @@ def test_recall_reads_lexical_db_through_its_own_read_only_connection(env):
             reader.conn.execute("DELETE FROM chunks")
     finally:
         reader.close()
+
+
+# --- tri-review fixes ---------------------------------------------------------------
+
+
+def test_missing_lexical_db_is_an_empty_index_not_a_503(make_env, recall_index, tmp_path):
+    """Fix A: before the first index run there is no lexical.db; recall answers like an empty index."""
+    from secondbrain.stores.lexical import LexicalStore
+
+    missing = tmp_path / "never-indexed" / "lexical.db"
+    index = RecallIndex(
+        vault_path=recall_index.vault_path,
+        data_path=tmp_path,
+        vector_store=recall_index.vector_store,
+        lexical_store=LexicalStore(missing),  # lazy: nothing created until .conn
+        tracker=recall_index.tracker,
+        embedder=recall_index.embedder,
+    )
+    env = make_env(index=index)
+
+    resp = env.post()
+
+    assert resp.status_code == 200
+    assert resp.json()["notices"] == ["no Witt notes indexed yet"]
+    assert resp.json()["witt_chunk_count"] == 0
+    assert not missing.exists()  # recall never creates the store
+
+
+def test_non_canonical_request_id_is_canonicalised(env):
+    """Fix D: a valid but non-canonical UUID spelling is returned in canonical form."""
+    import uuid
+
+    sent = uuid.uuid4()
+    resp = env.post(headers={"X-Request-ID": "{" + str(sent).upper() + "}"})
+
+    assert resp.json()["request_id"] == str(sent)
+    assert env.log_lines()[-1]["request_id"] == str(sent)
+
+
+@pytest.mark.parametrize("order", ["a_first", "b_first"])
+def test_rrf_ties_within_a_note_pick_the_lower_chunk_id(order):
+    """Fix F: which chunk represents a note doesn't depend on candidate order."""
+    from secondbrain.api.recall import _rank
+    from secondbrain.models import RecallFilters
+    from secondbrain.retrieval.hybrid import RetrievalCandidate
+
+    def cand(cid: str) -> RetrievalCandidate:
+        return RetrievalCandidate(
+            chunk_id=cid,
+            note_path=LEARNING,
+            note_title="T",
+            heading_path=[],
+            chunk_text=cid,
+            similarity_score=0.6,
+            bm25_score=1.0,
+            rrf_score=0.03,
+        )
+
+    cands = [cand("a"), cand("b")] if order == "a_first" else [cand("b"), cand("a")]
+    ranked = _rank(cands, RecallFilters())
+
+    assert ranked.best[LEARNING][0].chunk_id == "a"

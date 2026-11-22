@@ -19,7 +19,7 @@ from secondbrain.api.ask import router as ask_router
 from secondbrain.api.briefing import router as briefing_router
 from secondbrain.api.capture import router as capture_router
 from secondbrain.api.conversations import router as conversations_router
-from secondbrain.api.dependencies import get_embedder
+from secondbrain.api.dependencies import get_embedder, get_vector_store
 from secondbrain.api.events import router as events_router
 from secondbrain.api.feed import router as feed_router
 from secondbrain.api.index import router as index_router
@@ -30,6 +30,7 @@ from secondbrain.api.tasks import router as tasks_router
 from secondbrain.api.wiki import router as wiki_router
 from secondbrain.config import Settings, get_settings
 from secondbrain.indexing.embedder import Embedder
+from secondbrain.stores.vector import VectorStore
 from secondbrain.tracing import init_tracing
 
 logger = logging.getLogger(__name__)
@@ -37,10 +38,14 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
-async def _warm_up(embedder: Embedder) -> None:
-    """Load the embedding model off the event loop. Failures are logged, never raised."""
+async def _warm_up(embedder: Embedder, vector_store: VectorStore) -> None:
+    """Load the embedding model and open Chroma off the event loop.
+
+    Failures are logged, never raised.
+    """
     try:
         await asyncio.to_thread(embedder.embed_single, "warmup")
+        await asyncio.to_thread(vector_store.count)  # creates the Chroma client + collection
         logger.info("Embedder warmup complete (%s)", embedder.model_name)
     except Exception:
         logger.warning("Embedder warmup failed; the model will load on first use", exc_info=True)
@@ -53,7 +58,7 @@ def _start_warmup(app: FastAPI, s: Settings) -> None:
     if s.embedding_provider != "local":
         logger.debug("embedder_warmup ignored for provider %r", s.embedding_provider)
         return
-    app.state.warmup_task = asyncio.create_task(_warm_up(get_embedder()))
+    app.state.warmup_task = asyncio.create_task(_warm_up(get_embedder(), get_vector_store()))
 
 
 @asynccontextmanager

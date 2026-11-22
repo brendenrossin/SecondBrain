@@ -374,3 +374,17 @@ def test_recall_queries_yaml_validates():
     for q in dataset.labelled:
         assert q.expected is not None
         assert (Path(settings.vault_path) / q.expected).is_file(), q.expected
+
+
+def test_latency_gate_fails_when_latency_is_missing(harness, capsys):
+    """Fix G: responses without latency_ms can't pass the latency gate vacuously."""
+
+    def no_latency(body: dict) -> dict:
+        out = perfect(body, harness.dataset)
+        out.pop("latency_ms")
+        return out
+
+    code, report, err = harness.run(no_latency, capsys)
+
+    assert code == ev.EXIT_GATE
+    assert "latency" in report["failed_gates"] and "latency" in err

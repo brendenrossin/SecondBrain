@@ -106,7 +106,10 @@ async def recall(
     except ValidationError as exc:
         return _fail(request_id, _describe_validation(exc))
 
-    base = base_url()
+    try:
+        base = base_url()
+    except Exception as exc:  # a bad .env must not raise out of the handler
+        return _fail(request_id, f"invalid secondbrain settings: {type(exc).__name__}")
     logger.info("recall request_id=%s -> %s/api/v1/recall", request_id, base)
     try:
         resp = await _get_http_client().post(

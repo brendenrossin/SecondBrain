@@ -104,6 +104,10 @@ class HybridRetriever:
         for chunk_id, bm25_score in lexical_results:
             lexical_scores[chunk_id] = bm25_score
 
+        # 1-indexed ranks, first occurrence wins (one dict lookup per candidate, not a scan)
+        vector_ranks = self._ranks(vector_results)
+        lexical_ranks = self._ranks(lexical_results)
+
         # Get all candidate IDs
         all_ids = set(vector_scores.keys()) | set(lexical_scores.keys())
 
@@ -112,8 +116,8 @@ class HybridRetriever:
 
         for chunk_id in all_ids:
             # Get ranks (1-indexed)
-            vec_rank = self._get_rank(chunk_id, vector_results, key_idx=0)
-            lex_rank = self._get_rank(chunk_id, lexical_results, key_idx=0)
+            vec_rank = vector_ranks.get(chunk_id)
+            lex_rank = lexical_ranks.get(chunk_id)
 
             # RRF score
             rrf_score = 0.0
@@ -157,9 +161,10 @@ class HybridRetriever:
         candidates.sort(key=lambda c: c.rrf_score, reverse=True)
         return candidates[:top_k]
 
-    def _get_rank(self, chunk_id: str, results: list[Any], key_idx: int) -> int | None:
-        """Get the 1-indexed rank of a chunk in results."""
+    @staticmethod
+    def _ranks(results: list[Any]) -> dict[str, int]:
+        """Map chunk_id (each result's first field) to its 1-indexed rank; first occurrence wins."""
+        ranks: dict[str, int] = {}
         for i, result in enumerate(results):
-            if result[key_idx] == chunk_id:
-                return i + 1
-        return None
+            ranks.setdefault(result[0], i + 1)
+        return ranks

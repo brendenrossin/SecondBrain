@@ -66,16 +66,21 @@ def lifespan_env(tmp_path):
     """Build (lifespan context, app, mock embedder, get_embedder mock) for given settings."""
     from secondbrain import main
 
+    vector_store = MagicMock()
+
     with ExitStack() as stack:
 
         def make(**overrides):
             settings = Settings(_env_file=None, data_path=tmp_path, **overrides)
             embedder = MagicMock(model_name="mock")
+            vector_store.reset_mock()
             stack.enter_context(patch.object(main, "get_settings", return_value=settings))
             stack.enter_context(patch.object(main, "init_tracing"))
             get_embedder = stack.enter_context(
                 patch.object(main, "get_embedder", return_value=embedder)
             )
+            # Never the live data/chroma from a test process.
+            stack.enter_context(patch.object(main, "get_vector_store", return_value=vector_store))
             app = SimpleNamespace(state=SimpleNamespace())
             return main.lifespan(app), app, embedder, get_embedder
 
@@ -136,3 +141,14 @@ async def test_warmup_failure_is_logged_not_raised(lifespan_env, caplog):
         "warmup" in r.getMessage().lower() for r in caplog.records if r.levelname == "WARNING"
     )
     assert "Task exception was never retrieved" not in caplog.text
+
+
+async def test_warmup_also_opens_the_vector_store(lifespan_env):
+    """Fix C (tri-review): warmup opens Chroma too, so the first recall doesn't pay for it."""
+    from secondbrain import main
+
+    ctx, app, embedder, _ = lifespan_env(embedder_warmup=True)
+    async with ctx:
+        await app.state.warmup_task
+    embedder.embed_single.assert_called_once_with("warmup")
+    main.get_vector_store.return_value.count.assert_called_once_with()

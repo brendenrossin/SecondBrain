@@ -75,11 +75,9 @@ def _request_id(header: str | None) -> str:
     """The client's X-Request-ID if it is a valid UUID, else a fresh one."""
     if header:
         try:
-            uuid.UUID(header)
+            return str(uuid.UUID(header))  # canonical form, whatever spelling was sent
         except ValueError:
             pass
-        else:
-            return header
     return str(uuid.uuid4())
 
 
@@ -156,7 +154,11 @@ def _rank(candidates: list[RetrievalCandidate], filters: RecallFilters) -> _Rank
         if not _passes_filters(filters, c.note_path, kind):
             continue
         current = ranked.best.get(c.note_path)
-        if current is None or c.rrf_score > current[0].rrf_score:
+        # Ties on RRF go to the lower chunk_id, so the snippet doesn't depend on set order.
+        if current is None or (-c.rrf_score, c.chunk_id) < (
+            -current[0].rrf_score,
+            current[0].chunk_id,
+        ):
             ranked.best[c.note_path] = (c, kind, project)
     return ranked
 
@@ -266,7 +268,12 @@ async def recall(
     reader = _ReadOnlyLexicalStore(lexical_store.db_path)
     try:
         # Step 4: size the vector window to the Witt chunk count.
-        witt_chunk_count = await asyncio.to_thread(reader.count_chunks, [WITT_FOLDER])
+        # Before the first index run there is no lexical.db, and mode=ro can't create it.
+        witt_chunk_count = (
+            await asyncio.to_thread(reader.count_chunks, [WITT_FOLDER])
+            if reader.db_path.exists()
+            else 0
+        )
         if witt_chunk_count == 0:
             notices.append(NOTICE_NO_WITT)
             return await respond([])
