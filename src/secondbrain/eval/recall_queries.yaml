@@ -8,6 +8,9 @@
 # - Don't edit a failing query to make it pass; add new queries instead.
 # - Written 2026-11-21 against 15 Witt notes (5 spec mirrors, 7 ADRs, 1 learning, 2 hubs).
 
+# MRR became a hard gate (≥ 0.7) on 2026-11-21, once the corpus reached 16 notes (spec 001 Evals).
+gate_mrr: true
+
 queries:
   # --- identifier ---
   - query: suppress_instrumentation

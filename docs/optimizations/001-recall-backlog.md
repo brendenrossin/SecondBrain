@@ -37,3 +37,8 @@ Agreement: **2** = two personas raised it; **1** = one persona.
   - The read-only connection is opened per request (sub-millisecond).
 - [ ] **Snippet test rows** (1, QA). Add two rows: index 600 is whitespace, giving a 600-char snippet; and consecutive whitespace at the cut.
 - [ ] **Precondition not asserted** (1, QA). "Witt-only recall returns the best decision first" doesn't assert that `10_Notes/review-process.md` is the closest match in the whole index, which the scenario presupposes.
+- [ ] **The MRR recommendation still prints after the gate is on** (found 2026-11-21, after `gate_mrr: true`).
+  - `recall_eval.evaluate` prints `recommend gate_mrr: true` whenever the corpus has more than 15 notes, even when the dataset already sets it.
+  - Spec 001 Evals doesn't cover that case.
+  - Fix: skip the recommendation when `dataset.gate_mrr` is true. This is a spec change.
+- [ ] **The dataset-validation test reads the live vault** (found 2026-11-21). `test_recall_queries_yaml_validates` fails the suite whenever a new Witt note contains a null query's guard word. That happened with witt spec 006 and `react`. Decide whether the test should fail like this (it does catch drift) or warn.
