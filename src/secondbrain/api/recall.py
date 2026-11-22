@@ -14,6 +14,8 @@ import sqlite3
 import threading
 import time
 import uuid
+from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any
@@ -149,6 +151,40 @@ def _retrieve(retriever: HybridRetriever, query: str, top_k: int) -> list[Retrie
         return retriever.retrieve(query, top_k=top_k, include_folders=[WITT_FOLDER])
 
 
+@dataclass
+class _RecallState:
+    """What the worker call learned, kept even when it fails (spec 004 Decision 2)."""
+
+    witt_chunk_count: int = 0
+    lexical_only_skipped: int = 0
+
+
+def _recall_work(
+    db_path: Path,
+    build_retriever: Callable[[LexicalStore, int], HybridRetriever],
+    query: str,
+    holder: _RecallState,
+) -> list[RetrievalCandidate]:
+    """Open, use and close the private reader on one worker thread (Decision 7 steps 4-5).
+
+    Writes the Witt chunk count into holder before retrieving, so a failure after counting
+    still logs the real count and window. Raises whatever counting or retrieval raises.
+    """
+    # Before the first index run there is no lexical.db, and mode=ro can't create it.
+    if not db_path.exists():
+        return []
+    reader = _VectorLedReader(db_path)
+    try:
+        holder.witt_chunk_count = reader.count_chunks([WITT_FOLDER])
+        if holder.witt_chunk_count == 0:
+            return []
+        k_vec = k_vec_for(holder.witt_chunk_count)
+        return _retrieve(build_retriever(reader, k_vec), query, k_vec + K_LEX)
+    finally:
+        holder.lexical_only_skipped = reader.lexical_only_skipped
+        reader.close()
+
+
 class _Ranked:
     """Post-retrieval result: one best chunk per note, plus drop counters."""
 
@@ -214,17 +250,18 @@ async def recall(
 ) -> RecallResponse:
     """Decision 7 pipeline. 422 on an invalid request (no log line).
 
-    503 {"detail": "recall unavailable: <ExceptionType>"} on any exception in retrieval,
-    or "recall unavailable: requires the local embedder". The traceback is logged
-    server-side only; the body contains neither the exception message nor a path.
+    503 {"detail": "recall unavailable: <ExceptionType>"} on any exception in steps 3-11
+    (spec 004), or "recall unavailable: requires the local embedder". The traceback is
+    logged server-side only; the body contains neither the exception message nor a path.
+    A cancelled request writes no log line: CancelledError is not an Exception.
     """
     started = time.perf_counter()
     request_id = _request_id(x_request_id)
     filters = request.filters
     warnings: list[str] = []
     notices: list[str] = []
-    witt_chunk_count = 0
-    lexical_only_skipped = 0
+    holder = _RecallState()
+    hits: list[RecallHit] = []
     log_hits: list[dict[str, Any]] = []
     ranked = _Ranked()
     log_path = Path(settings.data_path) / RECALL_LOG_NAME
@@ -239,12 +276,12 @@ async def recall(
             "filters": filters.model_dump(),
             "limit": request.limit,
             "recall_min_similarity": settings.recall_min_similarity,
-            "k_vec": k_vec_for(witt_chunk_count),
+            "k_vec": k_vec_for(holder.witt_chunk_count),
             "k_lex": K_LEX,
             "rrf_k": RRF_K,
-            "witt_chunk_count": witt_chunk_count,
+            "witt_chunk_count": holder.witt_chunk_count,
             "hits": log_hits,
-            "dropped_keyword_only": lexical_only_skipped + ranked.dropped_keyword_only,
+            "dropped_keyword_only": holder.lexical_only_skipped + ranked.dropped_keyword_only,
             "dropped_out_of_scope": ranked.dropped_out_of_scope,
             "warnings": warnings,
             "notices": notices,
@@ -256,53 +293,9 @@ async def recall(
     def elapsed_ms() -> int:
         return int((time.perf_counter() - started) * 1000)
 
-    async def respond(hits: list[RecallHit]) -> RecallResponse:
-        """Build the 200 response and write its log line."""
-        response = RecallResponse(
-            request_id=request_id,
-            query=request.query,
-            applied_filters=filters,
-            hits=hits,
-            warnings=warnings,
-            notices=notices,
-            latency_ms=elapsed_ms(),
-            witt_chunk_count=witt_chunk_count,
-        )
-        await write_log(200, None, response.latency_ms)
-        return response
-
-    # Step 2: local embedder only.
-    if settings.embedding_provider != "local":
-        await write_log(503, "EmbedderNotLocal", elapsed_ms())
-        raise HTTPException(status_code=503, detail=NOT_LOCAL_DETAIL)
-
-    # Step 3: project slug check.
-    if filters.project is not None:
-        warning, notice = _check_project(filters.project, settings.vault_path)
-        if notice:
-            notices.append(notice)
-        if warning:
-            warnings.append(warning)
-            return await respond([])
-
-    reader = _VectorLedReader(lexical_store.db_path)
-    try:
-        # Step 4: size the vector window to the Witt chunk count.
-        # Before the first index run there is no lexical.db, and mode=ro can't create it.
-        witt_chunk_count = (
-            await asyncio.to_thread(reader.count_chunks, [WITT_FOLDER])
-            if reader.db_path.exists()
-            else 0
-        )
-        if witt_chunk_count == 0:
-            notices.append(NOTICE_NO_WITT)
-            return await respond([])
-        k_vec = k_vec_for(witt_chunk_count)
-        if witt_chunk_count > K_VEC_MAX:
-            notices.append(NOTICE_SATURATED)
-
-        # Step 5: retrieve (one query embedding), no spans.
-        retriever = HybridRetriever(
+    def build_retriever(reader: LexicalStore, k_vec: int) -> HybridRetriever:
+        # Looked up at call time, so tests can patch recall_module.HybridRetriever.
+        return HybridRetriever(
             vector_store,
             reader,
             embedder,
@@ -311,33 +304,66 @@ async def recall(
             rrf_k=RRF_K,
             min_similarity=settings.recall_min_similarity,
         )
-        candidates = await asyncio.to_thread(_retrieve, retriever, request.query, k_vec + K_LEX)
-        lexical_only_skipped = reader.lexical_only_skipped
 
-        # Steps 6-11: drop, classify, filter, dedupe, sort, slice.
-        ranked = _rank(candidates, filters)
-        best = sorted(ranked.best.values(), key=lambda t: (-t[0].rrf_score, t[0].note_path))
-        best = best[: request.limit]
-        hits = [
-            RecallHit(
-                note_path=c.note_path,
-                note_title=c.note_title,
-                heading_path=c.heading_path,
-                kind=kind,
-                project=project,
-                snippet=make_snippet(c.chunk_text),
-                score=c.rrf_score,
-                similarity=c.similarity_score,
+    # Step 2: local embedder only.
+    if settings.embedding_provider != "local":
+        await write_log(503, "EmbedderNotLocal", elapsed_ms())
+        raise HTTPException(status_code=503, detail=NOT_LOCAL_DETAIL)
+
+    try:
+        # Step 3: project slug check (filesystem, so off the event loop).
+        if filters.project is not None:
+            warning, notice = await asyncio.to_thread(
+                _check_project, filters.project, settings.vault_path
             )
-            for c, kind, project in best
-        ]
-        log_hits = [_log_hit(c) for c, _kind, _project in best]
+            if notice:
+                notices.append(notice)
+            if warning:
+                warnings.append(warning)
+
+        if not warnings:
+            # Steps 4-5: count Witt chunks, size the window, retrieve (one embedding, no spans).
+            candidates = await asyncio.to_thread(
+                _recall_work, lexical_store.db_path, build_retriever, request.query, holder
+            )
+            if holder.witt_chunk_count == 0:
+                notices.append(NOTICE_NO_WITT)
+            elif holder.witt_chunk_count > K_VEC_MAX:
+                notices.append(NOTICE_SATURATED)
+
+            # Steps 6-11: drop, classify, filter, dedupe, sort, slice.
+            ranked = _rank(candidates, filters)
+            best = sorted(ranked.best.values(), key=lambda t: (-t[0].rrf_score, t[0].note_path))
+            best = best[: request.limit]
+            hits = [
+                RecallHit(
+                    note_path=c.note_path,
+                    note_title=c.note_title,
+                    heading_path=c.heading_path,
+                    kind=kind,
+                    project=project,
+                    snippet=make_snippet(c.chunk_text),
+                    score=c.rrf_score,
+                    similarity=c.similarity_score,
+                )
+                for c, kind, project in best
+            ]
+            log_hits = [_log_hit(c) for c, _kind, _project in best]
     except Exception as exc:
         error_type = type(exc).__name__
         logger.exception("recall failed (request_id=%s): %s", request_id, error_type)
         await write_log(503, error_type, elapsed_ms())
         raise HTTPException(status_code=503, detail=f"recall unavailable: {error_type}") from None
-    finally:
-        reader.close()
 
-    return await respond(hits)
+    response = RecallResponse(
+        request_id=request_id,
+        query=request.query,
+        applied_filters=filters,
+        hits=hits,
+        warnings=warnings,
+        notices=notices,
+        latency_ms=elapsed_ms(),
+        witt_chunk_count=holder.witt_chunk_count,
+    )
+    await write_log(200, None, response.latency_ms)
+    return response

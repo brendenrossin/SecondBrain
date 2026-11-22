@@ -686,6 +686,8 @@ def test_retrieval_failures_return_503_without_leaking_internals(
         503,
         detail.removeprefix("recall unavailable: "),
     )
+    # Spec 004 Goal 4: a 503 after counting logs the real count; one during counting logs 0.
+    assert (line["witt_chunk_count"], line["k_vec"]) == ((0, 30) if failure == "count" else (7, 30))
 
 
 # --- 5.5 the real app: no LLM calls, no writes, no network ------------------------
@@ -1166,3 +1168,194 @@ def test_private_reader_is_never_the_shared_store(make_env, recall_index_copy):
         assert reader_cls.call_count == 2
     finally:
         deps.get_lexical_store.cache_clear()
+
+
+# --- spec 004 Goals 2-4: project check, reader lifecycle, 503 log fidelity -------------
+
+
+async def _apost(env: RecallEnv, body: dict | None = None):
+    import httpx
+
+    transport = httpx.ASGITransport(app=env.client.app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        return await client.post("/api/v1/recall", json=body or {"query": TEST_QUERY})
+
+
+@pytest.fixture
+def close_spy():
+    """Records the thread id of every _VectorLedReader.close call (real close still runs)."""
+    import threading
+
+    threads: list[int] = []
+    real_close = _VectorLedReader.close
+
+    def spy(self):
+        threads.append(threading.get_ident())
+        real_close(self)
+
+    with patch.object(_VectorLedReader, "close", spy):
+        yield threads
+
+
+def test_unknown_project_still_returns_a_200_with_a_warning(make_env, tmp_path, spies):
+    """Scenario: unknown project still returns a 200 with a warning."""
+    retrieve, _ = spies
+    vault = tmp_path / "one-project"
+    (vault / "Witt" / "Projects" / "witt").mkdir(parents=True)
+    env = make_env(vault_path=vault)
+
+    resp = env.post({"query": TEST_QUERY, "filters": {"project": "nope"}})
+
+    assert resp.status_code == 200 and resp.json()["hits"] == []
+    assert "unknown project 'nope'; known: witt" in resp.json()["warnings"]
+    retrieve.assert_not_called()
+
+
+def test_a_filesystem_error_in_the_project_check_gives_a_logged_503(env):
+    """Scenario: a filesystem error in the project check gives a logged 503."""
+    with patch.object(recall_module, "_check_project", side_effect=PermissionError("/secret")):
+        resp = env.post({"query": TEST_QUERY, "filters": {"project": "witt"}})
+
+    assert resp.status_code == 503  # TestClient re-raises anything that reached the server
+    assert resp.json() == {"detail": "recall unavailable: PermissionError"}
+    [line] = env.log_lines()
+    assert (line["status"], line["error_type"]) == (503, "PermissionError")
+
+
+def test_the_handler_offloads_exactly_one_call_for_the_whole_read_path(env):
+    """Scenario: the handler offloads exactly one call for the whole read path."""
+    import asyncio
+
+    real = asyncio.to_thread
+    calls: list = []
+
+    async def spy(func, /, *args, **kwargs):
+        calls.append(func)
+        return await real(func, *args, **kwargs)
+
+    with patch.object(recall_module.asyncio, "to_thread", spy):
+        assert env.post({"query": TEST_QUERY, "filters": {"project": "witt"}}).status_code == 200
+        with_project, calls[:] = list(calls), []
+        assert env.post().status_code == 200
+
+    m = recall_module
+    assert with_project == [m._check_project, m._recall_work, m._append_log]
+    assert calls == [m._recall_work, m._append_log]
+
+
+def _no_witt_index(tmp_path) -> RecallIndex:
+    from tests.fixtures.recall.index import build_index, note, write_vault
+
+    vault = write_vault(
+        tmp_path / "no-witt",
+        {f"10_Notes/n{i}.md": note(f"N{i}", 0.8, "review process") for i in range(3)},
+    )
+    return build_index(vault, tmp_path / "no-witt-data")
+
+
+@pytest.mark.parametrize("row", ["normal", "count_raises", "no_witt", "retrieve_raises"])
+async def test_the_reader_is_closed_exactly_once_on_every_path(make_env, tmp_path, close_spy, row):
+    """Scenario Outline: the reader is closed exactly once on every path."""
+    import sqlite3
+    import threading
+    from contextlib import ExitStack
+
+    code = 503 if row.endswith("_raises") else 200
+    env = make_env(index=_no_witt_index(tmp_path)) if row == "no_witt" else make_env()
+    with ExitStack() as stack:
+        if row == "count_raises":
+            stack.enter_context(
+                patch.object(
+                    _VectorLedReader,
+                    "count_chunks",
+                    side_effect=sqlite3.OperationalError("database is locked"),
+                )
+            )
+        if row == "retrieve_raises":
+            stack.enter_context(
+                patch.object(recall_module, "_retrieve", side_effect=RuntimeError("boom"))
+            )
+        resp = await _apost(env)
+
+    assert resp.status_code == code
+    assert len(close_spy) == 1 and close_spy[0] != threading.get_ident()
+    assert env.log_lines()[-1]["status"] == code
+
+
+@pytest.mark.parametrize("row", ["unknown_project", "no_lexical_db"])
+def test_no_reader_is_opened_when_the_request_stops_before_counting(
+    make_env, recall_index, tmp_path, close_spy, row
+):
+    """Scenario Outline: no reader is opened when the request stops before counting."""
+    from secondbrain.stores.lexical import LexicalStore
+
+    body = {"query": TEST_QUERY}
+    if row == "unknown_project":
+        env = make_env()
+        body["filters"] = {"project": "nope"}
+    else:
+        index = RecallIndex(
+            vault_path=recall_index.vault_path,
+            data_path=tmp_path,
+            vector_store=recall_index.vector_store,
+            lexical_store=LexicalStore(tmp_path / "never-indexed" / "lexical.db"),
+            tracker=recall_index.tracker,
+            embedder=recall_index.embedder,
+        )
+        env = make_env(index=index)
+
+    with patch.object(
+        recall_module, "_VectorLedReader", wraps=recall_module._VectorLedReader
+    ) as reader_cls:
+        resp = env.post(body)
+
+    assert resp.status_code == 200
+    assert reader_cls.call_count == 0 and close_spy == []
+
+
+async def test_a_cancelled_request_does_not_close_the_reader_under_a_running_thread(env, close_spy):
+    """Scenario: a cancelled request does not close the reader under a running thread."""
+    import asyncio
+    import threading
+    import time
+
+    entered, release = threading.Event(), threading.Event()
+    real_retrieve = recall_module._retrieve
+
+    def blocking_retrieve(*args, **kwargs):
+        entered.set()
+        release.wait(10)
+        return real_retrieve(*args, **kwargs)
+
+    loop_thread = threading.get_ident()
+    with patch.object(recall_module, "_retrieve", blocking_retrieve):
+        task = asyncio.create_task(_apost(env))
+        try:
+            assert await asyncio.to_thread(entered.wait, 5)
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            assert close_spy == []  # the worker still holds the reader
+        finally:
+            release.set()
+        deadline = time.monotonic() + 2
+        while not close_spy and time.monotonic() < deadline:
+            await asyncio.sleep(0.01)
+
+    assert len(close_spy) == 1 and close_spy[0] != loop_thread
+    assert env.log_lines() == []
+
+
+def test_a_503_after_counting_logs_a_window_that_depends_on_the_count(make_env, recall_index_copy):
+    """Scenario: a 503 after counting logs a window that actually depends on the count."""
+    from contextlib import ExitStack
+
+    env = make_env(index=recall_index_copy)
+    with ExitStack() as stack:
+        stack.enter_context(patch.object(_VectorLedReader, "count_chunks", return_value=120))
+        _inject("embedder", recall_index_copy, stack)
+        resp = env.post()
+
+    assert resp.status_code == 503
+    line = env.log_lines()[-1]
+    assert (line["witt_chunk_count"], line["k_vec"]) == (120, 120)
