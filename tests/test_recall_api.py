@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from secondbrain.api import dependencies as deps
 from secondbrain.api import recall as recall_module
-from secondbrain.api.recall import _ReadOnlyLexicalStore, router
+from secondbrain.api.recall import _VectorLedReader, router
 from secondbrain.config import Settings
 from tests.fixtures.recall.index import FIXTURE_VAULT, TEST_QUERY, RecallIndex
 
@@ -294,7 +294,7 @@ def test_witt_only_recall_returns_best_decision_first(env, spies):
 def test_vector_window_covers_every_witt_chunk_up_to_500(env, count, k_vec, saturated):
     """Scenario: the vector window covers every Witt chunk, up to 500."""
     with (
-        patch.object(recall_module._ReadOnlyLexicalStore, "count_chunks", return_value=count),
+        patch.object(recall_module._VectorLedReader, "count_chunks", return_value=count),
         patch.object(recall_module, "HybridRetriever") as retriever_cls,
     ):
         retriever_cls.return_value.retrieve.return_value = []
@@ -643,7 +643,7 @@ def _inject(failure: str, index: RecallIndex, stack) -> str:
         # Recall queries its own read-only connection (Decision 1 fallback).
         stack.enter_context(
             patch.object(
-                recall_module._ReadOnlyLexicalStore,
+                recall_module._VectorLedReader,
                 "conn",
                 new_callable=PropertyMock,
                 return_value=fake,
@@ -984,7 +984,7 @@ def test_recall_reads_lexical_db_through_its_own_read_only_connection(env):
     ):
         assert env.post().status_code == 200
 
-    reader = _ReadOnlyLexicalStore(shared.db_path)
+    reader = _VectorLedReader(shared.db_path)
     try:
         assert reader.count_chunks(["Witt"]) == 7
         with pytest.raises(sqlite3.OperationalError, match="readonly"):
@@ -1067,3 +1067,102 @@ def test_recall_endpoint_hits_match_goldens(recall_index, tmp_path):
     lexonly = build_lexonly_index(tmp_path / "lexonly")
 
     assert compute_recall_goldens(recall_index, lexonly, tmp_path / "recall") == goldens
+
+
+# --- spec 004 Goal 1: lexical-only candidates ----------------------------------------
+
+
+@pytest.fixture
+def lexonly_index(tmp_path) -> RecallIndex:
+    from tests.fixtures.recall.index import build_lexonly_index
+
+    return build_lexonly_index(tmp_path / "lexonly")
+
+
+@pytest.fixture
+def lexonly_env(make_env, lexonly_index) -> RecallEnv:
+    return make_env(index=lexonly_index, vault_path=lexonly_index.vault_path)
+
+
+def test_lexical_only_candidates_are_counted_without_a_chunk_query(lexonly_env):
+    """Scenario: lexical-only candidates are counted without a chunk query."""
+    from tests.fixtures.recall.index import LEXONLY_QUERY, LEXONLY_VECTOR_NOTES
+
+    statements: list[str] = []
+    real_conn = _VectorLedReader.conn
+
+    def traced(self):
+        conn = real_conn.fget(self)
+        conn.set_trace_callback(statements.append)
+        return conn
+
+    with patch.object(_VectorLedReader, "conn", property(traced)):
+        resp = lexonly_env.post({"query": LEXONLY_QUERY, "limit": 20})
+
+    assert resp.status_code == 200
+    assert statements, "the reader's connection was not traced"
+    assert not any("SELECT * FROM chunks WHERE chunk_id" in s for s in statements)
+    assert lexonly_env.log_lines()[-1]["dropped_keyword_only"] == 3
+    assert set(hit_paths(resp)) == set(LEXONLY_VECTOR_NOTES)
+
+
+def test_skip_count_covers_every_lexical_only_id_whatever_top_k_is(lexonly_index):
+    """Scenario: the skip count covers every lexical-only id, whatever top_k is."""
+    from secondbrain.retrieval.hybrid import HybridRetriever
+    from tests.fixtures.recall.index import LEXONLY_QUERY
+
+    reader = _VectorLedReader(lexonly_index.lexical_store.db_path)
+    try:
+        retriever = HybridRetriever(
+            lexonly_index.vector_store, reader, lexonly_index.embedder, min_similarity=0.40
+        )
+        candidates = retriever.retrieve(LEXONLY_QUERY, top_k=2, include_folders=["Witt"])
+    finally:
+        reader.close()
+
+    assert len(candidates) == 2
+    assert reader.lexical_only_skipped == 3
+
+
+def test_private_reader_still_serves_count_and_search(lexonly_index):
+    """Scenario: the private reader still serves count and search."""
+    from tests.fixtures.recall.index import LEXONLY_KEYWORD_NOTES, LEXONLY_QUERY
+
+    shared = lexonly_index.lexical_store
+    expected = {
+        r["chunk_id"]
+        for r in shared.conn.execute("SELECT chunk_id, note_path FROM chunks")
+        if r["note_path"] in {"Witt/Projects/witt/decisions/ADR-010-lex.md", *LEXONLY_KEYWORD_NOTES}
+    }
+    reader = _VectorLedReader(shared.db_path)
+    try:
+        assert reader.count_chunks(["Witt"]) == 7
+        assert {cid for cid, _ in reader.search(LEXONLY_QUERY)} == expected
+        assert all(reader.get_chunk(cid) is None for cid in [*expected, "no-such-id"])
+    finally:
+        reader.close()
+
+
+def test_private_reader_is_never_the_shared_store(make_env, recall_index_copy):
+    """Scenario: the private reader is never the shared store."""
+    from secondbrain.stores.lexical import LexicalStore
+
+    env = make_env(index=recall_index_copy)
+    del env.client.app.dependency_overrides[deps.get_lexical_store]
+    deps.get_lexical_store.cache_clear()
+    try:
+        with (
+            patch.object(deps, "get_data_path", return_value=recall_index_copy.data_path),
+            patch.object(
+                recall_module, "_VectorLedReader", wraps=recall_module._VectorLedReader
+            ) as reader_cls,
+        ):
+            assert [env.post().status_code for _ in range(2)] == [200, 200]
+            shared = deps.get_lexical_store()
+
+        assert type(shared) is LexicalStore
+        chunk_id = env.log_lines()[-1]["hits"][0]["chunk_id"]
+        assert shared.get_chunk(chunk_id)["chunk_id"] == chunk_id
+        assert reader_cls.call_count == 2
+    finally:
+        deps.get_lexical_store.cache_clear()

@@ -105,14 +105,28 @@ def _passes_filters(filters: RecallFilters, note_path: str, kind: RecallKind) ->
     return note_path not in (filters.exclude_paths or [])
 
 
-class _ReadOnlyLexicalStore(LexicalStore):
-    """A per-request, read-only connection to lexical.db (Decision 1 fallback).
+class _VectorLedReader(LexicalStore):
+    """Recall's private, per-request, read-only reader of lexical.db (specs 001 and 004).
 
     The cached LexicalStore shares one check_same_thread=False connection, and concurrent
     recalls on it fail with sqlite3.InterfaceError. Each recall therefore opens its own
     ``mode=ro`` connection: no schema init, no writes, and the shared store /ask depends
     on is left alone. A request uses it from one worker thread at a time, then closes it.
+
+    WARNING: ``get_chunk`` deliberately returns None for every id (ADR-005). Recall drops
+    keyword-only candidates anyway, and HybridRetriever only calls ``get_chunk`` for ids
+    missing from the vector results, so this skips one wasted query per lexical-only id and
+    counts it in ``lexical_only_skipped``. Any other caller would see "chunk not found"
+    everywhere: never hand this store to anything but recall's own retriever, never cache
+    it and never return it.
+
+    A lexical-only id from a store that ignores ``include_folders`` is counted here, as
+    keyword-only, rather than in ``dropped_out_of_scope``. That's harmless.
     """
+
+    def __init__(self, db_path: Path) -> None:
+        super().__init__(db_path)
+        self.lexical_only_skipped = 0
 
     @property
     def conn(self) -> sqlite3.Connection:
@@ -122,6 +136,11 @@ class _ReadOnlyLexicalStore(LexicalStore):
             self._conn.row_factory = sqlite3.Row
             self._conn.execute("PRAGMA busy_timeout=5000")
         return self._conn
+
+    def get_chunk(self, chunk_id: str) -> dict[str, Any] | None:  # noqa: ARG002
+        """Count a lexical-only candidate and return None, without running a query."""
+        self.lexical_only_skipped += 1
+        return None
 
 
 def _retrieve(retriever: HybridRetriever, query: str, top_k: int) -> list[RetrievalCandidate]:
@@ -205,6 +224,7 @@ async def recall(
     warnings: list[str] = []
     notices: list[str] = []
     witt_chunk_count = 0
+    lexical_only_skipped = 0
     log_hits: list[dict[str, Any]] = []
     ranked = _Ranked()
     log_path = Path(settings.data_path) / RECALL_LOG_NAME
@@ -224,7 +244,7 @@ async def recall(
             "rrf_k": RRF_K,
             "witt_chunk_count": witt_chunk_count,
             "hits": log_hits,
-            "dropped_keyword_only": ranked.dropped_keyword_only,
+            "dropped_keyword_only": lexical_only_skipped + ranked.dropped_keyword_only,
             "dropped_out_of_scope": ranked.dropped_out_of_scope,
             "warnings": warnings,
             "notices": notices,
@@ -265,7 +285,7 @@ async def recall(
             warnings.append(warning)
             return await respond([])
 
-    reader = _ReadOnlyLexicalStore(lexical_store.db_path)
+    reader = _VectorLedReader(lexical_store.db_path)
     try:
         # Step 4: size the vector window to the Witt chunk count.
         # Before the first index run there is no lexical.db, and mode=ro can't create it.
@@ -292,6 +312,7 @@ async def recall(
             min_similarity=settings.recall_min_similarity,
         )
         candidates = await asyncio.to_thread(_retrieve, retriever, request.query, k_vec + K_LEX)
+        lexical_only_skipped = reader.lexical_only_skipped
 
         # Steps 6-11: drop, classify, filter, dedupe, sort, slice.
         ranked = _rank(candidates, filters)
