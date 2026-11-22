@@ -1,5 +1,6 @@
 """FastAPI application entry point."""
 
+import asyncio
 import logging
 import shutil
 import time
@@ -18,14 +19,18 @@ from secondbrain.api.ask import router as ask_router
 from secondbrain.api.briefing import router as briefing_router
 from secondbrain.api.capture import router as capture_router
 from secondbrain.api.conversations import router as conversations_router
+from secondbrain.api.dependencies import get_embedder, get_vector_store
 from secondbrain.api.events import router as events_router
 from secondbrain.api.feed import router as feed_router
 from secondbrain.api.index import router as index_router
 from secondbrain.api.metadata import router as metadata_router
+from secondbrain.api.recall import router as recall_router
 from secondbrain.api.settings import router as settings_router
 from secondbrain.api.tasks import router as tasks_router
 from secondbrain.api.wiki import router as wiki_router
-from secondbrain.config import get_settings
+from secondbrain.config import Settings, get_settings
+from secondbrain.indexing.embedder import Embedder
+from secondbrain.stores.vector import VectorStore
 from secondbrain.tracing import init_tracing
 
 logger = logging.getLogger(__name__)
@@ -33,14 +38,38 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
+async def _warm_up(embedder: Embedder, vector_store: VectorStore) -> None:
+    """Load the embedding model and open Chroma off the event loop.
+
+    Failures are logged, never raised.
+    """
+    try:
+        await asyncio.to_thread(embedder.embed_single, "warmup")
+        await asyncio.to_thread(vector_store.count)  # creates the Chroma client + collection
+        logger.info("Embedder warmup complete (%s)", embedder.model_name)
+    except Exception:
+        logger.warning("Embedder warmup failed; the model will load on first use", exc_info=True)
+
+
+def _start_warmup(app: FastAPI, s: Settings) -> None:
+    """Start the optional background embedder warmup (spec 001, local provider only)."""
+    if not s.embedder_warmup:
+        return
+    if s.embedding_provider != "local":
+        logger.debug("embedder_warmup ignored for provider %r", s.embedding_provider)
+        return
+    app.state.warmup_task = asyncio.create_task(_warm_up(get_embedder(), get_vector_store()))
+
+
 @asynccontextmanager
-async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    """Log resolved configuration at startup for debugging."""
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Log resolved configuration at startup and start the optional embedder warmup."""
     s = get_settings()
     init_tracing(s)
     logger.info("SecondBrain starting — vault_path=%s, data_path=%s", s.vault_path, s.data_path)
     if not s.vault_path or not s.vault_path.exists():
         logger.error("VAULT PATH NOT CONFIGURED OR MISSING — APIs will return 503 errors")
+    _start_warmup(app, s)
     yield
 
 
@@ -70,6 +99,7 @@ app.include_router(events_router)
 app.include_router(feed_router)
 app.include_router(index_router)
 app.include_router(metadata_router)
+app.include_router(recall_router)
 app.include_router(settings_router)
 app.include_router(tasks_router)
 app.include_router(wiki_router)

@@ -1,0 +1,122 @@
+# Recall eval dataset (spec 001, Evals). Run against the live API:
+#   uv run python -m secondbrain.eval.recall_eval
+#
+# Rules (enforced by recall_eval.validate_dataset):
+# - kind: identifier | short | long | prose. Labelled queries have `expected`; null queries
+#   have `must_not_appear` terms that occur nowhere in the indexed Witt corpus.
+# - prose and long queries must not appear verbatim in a Witt note. Paraphrase.
+# - Don't edit a failing query to make it pass; add new queries instead.
+# - Written 2026-11-21 against 15 Witt notes (5 spec mirrors, 7 ADRs, 1 learning, 2 hubs).
+
+queries:
+  # --- identifier ---
+  - query: suppress_instrumentation
+    kind: identifier
+    expected: Witt/Projects/second-brain/specs/001-secondbrain-recall-mcp-server-for-witt.md
+    filters: {kinds: [spec]}
+
+  - query: Vault.learnings()
+    kind: identifier
+    expected: Witt/Projects/witt/decisions/ADR-004-symlinked-learnings-count-only-inside-the-witt-folder.md
+    allowed_cohits:
+      - Witt/Projects/witt/specs/004-memory-read-path-learnings-in-the-brief-note-write-logs.md
+    filters: {project: witt}
+
+  # --- short ---
+  - query: overrides
+    kind: short
+    expected: Witt/Projects/witt/decisions/ADR-001-overrides-may-skip-review-when-recorded.md
+    allowed_cohits:
+      - Witt/Projects/witt/specs/001-witt-v0-harness-mvp.md
+      - Witt/Projects/witt/specs/002-hardening-backlog-from-spec-001-review.md
+
+  # --- long ---
+  - query: >-
+      I edited the code of the tool server my assistant talks to over standard input and
+      output, reinstalled the package in editable mode, and then asked the assistant to run
+      the tool again. The answer it gave back looked as if my change had never happened, as
+      though it were still running yesterday's version of the module. Is there a known reason
+      a long-running tool process would keep serving old code after an edit, and what should I
+      check before I believe what it tells me?
+    kind: long
+    expected: Witt/Learnings/restart-a-stdio-mcp-server-after-changing-its-own-code-before-trusting-its-results.md
+
+  - query: >-
+      I am building a lookup tool that an AI coding assistant calls in the middle of a session
+      to find earlier design work in my notes. My first instinct was to choose a single cutoff
+      on the embedding score, so that an empty answer would reliably mean there is nothing
+      relevant to find. When I measured it, though, the scores for genuinely related notes and
+      the scores for the best match on completely unrelated questions landed in overlapping
+      bands, so no one number cleanly separated them. Some of the hits I most wanted were short
+      identifier lookups with fairly low scores, while some unrelated questions still pulled a
+      moderately high best match from a note that happened to share vocabulary. I also thought
+      about passing every candidate through a second language model to grade it, but that would
+      add a second or two of latency at best, would ship my private notes to a hosted provider,
+      and with a local model it would take long enough to blow through the time limit the
+      assistant gives a tool call. Since the thing calling the tool is itself a capable language
+      model that reads every snippet anyway, I am leaning toward just returning the closest
+      candidates in order, with their scores attached, keeping a low fixed threshold to throw
+      away obvious garbage, and letting the caller decide which results actually answer its
+      question. What did I decide about this tradeoff, and what were the reasons and the
+      consequences I wrote down when I made that call? I would also like to know whether I left
+      myself a way to tighten the threshold later if the measurements ever suggest it.
+    kind: long
+    expected: Witt/Projects/second-brain/decisions/ADR-001-recall-returns-ranked-candidates-the-calling-llm-judges-relevance.md
+    filters:
+      exclude_paths: [Witt/Projects/second-brain/specs/001-secondbrain-recall-mcp-server-for-witt.md]
+
+  # --- prose ---
+  - query: can a full-tier spec jump past the review stage as long as the reason is written down
+    kind: prose
+    expected: Witt/Projects/witt/decisions/ADR-001-overrides-may-skip-review-when-recorded.md
+    allowed_cohits:
+      - Witt/Projects/witt/specs/001-witt-v0-harness-mvp.md
+      - Witt/Projects/witt/specs/002-hardening-backlog-from-spec-001-review.md
+
+  - query: should every lesson I record show up in the session brief of every project
+    kind: prose
+    expected: Witt/Projects/witt/decisions/ADR-003-every-learning-appears-in-every-project-s-brief-unfiltered.md
+    allowed_cohits:
+      - Witt/Projects/witt/specs/004-memory-read-path-learnings-in-the-brief-note-write-logs.md
+
+  - query: why does the tool process call the web service instead of opening the vector database itself
+    kind: prose
+    expected: Witt/Projects/second-brain/decisions/ADR-002-recall-mcp-server-is-a-thin-http-client-the-api-stays-the-single-store-owner.md
+    allowed_cohits:
+      - Witt/Projects/second-brain/specs/001-secondbrain-recall-mcp-server-for-witt.md
+
+  - query: the trace viewer's docker containers are not running after I log in to the mac
+    kind: prose
+    expected: Witt/Projects/second-brain/specs/002-langfuse-starts-reliably-at-login.md
+
+  - query: does the tamper check validate the whole status history or only the most recent entry
+    kind: prose
+    expected: Witt/Projects/witt/decisions/ADR-002-integrity-checks-cover-structure-and-the-last-history-entry-only.md
+    allowed_cohits:
+      - Witt/Projects/witt/specs/001-witt-v0-harness-mvp.md
+      - Witt/Projects/witt/specs/002-hardening-backlog-from-spec-001-review.md
+
+  - query: several lookups at once broke the shared sqlite handle, so how did I fix it
+    kind: prose
+    expected: Witt/Projects/second-brain/decisions/ADR-003-recall-reads-lexical-db-through-its-own-read-only-connection-vectorstore-init-is-locked.md
+    allowed_cohits:
+      - Witt/Projects/second-brain/specs/001-secondbrain-recall-mcp-server-for-witt.md
+
+  # --- null: nothing in the Witt corpus covers these ---
+  - query: how should I paginate through a large mailbox with the Gmail API
+    kind: prose
+    near_miss: true
+    must_not_appear: [gmail]
+
+  - query: what is a good way to cache server state in a React frontend with TanStack Query
+    kind: prose
+    near_miss: true
+    must_not_appear: [tanstack, react]
+
+  - query: sourdough starter feeding schedule and hydration ratio
+    kind: prose
+    must_not_appear: [sourdough]
+
+  - query: a sixteen week marathon training plan for a first-time runner
+    kind: prose
+    must_not_appear: [marathon]

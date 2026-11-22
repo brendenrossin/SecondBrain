@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -77,6 +78,12 @@ class Settings(BaseSettings):
 
     # Contextual retrieval
     context_generation_enabled: bool = True
+
+    # Recall (spec 001). The sanity floor drops obvious junk only; the calling agent judges
+    # relevance. It can't go below the retriever's own 0.3 cut.
+    recall_min_similarity: float = Field(default=0.40, ge=0.3, le=1.0)
+    # Load the local embedding model at API startup, in the background (local provider only).
+    embedder_warmup: bool = False
 
     # Feed (FEED-1 attention router) — off by default so repo cloners aren't affected
     feed_enabled: bool = False

@@ -225,12 +225,17 @@ class LexicalStore:
             self.conn.commit()
             self._rebuild_fts()
 
-    def search(self, query: str, top_k: int = 50) -> list[tuple[str, float]]:
+    def search(
+        self, query: str, top_k: int = 50, *, include_folders: list[str] | None = None
+    ) -> list[tuple[str, float]]:
         """Search for chunks using BM25.
 
         Args:
             query: The search query.
             top_k: Number of results to return.
+            include_folders: If set, only chunks whose note_folder is in this list are
+                matched. The filter is a rowid JOIN with a parameterized IN, applied before
+                ORDER BY/LIMIT. None runs exactly the unfiltered SQL.
 
         Returns:
             List of (chunk_id, bm25_score) tuples, sorted by relevance.
@@ -246,13 +251,25 @@ class LexicalStore:
             ORDER BY score
             LIMIT ?
         """
+        params: tuple[object, ...] = (escaped_query, top_k)
+        if include_folders is not None:
+            placeholders = ",".join("?" for _ in include_folders)
+            sql = f"""
+            SELECT chunks_fts.chunk_id, bm25(chunks_fts) as score
+            FROM chunks_fts
+            JOIN chunks c ON c.rowid = chunks_fts.rowid AND c.note_folder IN ({placeholders})
+            WHERE chunks_fts MATCH ?
+            ORDER BY score
+            LIMIT ?
+        """
+            params = (*include_folders, escaped_query, top_k)
 
         try:
-            cursor = self.conn.execute(sql, (escaped_query, top_k))
+            cursor = self.conn.execute(sql, params)
         except sqlite3.DatabaseError:
             logger.warning("LexicalStore: DatabaseError on search, reconnecting")
             self._reconnect()
-            cursor = self.conn.execute(sql, (escaped_query, top_k))
+            cursor = self.conn.execute(sql, params)
 
         # BM25 scores are negative (lower is better), so we negate them
         return [(row["chunk_id"], -row["score"]) for row in cursor.fetchall()]
@@ -364,6 +381,19 @@ class LexicalStore:
             logger.warning("LexicalStore: DatabaseError on count, reconnecting")
             self._reconnect()
             cursor = self.conn.execute("SELECT COUNT(*) FROM chunks")
+        result = cursor.fetchone()
+        return int(result[0]) if result else 0
+
+    def count_chunks(self, include_folders: list[str]) -> int:
+        """Count chunks whose note_folder is in include_folders."""
+        placeholders = ",".join("?" for _ in include_folders)
+        sql = f"SELECT COUNT(*) FROM chunks WHERE note_folder IN ({placeholders})"
+        try:
+            cursor = self.conn.execute(sql, include_folders)
+        except sqlite3.DatabaseError:
+            logger.warning("LexicalStore: DatabaseError on count_chunks, reconnecting")
+            self._reconnect()
+            cursor = self.conn.execute(sql, include_folders)
         result = cursor.fetchone()
         return int(result[0]) if result else 0
 

@@ -1,0 +1,493 @@
+{
+  "lexical_search": {
+    "harness": [
+      [
+        "6d41d471341755a5",
+        0.70824
+      ],
+      [
+        "2c148b7d31b255e9",
+        0.47532
+      ],
+      [
+        "bcea188cb4ca565d",
+        0.46993
+      ]
+    ],
+    "override review process": [
+      [
+        "9e6c1d09955f2c48",
+        0.67006
+      ],
+      [
+        "9a62f2f754787332",
+        0.45951
+      ],
+      [
+        "6d41d471341755a5",
+        0.44954
+      ],
+      [
+        "ebe0bed3b4268953",
+        0.0
+      ],
+      [
+        "743ff802fc699240",
+        0.0
+      ],
+      [
+        "2c148b7d31b255e9",
+        0.0
+      ],
+      [
+        "bcea188cb4ca565d",
+        0.0
+      ],
+      [
+        "b417bf74213ae96d",
+        0.0
+      ]
+    ],
+    "single owner stores": [
+      [
+        "ebe0bed3b4268953",
+        4.80212
+      ]
+    ]
+  },
+  "lexical_sql": {
+    "harness": [
+      "\n            SELECT chunk_id, bm25(chunks_fts) as score\n            FROM chunks_fts\n            WHERE chunks_fts MATCH '\"harness\"'\n            ORDER BY score\n            LIMIT 50\n        "
+    ],
+    "override review process": [
+      "\n            SELECT chunk_id, bm25(chunks_fts) as score\n            FROM chunks_fts\n            WHERE chunks_fts MATCH '\"override\" OR \"review\" OR \"process\"'\n            ORDER BY score\n            LIMIT 50\n        "
+    ],
+    "single owner stores": [
+      "\n            SELECT chunk_id, bm25(chunks_fts) as score\n            FROM chunks_fts\n            WHERE chunks_fts MATCH '\"single\" OR \"owner\" OR \"stores\"'\n            ORDER BY score\n            LIMIT 50\n        "
+    ]
+  },
+  "retrieve": {
+    "harness": [
+      {
+        "bm25": 0.70824,
+        "chunk_id": "6d41d471341755a5",
+        "heading_path": [
+          "Harness"
+        ],
+        "note_folder": "Witt",
+        "note_path": "Witt/Projects/witt/specs/001-harness.md",
+        "note_title": "Witt v0 harness MVP",
+        "rrf": 0.03227,
+        "similarity": 0.8
+      },
+      {
+        "bm25": 0.47532,
+        "chunk_id": "2c148b7d31b255e9",
+        "heading_path": [
+          "Tools spec"
+        ],
+        "note_folder": "Witt",
+        "note_path": "Witt/Projects/witt-tools/specs/x.md",
+        "note_title": "Tools spec",
+        "rrf": 0.03151,
+        "similarity": 0.7
+      },
+      {
+        "bm25": 0.46993,
+        "chunk_id": "bcea188cb4ca565d",
+        "heading_path": [
+          "Scratch"
+        ],
+        "note_folder": "Witt",
+        "note_path": "Witt/Projects/witt/scratch.md",
+        "note_title": "Scratch",
+        "rrf": 0.0315,
+        "similarity": 0.75
+      },
+      {
+        "bm25": 0.0,
+        "chunk_id": "9a62f2f754787332",
+        "heading_path": [
+          "Review process"
+        ],
+        "note_folder": "10_Notes",
+        "note_path": "10_Notes/review-process.md",
+        "note_title": "Review process",
+        "rrf": 0.01639,
+        "similarity": 0.95
+      },
+      {
+        "bm25": 0.0,
+        "chunk_id": "9e6c1d09955f2c48",
+        "heading_path": [
+          "Overrides may skip Review when recorded"
+        ],
+        "note_folder": "Witt",
+        "note_path": "Witt/Projects/witt/decisions/ADR-001-overrides.md",
+        "note_title": "Overrides may skip Review when recorded",
+        "rrf": 0.01613,
+        "similarity": 0.9
+      },
+      {
+        "bm25": 0.0,
+        "chunk_id": "ebe0bed3b4268953",
+        "heading_path": [
+          "Thin HTTP client"
+        ],
+        "note_folder": "Witt",
+        "note_path": "Witt/Projects/second-brain/decisions/ADR-001-thin.md",
+        "note_title": "Thin HTTP client",
+        "rrf": 0.01515,
+        "similarity": 0.65
+      },
+      {
+        "bm25": 0.0,
+        "chunk_id": "743ff802fc699240",
+        "heading_path": [
+          "second-brain"
+        ],
+        "note_folder": "Witt",
+        "note_path": "Witt/Projects/second-brain/second-brain.md",
+        "note_title": "second-brain",
+        "rrf": 0.01493,
+        "similarity": 0.6
+      },
+      {
+        "bm25": 0.0,
+        "chunk_id": "b417bf74213ae96d",
+        "heading_path": [
+          "Pin the docstring"
+        ],
+        "note_folder": "Witt",
+        "note_path": "Witt/Learnings/pin-the-docstring.md",
+        "note_title": "Pin the docstring",
+        "rrf": 0.01471,
+        "similarity": 0.55
+      }
+    ],
+    "override review process": [
+      {
+        "bm25": 0.45951,
+        "chunk_id": "9a62f2f754787332",
+        "heading_path": [
+          "Review process"
+        ],
+        "note_folder": "10_Notes",
+        "note_path": "10_Notes/review-process.md",
+        "note_title": "Review process",
+        "rrf": 0.03252,
+        "similarity": 0.95
+      },
+      {
+        "bm25": 0.67006,
+        "chunk_id": "9e6c1d09955f2c48",
+        "heading_path": [
+          "Overrides may skip Review when recorded"
+        ],
+        "note_folder": "Witt",
+        "note_path": "Witt/Projects/witt/decisions/ADR-001-overrides.md",
+        "note_title": "Overrides may skip Review when recorded",
+        "rrf": 0.03252,
+        "similarity": 0.9
+      },
+      {
+        "bm25": 0.44954,
+        "chunk_id": "6d41d471341755a5",
+        "heading_path": [
+          "Harness"
+        ],
+        "note_folder": "Witt",
+        "note_path": "Witt/Projects/witt/specs/001-harness.md",
+        "note_title": "Witt v0 harness MVP",
+        "rrf": 0.03175,
+        "similarity": 0.8
+      },
+      {
+        "bm25": 0.0,
+        "chunk_id": "ebe0bed3b4268953",
+        "heading_path": [
+          "Thin HTTP client"
+        ],
+        "note_folder": "Witt",
+        "note_path": "Witt/Projects/second-brain/decisions/ADR-001-thin.md",
+        "note_title": "Thin HTTP client",
+        "rrf": 0.03078,
+        "similarity": 0.65
+      },
+      {
+        "bm25": 0.0,
+        "chunk_id": "bcea188cb4ca565d",
+        "heading_path": [
+          "Scratch"
+        ],
+        "note_folder": "Witt",
+        "note_path": "Witt/Projects/witt/scratch.md",
+        "note_title": "Scratch",
+        "rrf": 0.03055,
+        "similarity": 0.75
+      },
+      {
+        "bm25": 0.0,
+        "chunk_id": "2c148b7d31b255e9",
+        "heading_path": [
+          "Tools spec"
+        ],
+        "note_folder": "Witt",
+        "note_path": "Witt/Projects/witt-tools/specs/x.md",
+        "note_title": "Tools spec",
+        "rrf": 0.03054,
+        "similarity": 0.7
+      },
+      {
+        "bm25": 0.0,
+        "chunk_id": "743ff802fc699240",
+        "heading_path": [
+          "second-brain"
+        ],
+        "note_folder": "Witt",
+        "note_path": "Witt/Projects/second-brain/second-brain.md",
+        "note_title": "second-brain",
+        "rrf": 0.03031,
+        "similarity": 0.6
+      },
+      {
+        "bm25": 0.0,
+        "chunk_id": "b417bf74213ae96d",
+        "heading_path": [
+          "Pin the docstring"
+        ],
+        "note_folder": "Witt",
+        "note_path": "Witt/Learnings/pin-the-docstring.md",
+        "note_title": "Pin the docstring",
+        "rrf": 0.02941,
+        "similarity": 0.55
+      }
+    ],
+    "single owner stores": [
+      {
+        "bm25": 4.80212,
+        "chunk_id": "ebe0bed3b4268953",
+        "heading_path": [
+          "Thin HTTP client"
+        ],
+        "note_folder": "Witt",
+        "note_path": "Witt/Projects/second-brain/decisions/ADR-001-thin.md",
+        "note_title": "Thin HTTP client",
+        "rrf": 0.03154,
+        "similarity": 0.65
+      },
+      {
+        "bm25": 0.0,
+        "chunk_id": "9a62f2f754787332",
+        "heading_path": [
+          "Review process"
+        ],
+        "note_folder": "10_Notes",
+        "note_path": "10_Notes/review-process.md",
+        "note_title": "Review process",
+        "rrf": 0.01639,
+        "similarity": 0.95
+      },
+      {
+        "bm25": 0.0,
+        "chunk_id": "9e6c1d09955f2c48",
+        "heading_path": [
+          "Overrides may skip Review when recorded"
+        ],
+        "note_folder": "Witt",
+        "note_path": "Witt/Projects/witt/decisions/ADR-001-overrides.md",
+        "note_title": "Overrides may skip Review when recorded",
+        "rrf": 0.01613,
+        "similarity": 0.9
+      },
+      {
+        "bm25": 0.0,
+        "chunk_id": "6d41d471341755a5",
+        "heading_path": [
+          "Harness"
+        ],
+        "note_folder": "Witt",
+        "note_path": "Witt/Projects/witt/specs/001-harness.md",
+        "note_title": "Witt v0 harness MVP",
+        "rrf": 0.01587,
+        "similarity": 0.8
+      },
+      {
+        "bm25": 0.0,
+        "chunk_id": "bcea188cb4ca565d",
+        "heading_path": [
+          "Scratch"
+        ],
+        "note_folder": "Witt",
+        "note_path": "Witt/Projects/witt/scratch.md",
+        "note_title": "Scratch",
+        "rrf": 0.01562,
+        "similarity": 0.75
+      },
+      {
+        "bm25": 0.0,
+        "chunk_id": "2c148b7d31b255e9",
+        "heading_path": [
+          "Tools spec"
+        ],
+        "note_folder": "Witt",
+        "note_path": "Witt/Projects/witt-tools/specs/x.md",
+        "note_title": "Tools spec",
+        "rrf": 0.01538,
+        "similarity": 0.7
+      },
+      {
+        "bm25": 0.0,
+        "chunk_id": "743ff802fc699240",
+        "heading_path": [
+          "second-brain"
+        ],
+        "note_folder": "Witt",
+        "note_path": "Witt/Projects/second-brain/second-brain.md",
+        "note_title": "second-brain",
+        "rrf": 0.01493,
+        "similarity": 0.6
+      },
+      {
+        "bm25": 0.0,
+        "chunk_id": "b417bf74213ae96d",
+        "heading_path": [
+          "Pin the docstring"
+        ],
+        "note_folder": "Witt",
+        "note_path": "Witt/Learnings/pin-the-docstring.md",
+        "note_title": "Pin the docstring",
+        "rrf": 0.01471,
+        "similarity": 0.55
+      }
+    ]
+  },
+  "vector_search": {
+    "harness": [
+      {
+        "chunk_id": "9a62f2f754787332",
+        "note_path": "10_Notes/review-process.md",
+        "similarity": 0.95
+      },
+      {
+        "chunk_id": "9e6c1d09955f2c48",
+        "note_path": "Witt/Projects/witt/decisions/ADR-001-overrides.md",
+        "similarity": 0.9
+      },
+      {
+        "chunk_id": "6d41d471341755a5",
+        "note_path": "Witt/Projects/witt/specs/001-harness.md",
+        "similarity": 0.8
+      },
+      {
+        "chunk_id": "bcea188cb4ca565d",
+        "note_path": "Witt/Projects/witt/scratch.md",
+        "similarity": 0.75
+      },
+      {
+        "chunk_id": "2c148b7d31b255e9",
+        "note_path": "Witt/Projects/witt-tools/specs/x.md",
+        "similarity": 0.7
+      },
+      {
+        "chunk_id": "ebe0bed3b4268953",
+        "note_path": "Witt/Projects/second-brain/decisions/ADR-001-thin.md",
+        "similarity": 0.65
+      },
+      {
+        "chunk_id": "743ff802fc699240",
+        "note_path": "Witt/Projects/second-brain/second-brain.md",
+        "similarity": 0.6
+      },
+      {
+        "chunk_id": "b417bf74213ae96d",
+        "note_path": "Witt/Learnings/pin-the-docstring.md",
+        "similarity": 0.55
+      }
+    ],
+    "override review process": [
+      {
+        "chunk_id": "9a62f2f754787332",
+        "note_path": "10_Notes/review-process.md",
+        "similarity": 0.95
+      },
+      {
+        "chunk_id": "9e6c1d09955f2c48",
+        "note_path": "Witt/Projects/witt/decisions/ADR-001-overrides.md",
+        "similarity": 0.9
+      },
+      {
+        "chunk_id": "6d41d471341755a5",
+        "note_path": "Witt/Projects/witt/specs/001-harness.md",
+        "similarity": 0.8
+      },
+      {
+        "chunk_id": "bcea188cb4ca565d",
+        "note_path": "Witt/Projects/witt/scratch.md",
+        "similarity": 0.75
+      },
+      {
+        "chunk_id": "2c148b7d31b255e9",
+        "note_path": "Witt/Projects/witt-tools/specs/x.md",
+        "similarity": 0.7
+      },
+      {
+        "chunk_id": "ebe0bed3b4268953",
+        "note_path": "Witt/Projects/second-brain/decisions/ADR-001-thin.md",
+        "similarity": 0.65
+      },
+      {
+        "chunk_id": "743ff802fc699240",
+        "note_path": "Witt/Projects/second-brain/second-brain.md",
+        "similarity": 0.6
+      },
+      {
+        "chunk_id": "b417bf74213ae96d",
+        "note_path": "Witt/Learnings/pin-the-docstring.md",
+        "similarity": 0.55
+      }
+    ],
+    "single owner stores": [
+      {
+        "chunk_id": "9a62f2f754787332",
+        "note_path": "10_Notes/review-process.md",
+        "similarity": 0.95
+      },
+      {
+        "chunk_id": "9e6c1d09955f2c48",
+        "note_path": "Witt/Projects/witt/decisions/ADR-001-overrides.md",
+        "similarity": 0.9
+      },
+      {
+        "chunk_id": "6d41d471341755a5",
+        "note_path": "Witt/Projects/witt/specs/001-harness.md",
+        "similarity": 0.8
+      },
+      {
+        "chunk_id": "bcea188cb4ca565d",
+        "note_path": "Witt/Projects/witt/scratch.md",
+        "similarity": 0.75
+      },
+      {
+        "chunk_id": "2c148b7d31b255e9",
+        "note_path": "Witt/Projects/witt-tools/specs/x.md",
+        "similarity": 0.7
+      },
+      {
+        "chunk_id": "ebe0bed3b4268953",
+        "note_path": "Witt/Projects/second-brain/decisions/ADR-001-thin.md",
+        "similarity": 0.65
+      },
+      {
+        "chunk_id": "743ff802fc699240",
+        "note_path": "Witt/Projects/second-brain/second-brain.md",
+        "similarity": 0.6
+      },
+      {
+        "chunk_id": "b417bf74213ae96d",
+        "note_path": "Witt/Learnings/pin-the-docstring.md",
+        "similarity": 0.55
+      }
+    ]
+  }
+}
