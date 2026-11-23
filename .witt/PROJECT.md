@@ -23,12 +23,13 @@ suggestion-only, and the vault is the single source of truth.
   plain `uv run pytest` resolves to Anaconda's pytest.
 - Frontend: Next.js 15 in `frontend/`, served as a production build (`npm run start`). Gradio
   (`secondbrain.ui`) is deprecated.
-- `test_cmd` = the full suite: 1097 tests in about 50–70s (timed 2026-11-21, after spec 001). It's
-  still fine for the synchronous Implemented gate, but it's slower than before.
+- `test_cmd` = the full suite: 1162 tests in about 50–70s (2026-11-22, after spec 004). It's
+  still fine for the synchronous Implemented gate.
   `make check` = ruff + mypy + pytest.
-- `tests/test_recall_eval.py::test_recall_queries_yaml_validates` reads the **live vault**. A new
-  Witt note that contains a null query's `must_not_appear` term fails the suite ("null
-  contamination"). Fix it in `recall_queries.yaml` (backlog item).
+- Recall dataset checks (spec 004, ADR-006): pytest checks `recall_queries.yaml` structurally, and
+  live-vault drift only raises a `RecallDatasetDriftWarning`. The recall eval is the hard gate. Don't
+  quote a null query's `must_not_appear` term in a Witt note, or the eval fails on "null
+  contamination". Don't add `filterwarnings = ["error"]`.
 - Settings come from `config.py` (pydantic-settings, `SECONDBRAIN_` prefix, `.env` at the repo root).
 - LLMs: Anthropic `claude-haiku-4-5` by default for rerank and answers, with an OpenAI option and a
   local Ollama option (`gemma4:26b-a4b-it-qat` for both rerank and synthesis, `reasoning_effort: "none"`).
@@ -88,22 +89,23 @@ second process.
 ## Current state
 - Phases 0–4 are delivered: ENGAGE-1 (PR #12), FEED-1 (PR #13), the Langfuse skip fix (PR #14), and
   the Gemma 4 fix with the Witt adoption (PR #15).
-- **Spec 001 (recall) is Implemented** (PRs #16–#18, 2026-11-21). `secondbrain` MCP is live at user scope.
-  The eval passes with the MRR gate on: recall@1 1.00, MRR 1.00, warm p95 about 85 ms.
-- Spec 002 (Langfuse at login) is Implemented.
-- `.env` `SECONDBRAIN_HOST` is now `127.0.0.1`, matching the API plist.
-- **Next:**
-  - Witt spec 005, where the Witt skills use `recall` for prior art. It's a Draft in `~/code/witt`,
-    uncommitted, and needs a spec-draft session.
-  - The deferred items in `docs/optimizations/001-recall-backlog.md`.
+- **Specs 001–004 are Implemented.** Spec 001 (recall MCP) is PRs #16–#18. Spec 002 is Langfuse at
+  login. Spec 003 (repo UI plist = installed Next.js) and spec 004 (recall hardening) are PR #21 plus
+  the rollout PR #22, both 2026-11-22.
+- Recall eval baseline (2026-11-23): PASS, recall@1 0.91, MRR 0.94, warm p95 about 143 ms, over 44 Witt
+  notes / 1108 chunks with the MRR gate on. It was 1.00/1.00 over 18 notes. The drop is corpus growth:
+  the ADR-002 query now ranks 3rd.
+- Spec 005 (dev-tooling scout) was Abandoned in favour of Radar (`~/code/radar`, ADR-011).
+- **Next:** see the deferred lists in spec 004's Risks section and in
+  `docs/optimizations/001-recall-backlog.md`, plus the ENGAGE and FEED epics in `docs/ROADMAP.md`.
 
 ## Domain notes
 **Known issues (2026-11-21):**
 - **Langfuse is optional.** Fixed by spec 002 (start script plus retries). The API still probes
   Langfuse only at its own startup and falls back to JSONL only (PR #14), so the script restarts
   the API once Langfuse is healthy. Nothing may depend on Langfuse.
-- **Repo `com.secondbrain.ui.plist` is stale.** It still launches Gradio (`python -m secondbrain.ui`).
-  The installed copy runs `npm run start` in `frontend/`. Reconcile before anyone re-installs from the repo.
+- **Repo plists match the installed ones** (spec 003). `make install-ui-service` doesn't build
+  `frontend/.next` first, so run `npm run build` before installing on a fresh clone.
 - **Witt indexing policy (spec 001):** `Witt/Logs/*` is excluded from the index. Every other Witt
   note is indexed and recallable after the next hourly index run.
 - **Traceloop logs `Error initializing MCP instrumentor`** at API startup since `mcp` 2.x became a
