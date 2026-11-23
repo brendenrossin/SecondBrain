@@ -571,7 +571,7 @@ Feature: Recall hardening
 - **The concurrent-reconnect test is probabilistic.** It can pass on broken code if the race window is never hit. The deterministic lock-held scenarios carry the guarantee; the stress test is a smoke check.
 
 ### Deferred from code review
-- (Medium) `tests/test_launchd_plists.py` compares the plist's absolute paths with the checkout's own root, so the test fails when run from a worktree or another checkout.
+- ~~(Medium) `tests/test_launchd_plists.py` compared the plist paths against the checkout root, so it failed outside the canonical checkout.~~ Fixed after CI failed on PR #21: the root now comes from the API plist WorkingDirectory.
 - (Low) `make install-ui-service` and `make ui` don't build `frontend/.next` first, so on a fresh clone launchd keeps restarting a process that fails.
 - (Low) The lifespan `yield` isn't wrapped in try/finally, so `_stop_warmup` is skipped if shutdown happens through an exception. `suppress(CancelledError)` can also swallow a cancellation of the shutdown itself.
 - (Low) `check_live_dataset` relies on `assert q.expected is not None`, which `python -O` strips. Use an explicit `continue`.

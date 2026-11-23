@@ -9,6 +9,16 @@ REPO = Path(__file__).resolve().parent.parent
 UI_PLIST = REPO / "com.secondbrain.ui.plist"
 
 
+def _install_root() -> Path:
+    """The repo root the launchd services run from: the API plist's WorkingDirectory.
+
+    The plists hold absolute paths for the installed checkout, so the test compares against that
+    root, not wherever this checkout lives (CI, a worktree).
+    """
+    with (REPO / "com.secondbrain.api.plist").open("rb") as f:
+        return Path(plistlib.load(f)["WorkingDirectory"])
+
+
 def _ui_plist() -> dict:
     with UI_PLIST.open("rb") as f:
         return plistlib.load(f)
@@ -17,13 +27,14 @@ def _ui_plist() -> dict:
 def test_repo_plist_launches_npm_start_in_frontend():
     """Scenario: repo plist launches npm start in frontend/."""
     plist = _ui_plist()
+    root = _install_root()
 
     assert plist["Label"] == "com.secondbrain.ui"
     assert plist["ProgramArguments"] == ["/opt/homebrew/bin/npm", "run", "start"]
-    assert Path(plist["WorkingDirectory"]) == REPO / "frontend"
+    assert Path(plist["WorkingDirectory"]) == root / "frontend"
     assert (plist["RunAtLoad"], plist["KeepAlive"], plist["ThrottleInterval"]) == (True, True, 10)
     for key in ("StandardOutPath", "StandardErrorPath"):
-        assert Path(plist[key]).parent == REPO / "data" / "logs"
+        assert Path(plist[key]).parent == root / "data" / "logs"
 
 
 def test_repo_plist_no_longer_launches_gradio():
