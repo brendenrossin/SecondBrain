@@ -42,27 +42,36 @@ class VectorStore:
         self._last_epoch_check = 0.0
         self._known_epoch_mtime = 0.0
 
+    # Both properties read their attribute once into a local and return that local, so a
+    # concurrent _reconnect can never make them return None (spec 004 Goal 8).
+
     @property
     def client(self) -> ClientAPI:
-        """Lazy-load the ChromaDB client."""
-        if self._client is None:
+        """Lazy-load the ChromaDB client. Never returns None."""
+        c = self._client
+        if c is None:
             with self._init_lock:
-                if self._client is None:
+                c = self._client
+                if c is None:
                     self.data_path.mkdir(parents=True, exist_ok=True)
-                    self._client = chromadb.PersistentClient(path=str(self.data_path))
-        return self._client
+                    c = chromadb.PersistentClient(path=str(self.data_path))
+                    self._client = c
+        return c
 
     @property
     def collection(self) -> Collection:
-        """Get or create the collection."""
-        if self._collection is None:
+        """Get or create the collection. Never returns None."""
+        c = self._collection
+        if c is None:
             with self._init_lock:
-                if self._collection is None:
-                    self._collection = self.client.get_or_create_collection(
+                c = self._collection
+                if c is None:
+                    c = self.client.get_or_create_collection(
                         name=self.collection_name,
                         metadata={"hnsw:space": "cosine"},
                     )
-        return self._collection
+                    self._collection = c
+        return c
 
     def get_stored_model(self) -> str | None:
         """Get the embedding model name stored in collection metadata."""
@@ -101,12 +110,16 @@ class VectorStore:
         return False
 
     def _reconnect(self) -> None:
-        """Destroy the client and collection so the next access creates fresh ones."""
-        self._collection = None
-        if self._client is not None:
-            with contextlib.suppress(Exception):
-                del self._client
-            self._client = None
+        """Destroy the client and collection so the next access creates fresh ones.
+
+        Runs under _init_lock (an RLock, so a caller holding it can re-enter).
+        """
+        with self._init_lock:
+            self._collection = None
+            if self._client is not None:
+                with contextlib.suppress(Exception):
+                    del self._client
+                self._client = None
 
     def _check_epoch(self) -> None:
         """Check if another process reindexed and reconnect if so."""
@@ -299,5 +312,6 @@ class VectorStore:
 
     def clear(self) -> None:
         """Clear all chunks from the store."""
-        self.client.delete_collection(self.collection_name)
-        self._collection = None
+        with self._init_lock:
+            self.client.delete_collection(self.collection_name)
+            self._collection = None

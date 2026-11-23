@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from secondbrain.api import dependencies as deps
 from secondbrain.api import recall as recall_module
-from secondbrain.api.recall import _ReadOnlyLexicalStore, router
+from secondbrain.api.recall import _VectorLedReader, router
 from secondbrain.config import Settings
 from tests.fixtures.recall.index import FIXTURE_VAULT, TEST_QUERY, RecallIndex
 
@@ -108,6 +108,16 @@ _ELEVEN = [f"Witt/{c}.md" for c in "abcdefghijk"]
             "exclude_paths entries must start with 'Witt/'",
         ),
         ({"query": "x", "filters": {"exclude_paths": _ELEVEN}}, "exclude_paths", "at most 10"),
+        (
+            {"query": "x", "filters": {"exclude_paths": ["Witt/" + "a" * 508]}},
+            "exclude_paths",
+            "exclude_paths entries must be at most 512 characters",
+        ),
+        (
+            {"query": "x", "filters": {"exclude_paths": ["a" * 600]}},
+            "exclude_paths",
+            "exclude_paths entries must start with 'Witt/'",
+        ),
     ],
 )
 def test_invalid_requests_rejected_with_specific_messages(env, body, field, detail):
@@ -129,6 +139,7 @@ def test_invalid_requests_rejected_with_specific_messages(env, body, field, deta
         {"query": "x", "limit": 20},
         {"query": "x", "filters": {"exclude_paths": _ELEVEN[:10]}},
         {"query": "日本"},
+        {"query": "x", "filters": {"exclude_paths": ["Witt/" + "a" * 507]}},
     ],
 )
 def test_boundary_values_are_accepted(env, body):
@@ -259,8 +270,23 @@ def _sections(title: str, sections: list[tuple[str, float, str]]) -> str:
 
 
 def test_witt_only_recall_returns_best_decision_first(env, spies):
-    """Scenario: Witt-only recall returns the best decision first."""
+    """Scenario: Witt-only recall returns the best decision first, with its precondition."""
+    from secondbrain.retrieval.hybrid import HybridRetriever
+    from tests.fixtures.recall.index import GOLDENS_PATH
+
     _, embed_single = spies
+    # Precondition: without the Witt pre-filter, a non-Witt note ranks first. It ties the
+    # ADR on RRF, so rank with the golden's own tie-break (-round5(rrf), chunk_id).
+    goldens = json.loads(GOLDENS_PATH.read_text(encoding="utf-8"))
+    assert goldens["retrieve"][TEST_QUERY][0]["note_path"] == OUTSIDE
+    index = env.index
+    default = HybridRetriever(index.vector_store, index.lexical_store, index.embedder)
+    ranked = sorted(
+        default.retrieve(TEST_QUERY, top_k=10),
+        key=lambda c: (-round(c.rrf_score, 5), c.chunk_id),
+    )
+    assert ranked[0].note_path == OUTSIDE
+    embed_single.reset_mock()
 
     resp = env.post({"query": TEST_QUERY})
 
@@ -294,7 +320,7 @@ def test_witt_only_recall_returns_best_decision_first(env, spies):
 def test_vector_window_covers_every_witt_chunk_up_to_500(env, count, k_vec, saturated):
     """Scenario: the vector window covers every Witt chunk, up to 500."""
     with (
-        patch.object(recall_module._ReadOnlyLexicalStore, "count_chunks", return_value=count),
+        patch.object(recall_module._VectorLedReader, "count_chunks", return_value=count),
         patch.object(recall_module, "HybridRetriever") as retriever_cls,
     ):
         retriever_cls.return_value.retrieve.return_value = []
@@ -488,6 +514,10 @@ def test_out_of_scope_candidates_dropped_even_if_a_store_misbehaves(env, caplog)
         ("b" * 600, "b" * 600),
         ("word " * 200, "word " * 119 + "word"),
         ("c" * 700, "c" * 600),
+        # Spec 004: whitespace exactly at 600 cuts at 600 (a scan from 599 would give [:300]).
+        ("x" * 300 + " " + "x" * 299 + " " + "x" * 99, "x" * 300 + " " + "x" * 299),
+        # Spec 004: a run of spaces at 590-594 is found by the backward scan; no rstrip.
+        ("y" * 590 + " " * 5 + "y" * 105, "y" * 590 + " " * 4),
     ],
 )
 def test_snippets_truncated_on_a_word_boundary(env, text, expected):
@@ -579,7 +609,11 @@ def test_recall_log_write_failure_does_not_fail_the_request(env, caplog):
         resp = env.post()
 
     assert resp.status_code == 200 and resp.json()["hits"]
-    assert any("recall_log" in r.getMessage() for r in caplog.records if r.levelname == "WARNING")
+    assert any(
+        "recall_log write failed" in r.getMessage()
+        for r in caplog.records
+        if r.levelname == "WARNING"
+    )
 
 
 def test_x_request_id_is_honoured(env):
@@ -643,7 +677,7 @@ def _inject(failure: str, index: RecallIndex, stack) -> str:
         # Recall queries its own read-only connection (Decision 1 fallback).
         stack.enter_context(
             patch.object(
-                recall_module._ReadOnlyLexicalStore,
+                recall_module._VectorLedReader,
                 "conn",
                 new_callable=PropertyMock,
                 return_value=fake,
@@ -686,6 +720,8 @@ def test_retrieval_failures_return_503_without_leaking_internals(
         503,
         detail.removeprefix("recall unavailable: "),
     )
+    # Spec 004 Goal 4: a 503 after counting logs the real count; one during counting logs 0.
+    assert (line["witt_chunk_count"], line["k_vec"]) == ((0, 30) if failure == "count" else (7, 30))
 
 
 # --- 5.5 the real app: no LLM calls, no writes, no network ------------------------
@@ -984,7 +1020,7 @@ def test_recall_reads_lexical_db_through_its_own_read_only_connection(env):
     ):
         assert env.post().status_code == 200
 
-    reader = _ReadOnlyLexicalStore(shared.db_path)
+    reader = _VectorLedReader(shared.db_path)
     try:
         assert reader.count_chunks(["Witt"]) == 7
         with pytest.raises(sqlite3.OperationalError, match="readonly"):
@@ -1053,3 +1089,403 @@ def test_rrf_ties_within_a_note_pick_the_lower_chunk_id(order):
     ranked = _rank(cands, RecallFilters())
 
     assert ranked.best[LEARNING][0].chunk_id == "a"
+
+
+# --- spec 004: recall goldens (captured on unchanged code) -------------------------
+
+
+def test_recall_endpoint_hits_match_goldens(recall_index, tmp_path):
+    """Scenario: recall endpoint hits are unchanged by this spec."""
+    from tests.fixtures.recall.capture_goldens import RECALL_GOLDENS_PATH, compute_recall_goldens
+    from tests.fixtures.recall.index import build_lexonly_index
+
+    goldens = json.loads(RECALL_GOLDENS_PATH.read_text(encoding="utf-8"))
+    lexonly = build_lexonly_index(tmp_path / "lexonly")
+
+    assert compute_recall_goldens(recall_index, lexonly, tmp_path / "recall") == goldens
+
+
+# --- spec 004 Goal 1: lexical-only candidates ----------------------------------------
+
+
+@pytest.fixture
+def lexonly_index(tmp_path) -> RecallIndex:
+    from tests.fixtures.recall.index import build_lexonly_index
+
+    return build_lexonly_index(tmp_path / "lexonly")
+
+
+@pytest.fixture
+def lexonly_env(make_env, lexonly_index) -> RecallEnv:
+    return make_env(index=lexonly_index, vault_path=lexonly_index.vault_path)
+
+
+def test_lexical_only_candidates_are_counted_without_a_chunk_query(lexonly_env):
+    """Scenario: lexical-only candidates are counted without a chunk query."""
+    from tests.fixtures.recall.index import LEXONLY_QUERY, LEXONLY_VECTOR_NOTES
+
+    statements: list[str] = []
+    real_conn = _VectorLedReader.conn
+
+    def traced(self):
+        conn = real_conn.fget(self)
+        conn.set_trace_callback(statements.append)
+        return conn
+
+    with patch.object(_VectorLedReader, "conn", property(traced)):
+        resp = lexonly_env.post({"query": LEXONLY_QUERY, "limit": 20})
+
+    assert resp.status_code == 200
+    assert statements, "the reader's connection was not traced"
+    assert not any("SELECT * FROM chunks WHERE chunk_id" in s for s in statements)
+    assert lexonly_env.log_lines()[-1]["dropped_keyword_only"] == 3
+    assert set(hit_paths(resp)) == set(LEXONLY_VECTOR_NOTES)
+
+
+def test_skip_count_covers_every_lexical_only_id_whatever_top_k_is(lexonly_index):
+    """Scenario: the skip count covers every lexical-only id, whatever top_k is."""
+    from secondbrain.retrieval.hybrid import HybridRetriever
+    from tests.fixtures.recall.index import LEXONLY_QUERY
+
+    reader = _VectorLedReader(lexonly_index.lexical_store.db_path)
+    try:
+        retriever = HybridRetriever(
+            lexonly_index.vector_store, reader, lexonly_index.embedder, min_similarity=0.40
+        )
+        candidates = retriever.retrieve(LEXONLY_QUERY, top_k=2, include_folders=["Witt"])
+    finally:
+        reader.close()
+
+    assert len(candidates) == 2
+    assert reader.lexical_only_skipped == 3
+
+
+def test_private_reader_still_serves_count_and_search(lexonly_index):
+    """Scenario: the private reader still serves count and search."""
+    from tests.fixtures.recall.index import LEXONLY_KEYWORD_NOTES, LEXONLY_QUERY
+
+    shared = lexonly_index.lexical_store
+    expected = {
+        r["chunk_id"]
+        for r in shared.conn.execute("SELECT chunk_id, note_path FROM chunks")
+        if r["note_path"] in {"Witt/Projects/witt/decisions/ADR-010-lex.md", *LEXONLY_KEYWORD_NOTES}
+    }
+    reader = _VectorLedReader(shared.db_path)
+    try:
+        assert reader.count_chunks(["Witt"]) == 7
+        assert {cid for cid, _ in reader.search(LEXONLY_QUERY)} == expected
+        assert all(reader.get_chunk(cid) is None for cid in [*expected, "no-such-id"])
+    finally:
+        reader.close()
+
+
+def test_private_reader_is_never_the_shared_store(make_env, recall_index_copy):
+    """Scenario: the private reader is never the shared store."""
+    from secondbrain.stores.lexical import LexicalStore
+
+    env = make_env(index=recall_index_copy)
+    del env.client.app.dependency_overrides[deps.get_lexical_store]
+    deps.get_lexical_store.cache_clear()
+    try:
+        with (
+            patch.object(deps, "get_data_path", return_value=recall_index_copy.data_path),
+            patch.object(
+                recall_module, "_VectorLedReader", wraps=recall_module._VectorLedReader
+            ) as reader_cls,
+        ):
+            assert [env.post().status_code for _ in range(2)] == [200, 200]
+            shared = deps.get_lexical_store()
+
+        assert type(shared) is LexicalStore
+        chunk_id = env.log_lines()[-1]["hits"][0]["chunk_id"]
+        assert shared.get_chunk(chunk_id)["chunk_id"] == chunk_id
+        assert reader_cls.call_count == 2
+    finally:
+        deps.get_lexical_store.cache_clear()
+
+
+# --- spec 004 Goals 2-4: project check, reader lifecycle, 503 log fidelity -------------
+
+
+async def _apost(env: RecallEnv, body: dict | None = None):
+    import httpx
+
+    transport = httpx.ASGITransport(app=env.client.app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        return await client.post("/api/v1/recall", json=body or {"query": TEST_QUERY})
+
+
+@pytest.fixture
+def close_spy():
+    """Records the thread id of every _VectorLedReader.close call (real close still runs)."""
+    import threading
+
+    threads: list[int] = []
+    real_close = _VectorLedReader.close
+
+    def spy(self):
+        threads.append(threading.get_ident())
+        real_close(self)
+
+    with patch.object(_VectorLedReader, "close", spy):
+        yield threads
+
+
+def test_unknown_project_still_returns_a_200_with_a_warning(make_env, tmp_path, spies):
+    """Scenario: unknown project still returns a 200 with a warning."""
+    retrieve, _ = spies
+    vault = tmp_path / "one-project"
+    (vault / "Witt" / "Projects" / "witt").mkdir(parents=True)
+    env = make_env(vault_path=vault)
+
+    resp = env.post({"query": TEST_QUERY, "filters": {"project": "nope"}})
+
+    assert resp.status_code == 200 and resp.json()["hits"] == []
+    assert "unknown project 'nope'; known: witt" in resp.json()["warnings"]
+    retrieve.assert_not_called()
+
+
+def test_a_filesystem_error_in_the_project_check_gives_a_logged_503(env):
+    """Scenario: a filesystem error in the project check gives a logged 503."""
+    with patch.object(recall_module, "_check_project", side_effect=PermissionError("/secret")):
+        resp = env.post({"query": TEST_QUERY, "filters": {"project": "witt"}})
+
+    assert resp.status_code == 503  # TestClient re-raises anything that reached the server
+    assert resp.json() == {"detail": "recall unavailable: PermissionError"}
+    [line] = env.log_lines()
+    assert (line["status"], line["error_type"]) == (503, "PermissionError")
+
+
+def test_the_handler_offloads_exactly_one_call_for_the_whole_read_path(env):
+    """Scenario: the handler offloads exactly one call for the whole read path."""
+    import asyncio
+
+    real = asyncio.to_thread
+    calls: list = []
+
+    async def spy(func, /, *args, **kwargs):
+        calls.append(func)
+        return await real(func, *args, **kwargs)
+
+    with patch.object(recall_module.asyncio, "to_thread", spy):
+        assert env.post({"query": TEST_QUERY, "filters": {"project": "witt"}}).status_code == 200
+        with_project, calls[:] = list(calls), []
+        assert env.post().status_code == 200
+
+    m = recall_module
+    assert with_project == [m._check_project, m._recall_work, m._append_log]
+    assert calls == [m._recall_work, m._append_log]
+
+
+def _no_witt_index(tmp_path) -> RecallIndex:
+    from tests.fixtures.recall.index import build_index, note, write_vault
+
+    vault = write_vault(
+        tmp_path / "no-witt",
+        {f"10_Notes/n{i}.md": note(f"N{i}", 0.8, "review process") for i in range(3)},
+    )
+    return build_index(vault, tmp_path / "no-witt-data")
+
+
+@pytest.mark.parametrize("row", ["normal", "count_raises", "no_witt", "retrieve_raises"])
+async def test_the_reader_is_closed_exactly_once_on_every_path(make_env, tmp_path, close_spy, row):
+    """Scenario Outline: the reader is closed exactly once on every path."""
+    import sqlite3
+    import threading
+    from contextlib import ExitStack
+
+    code = 503 if row.endswith("_raises") else 200
+    env = make_env(index=_no_witt_index(tmp_path)) if row == "no_witt" else make_env()
+    with ExitStack() as stack:
+        if row == "count_raises":
+            stack.enter_context(
+                patch.object(
+                    _VectorLedReader,
+                    "count_chunks",
+                    side_effect=sqlite3.OperationalError("database is locked"),
+                )
+            )
+        if row == "retrieve_raises":
+            stack.enter_context(
+                patch.object(recall_module, "_retrieve", side_effect=RuntimeError("boom"))
+            )
+        resp = await _apost(env)
+
+    assert resp.status_code == code
+    assert len(close_spy) == 1 and close_spy[0] != threading.get_ident()
+    assert env.log_lines()[-1]["status"] == code
+
+
+@pytest.mark.parametrize("row", ["unknown_project", "no_lexical_db"])
+def test_no_reader_is_opened_when_the_request_stops_before_counting(
+    make_env, recall_index, tmp_path, close_spy, row
+):
+    """Scenario Outline: no reader is opened when the request stops before counting."""
+    from secondbrain.stores.lexical import LexicalStore
+
+    body = {"query": TEST_QUERY}
+    if row == "unknown_project":
+        env = make_env()
+        body["filters"] = {"project": "nope"}
+    else:
+        index = RecallIndex(
+            vault_path=recall_index.vault_path,
+            data_path=tmp_path,
+            vector_store=recall_index.vector_store,
+            lexical_store=LexicalStore(tmp_path / "never-indexed" / "lexical.db"),
+            tracker=recall_index.tracker,
+            embedder=recall_index.embedder,
+        )
+        env = make_env(index=index)
+
+    with patch.object(
+        recall_module, "_VectorLedReader", wraps=recall_module._VectorLedReader
+    ) as reader_cls:
+        resp = env.post(body)
+
+    assert resp.status_code == 200
+    assert reader_cls.call_count == 0 and close_spy == []
+
+
+async def test_a_cancelled_request_does_not_close_the_reader_under_a_running_thread(env, close_spy):
+    """Scenario: a cancelled request does not close the reader under a running thread."""
+    import asyncio
+    import threading
+    import time
+
+    entered, release = threading.Event(), threading.Event()
+    real_retrieve = recall_module._retrieve
+
+    def blocking_retrieve(*args, **kwargs):
+        entered.set()
+        release.wait(10)
+        return real_retrieve(*args, **kwargs)
+
+    loop_thread = threading.get_ident()
+    with patch.object(recall_module, "_retrieve", blocking_retrieve):
+        task = asyncio.create_task(_apost(env))
+        try:
+            assert await asyncio.to_thread(entered.wait, 5)
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            assert close_spy == []  # the worker still holds the reader
+        finally:
+            release.set()
+        deadline = time.monotonic() + 2
+        while not close_spy and time.monotonic() < deadline:
+            await asyncio.sleep(0.01)
+
+    assert len(close_spy) == 1 and close_spy[0] != loop_thread
+    assert env.log_lines() == []
+
+
+def test_a_503_after_counting_logs_a_window_that_depends_on_the_count(make_env, recall_index_copy):
+    """Scenario: a 503 after counting logs a window that actually depends on the count."""
+    from contextlib import ExitStack
+
+    env = make_env(index=recall_index_copy)
+    with ExitStack() as stack:
+        stack.enter_context(patch.object(_VectorLedReader, "count_chunks", return_value=120))
+        _inject("embedder", recall_index_copy, stack)
+        resp = env.post()
+
+    assert resp.status_code == 503
+    line = env.log_lines()[-1]
+    assert (line["witt_chunk_count"], line["k_vec"]) == (120, 120)
+
+
+# --- spec 004 Goal 5: exclude_paths cap --------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("ch", "n", "code"),
+    [("a", 507, 200), ("a", 508, 422), ("\u00e9", 507, 200), ("\u00e9", 508, 422)],
+)
+def test_the_512_character_cap_counts_characters_not_bytes(env, ch, n, code):
+    """Scenario Outline: the 512-character cap counts characters, not bytes."""
+    entry = "Witt/" + ch * n
+
+    resp = env.post({"query": TEST_QUERY, "filters": {"exclude_paths": [entry]}})
+
+    assert resp.status_code == code
+
+
+# --- spec 004 Goal 6: recall log permissions ---------------------------------------------
+
+
+def test_a_new_recall_log_is_created_0600(env):
+    """Scenario: a new recall log is created 0600.
+
+    Not parallel-safe: os.umask is process-wide. It is restored in a finally.
+    """
+    import os
+    import stat
+
+    assert not env.log_path.exists()
+    old = os.umask(0o022)
+    try:
+        assert env.post().status_code == 200
+    finally:
+        os.umask(old)
+
+    assert stat.S_IMODE(env.log_path.stat().st_mode) == 0o600
+
+
+def test_an_existing_recall_log_keeps_its_mode_and_is_appended_to(env):
+    """Scenario: an existing recall log keeps its mode and is appended to."""
+    import stat
+
+    env.log_path.write_text('{"status": 200}\n')
+    env.log_path.chmod(0o644)
+
+    assert env.post().status_code == 200
+
+    assert len(env.log_path.read_text().splitlines()) == 2
+    assert stat.S_IMODE(env.log_path.stat().st_mode) == 0o644
+
+
+def test_a_failing_fdopen_closes_the_descriptor(env, caplog):
+    """Scenario: a failing fdopen closes the descriptor."""
+    import os
+    from unittest.mock import call
+
+    opened: list[tuple[Path, int]] = []
+    real_open = os.open
+
+    def open_spy(path, flags, mode=0o777):
+        fd = real_open(path, flags, mode)
+        opened.append((Path(path), fd))
+        return fd
+
+    with (
+        patch.object(recall_module.os, "open", open_spy),
+        patch.object(recall_module.os, "fdopen", side_effect=OSError("fdopen failed")),
+        patch.object(recall_module.os, "close", wraps=os.close) as close_spy,
+        caplog.at_level("WARNING"),
+    ):
+        resp = env.post()
+
+    assert resp.status_code == 200
+    assert any(
+        "recall_log write failed" in r.getMessage()
+        for r in caplog.records
+        if r.levelname == "WARNING"
+    )
+    [fd] = [fd for path, fd in opened if path == env.log_path]
+    assert close_spy.call_args_list.count(call(fd)) == 1
+
+
+def test_newsyslog_rotates_the_recall_log_at_mode_600():
+    """Scenario: newsyslog rotates the recall log at mode 600."""
+    conf = _REPO_ROOT / "etc" / "newsyslog.d" / "secondbrain.conf"
+    [fields] = [
+        line.split()
+        for line in conf.read_text().splitlines()
+        if line.strip()
+        and not line.startswith("#")
+        and line.split()[0].endswith("/recall_log.jsonl")
+    ]
+
+    # logfilename [owner:group] mode count size when flags
+    assert fields[2] == "600"

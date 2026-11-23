@@ -3,6 +3,8 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from secondbrain.models import Chunk
 from secondbrain.stores.conversation import ConversationStore
 from secondbrain.stores.lexical import LexicalStore
@@ -466,3 +468,122 @@ class TestVectorStoreEpoch:
         # Should have reconnected
         assert store._client is None
         assert store._collection is None
+
+
+class TestVectorStoreInitLock:
+    """Spec 004 Goal 8: the Chroma reconnect race."""
+
+    @staticmethod
+    def _store(tmp_path: Path):
+        from secondbrain.stores.vector import VectorStore
+
+        store = VectorStore(tmp_path / "chroma")
+        store._client, store._collection = MagicMock(name="client"), MagicMock(name="collection")
+        return store
+
+    @staticmethod
+    def _hold_lock(store):
+        """Hold store._init_lock on another thread until the returned event is set."""
+        import threading
+
+        held, release = threading.Event(), threading.Event()
+
+        def holder():
+            with store._init_lock:
+                held.set()
+                release.wait(5)
+
+        thread = threading.Thread(target=holder)
+        thread.start()
+        assert held.wait(2)
+        return thread, release
+
+    def _assert_waits_for_lock(self, store, call) -> None:
+        import threading
+
+        client, collection = store._client, store._collection
+        holder, release = self._hold_lock(store)
+        worker = threading.Thread(target=call)
+        try:
+            worker.start()
+            worker.join(0.2)
+            assert worker.is_alive()
+            assert (store._client, store._collection) == (client, collection)
+        finally:
+            release.set()
+            holder.join(2)
+        worker.join(2)
+        assert not worker.is_alive()
+        assert store._collection is None
+
+    def test_reconnect_waits_for_a_thread_holding_the_init_lock(self, tmp_path):
+        """Scenario: _reconnect waits for a thread holding the init lock, then completes."""
+        store = self._store(tmp_path)
+        self._assert_waits_for_lock(store, store._reconnect)
+
+    def test_reconnect_is_reentrant_for_a_caller_that_holds_the_lock(self, tmp_path):
+        """Scenario: _reconnect is re-entrant for a caller that holds the lock."""
+        store = self._store(tmp_path)
+        with store._init_lock:
+            store._reconnect()
+        assert store._collection is None and store._client is None
+
+    def test_clear_resets_the_collection_under_the_init_lock(self, tmp_path):
+        """Scenario: clear() resets the collection under the init lock."""
+        store = self._store(tmp_path)
+        self._assert_waits_for_lock(store, store.clear)
+
+    @pytest.mark.parametrize(
+        ("attr", "prop"), [("_collection", "collection"), ("_client", "client")]
+    )
+    def test_each_property_reads_its_attribute_only_once(self, tmp_path, attr, prop):
+        """Scenario Outline: each property reads its attribute only once."""
+        from secondbrain.stores.vector import VectorStore
+
+        real = MagicMock(name=attr)
+        reads: list[int] = []
+
+        def get(_self):
+            reads.append(1)
+            return real if len(reads) == 1 else None
+
+        flaky = type("Flaky", (VectorStore,), {attr: property(get, lambda _self, _v: None)})
+        store = flaky(tmp_path / "chroma")
+        reads.clear()  # count only reads made by the property under test
+
+        assert getattr(store, prop) is real
+
+    def test_neither_property_returns_none_during_a_concurrent_reconnect(self, tmp_path):
+        """Scenario: neither property returns None during a concurrent reconnect (smoke test)."""
+        import threading
+
+        from secondbrain.stores.vector import VectorStore
+
+        store = VectorStore(tmp_path / "chroma")
+        bad: list[object] = []
+
+        def read(prop: str) -> None:
+            try:
+                for _ in range(200):
+                    if getattr(store, prop) is None:
+                        bad.append(prop)
+            except Exception as exc:  # surfaced below
+                bad.append(exc)
+
+        def reconnect() -> None:
+            try:
+                for _ in range(50):
+                    store._reconnect()
+            except Exception as exc:  # surfaced below
+                bad.append(exc)
+
+        threads = [threading.Thread(target=read, args=(p,)) for p in ("collection",) * 2]
+        threads += [threading.Thread(target=read, args=(p,)) for p in ("client",) * 2]
+        threads.append(threading.Thread(target=reconnect))
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(60)
+
+        assert not any(t.is_alive() for t in threads)
+        assert bad == []

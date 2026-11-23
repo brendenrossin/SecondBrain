@@ -291,3 +291,33 @@ def test_concurrent_first_use_creates_one_chroma_client(recall_index, tmp_path):
 
     assert len(created) == 1
     assert results == [8] * 8
+
+
+def test_lexonly_fixture_shape(tmp_path):
+    """Spec 004 step 1.2: the LEXONLY fixture has 7 Witt chunks, 4 above the floor, 4 lexical."""
+    from tests.fixtures.recall.index import (
+        LEXONLY_KEYWORD_NOTES,
+        LEXONLY_QUERY,
+        LEXONLY_VECTOR_NOTES,
+        build_lexonly_index,
+    )
+
+    idx = build_lexonly_index(tmp_path)
+    paths = {
+        r["chunk_id"]: r["note_path"]
+        for r in idx.lexical_store.conn.execute("SELECT chunk_id, note_path FROM chunks")
+    }
+
+    assert idx.lexical_store.count_chunks(["Witt"]) == 7 == len(paths)
+    vec = idx.vector_store.search(
+        idx.embedder.embed_single(LEXONLY_QUERY),
+        top_k=30,
+        min_similarity=0.40,
+        include_folders=["Witt"],
+    )
+    assert {meta["note_path"] for _cid, _sim, meta, _doc in vec} == set(LEXONLY_VECTOR_NOTES)
+    lex = idx.lexical_store.search(LEXONLY_QUERY, top_k=50, include_folders=["Witt"])
+    assert {paths[cid] for cid, _score in lex} == {
+        "Witt/Projects/witt/decisions/ADR-010-lex.md",
+        *LEXONLY_KEYWORD_NOTES,
+    }

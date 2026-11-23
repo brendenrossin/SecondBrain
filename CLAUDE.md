@@ -29,7 +29,7 @@ vault sync.
 ```bash
 make install   # Install dependencies with uv
 make dev       # Run FastAPI server at http://localhost:8000
-make ui        # Run Gradio UI at http://localhost:7860
+make ui        # Run Next.js frontend (prod build) at http://127.0.0.1:7860
 make index     # Trigger vault indexing via API
 make test      # Run pytest
 make lint      # Run ruff linter

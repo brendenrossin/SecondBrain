@@ -7,15 +7,13 @@
 
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/brentrossin/.local/bin/uv</string>
+        <string>/opt/homebrew/bin/npm</string>
         <string>run</string>
-        <string>python</string>
-        <string>-m</string>
-        <string>secondbrain.ui</string>
+        <string>start</string>
     </array>
 
     <key>WorkingDirectory</key>
-    <string>/Users/brentrossin/code/second-brain</string>
+    <string>/Users/brentrossin/code/second-brain/frontend</string>
 
     <key>EnvironmentVariables</key>
     <dict>
@@ -30,6 +28,9 @@
 
     <key>KeepAlive</key>
     <true/>
+
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
 
     <key>StandardOutPath</key>
     <string>/Users/brentrossin/code/second-brain/data/logs/ui.stdout.log</string>

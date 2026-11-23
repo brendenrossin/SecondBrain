@@ -114,6 +114,9 @@ ignore_missing_imports = true
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+# Don't add `filterwarnings = ["error"]`: live-vault drift in the recall dataset is reported
+# as a RecallDatasetDriftWarning on purpose, so a new Witt note can't break the suite (spec 004
+# Decision 4). The recall eval is the hard gate on drift.
 markers = [
     "eval: marks tests as LLM evals (may require API keys and cost money)",
 ]

@@ -134,9 +134,10 @@ async def test_warmup_failure_is_logged_not_raised(lifespan_env, caplog):
 
     with caplog.at_level("WARNING"):
         async with ctx:
-            await app.state.warmup_task
+            task = app.state.warmup_task  # captured inside: shutdown clears it (spec 004)
+            await task
 
-    assert app.state.warmup_task.exception() is None
+    assert task.exception() is None
     assert any(
         "warmup" in r.getMessage().lower() for r in caplog.records if r.levelname == "WARNING"
     )
@@ -152,3 +153,51 @@ async def test_warmup_also_opens_the_vector_store(lifespan_env):
         await app.state.warmup_task
     embedder.embed_single.assert_called_once_with("warmup")
     main.get_vector_store.return_value.count.assert_called_once_with()
+
+
+# --- spec 004 Goal 7: warmup cancellation at shutdown ------------------------------------
+
+
+async def test_a_still_running_warmup_task_is_cancelled_at_shutdown(lifespan_env, caplog, tmp_path):
+    """Scenario: a still-running warmup task is cancelled at shutdown."""
+    # A real vault path, so startup's own "vault missing" error doesn't count as noise.
+    ctx, app, embedder, _ = lifespan_env(embedder_warmup=True, vault_path=tmp_path)
+    release = threading.Event()
+    embedder.embed_single.side_effect = lambda _text: release.wait(5)
+
+    try:
+        with caplog.at_level("WARNING"):
+            async with ctx:
+                task = app.state.warmup_task
+                assert not task.done()
+    finally:
+        release.set()  # no worker thread outlives the test
+
+    assert task.cancelled() is True
+    assert app.state.warmup_task is None
+    assert [r for r in caplog.records if r.levelno >= 30] == []
+
+
+async def test_a_finished_warmup_is_not_cancelled_at_shutdown(lifespan_env):
+    """Scenario: a finished warmup is not cancelled at shutdown."""
+    ctx, app, _embedder, _ = lifespan_env(embedder_warmup=True)
+
+    async with ctx:
+        task = app.state.warmup_task
+        await task
+        spy = MagicMock(wraps=task)
+        app.state.warmup_task = spy
+
+    assert task.cancelled() is False and task.exception() is None
+    spy.cancel.assert_not_called()
+    assert app.state.warmup_task is None
+
+
+async def test_shutdown_with_warmup_disabled_is_a_no_op(lifespan_env):
+    """Scenario: shutdown with warmup disabled is a no-op."""
+    ctx, app, _embedder, _ = lifespan_env(embedder_warmup=False)
+
+    async with ctx:
+        pass  # exiting raises nothing
+
+    assert not hasattr(app.state, "warmup_task")

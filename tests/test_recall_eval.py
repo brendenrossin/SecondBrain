@@ -92,7 +92,10 @@ class Harness:
         responder = responder or (lambda body: perfect(body, self.dataset))
 
         def handle(request: httpx.Request) -> httpx.Response:
-            return httpx.Response(200, json=responder(json.loads(request.content)))
+            out = responder(json.loads(request.content))
+            if isinstance(out, str):  # raw body, sent as-is (spec 004 invalid-body rows)
+                return httpx.Response(200, content=out.encode())
+            return httpx.Response(200, json=out)
 
         code = ev.main(
             ["--dataset", str(self.dataset_path), "--base-url", "http://api"],
@@ -336,6 +339,7 @@ def test_validation_exemptions_and_scoping(harness, row):
     harness.dataset_path.write_text(yaml.safe_dump(harness.dataset))
 
     dataset = ev.load_dataset(harness.dataset_path)
+    assert ev.corpus_problems(dataset, ev.witt_corpus(harness.vault)) == []
     ev.validate_dataset(dataset, ev.witt_corpus(harness.vault))  # does not raise
 
 
@@ -364,16 +368,17 @@ def test_eval_fails_loudly_when_the_api_is_down(tmp_path):
     assert "unreachable" in out.stderr
 
 
-def test_recall_queries_yaml_validates():
-    """The committed dataset passes validation against this machine's Witt corpus."""
+def test_recall_queries_yaml_is_structurally_valid():
+    """Scenario: the committed dataset is structurally valid with no vault."""
+    assert ev.structural_problems(ev.load_dataset(ev.DEFAULT_DATASET)) == []
+
+
+def test_recall_queries_yaml_live_drift_only_warns():
+    """The committed dataset against this machine's vault: drift warns, never fails (004)."""
     settings = Settings()
     if settings.vault_path is None or not (Path(settings.vault_path) / "Witt").is_dir():
         pytest.skip("Witt vault not present on this machine")
-    dataset = ev.load_dataset(ev.DEFAULT_DATASET)
-    ev.validate_dataset(dataset, ev.witt_corpus(Path(settings.vault_path)))
-    for q in dataset.labelled:
-        assert q.expected is not None
-        assert (Path(settings.vault_path) / q.expected).is_file(), q.expected
+    ev.check_live_dataset(ev.load_dataset(ev.DEFAULT_DATASET), Path(settings.vault_path))
 
 
 def test_latency_gate_fails_when_latency_is_missing(harness, capsys):
@@ -388,3 +393,197 @@ def test_latency_gate_fails_when_latency_is_missing(harness, capsys):
 
     assert code == ev.EXIT_GATE
     assert "latency" in report["failed_gates"] and "latency" in err
+
+
+# --- spec 004 Goal 12: structural vs corpus validation ----------------------------------
+
+
+def _dataset(raw: dict, tmp_path: Path) -> ev.Dataset:
+    path = tmp_path / "ds.yaml"
+    path.write_text(yaml.safe_dump(raw, allow_unicode=True))
+    return ev.load_dataset(path)
+
+
+def _labelled_paths(ds: dict) -> list[str]:
+    return [q["expected"] for q in ds["queries"] if q.get("expected")]
+
+
+def test_a_structurally_broken_dataset_fails(tmp_path):
+    """Scenario: a structurally broken dataset fails."""
+    raw = base_dataset()
+    _mutate("3 null", raw)
+    dataset = _dataset(raw, tmp_path)
+
+    with pytest.raises(ev.DatasetError, match="too few null"):
+        ev.validate_dataset(dataset, {})
+
+
+def test_corpus_problems_returns_exact_reasons_in_order(tmp_path):
+    """Scenario: corpus_problems returns exact reasons in order."""
+    dataset = _dataset(base_dataset(), tmp_path)
+    prose = "may a spec skip its review if recorded"
+    dirty = {"Witt/a.md": f"intro. {prose.upper()} and more", "Witt/b.md": "about Kubernetes"}
+
+    assert ev.corpus_problems(dataset, dirty) == ["verbatim query", "null contamination"]
+    assert ev.corpus_problems(dataset, {"Witt/c.md": "nothing relevant"}) == []
+
+
+def test_the_eval_error_names_every_reason_across_both_kinds(tmp_path):
+    """Scenario: the eval error names every reason across both kinds."""
+    raw = base_dataset()
+    _mutate("3 null", raw)
+    dataset = _dataset(raw, tmp_path)
+
+    with pytest.raises(ev.DatasetError) as info:
+        ev.validate_dataset(dataset, {"Witt/a.md": "espresso talk"})
+
+    message = str(info.value)
+    assert "too few null" in message and "null contamination" in message
+    assert message.index("too few null") < message.index("null contamination")
+
+
+def test_live_drift_warns_and_does_not_raise(harness):
+    """Scenario: live drift warns and does not raise."""
+    write_vault(harness.vault, {"Witt/Learnings/coffee.md": "# Coffee\n\nespresso notes\n"})
+    dataset = _dataset(harness.dataset, harness.vault.parent)
+
+    with pytest.warns(ev.RecallDatasetDriftWarning, match="null contamination"):
+        ev.check_live_dataset(dataset, harness.vault)
+
+
+def test_a_missing_expected_file_warns_and_does_not_raise(harness):
+    """Scenario: a missing expected file warns and does not raise."""
+    (harness.vault / HUB).unlink()
+    dataset = _dataset(harness.dataset, harness.vault.parent)
+
+    with pytest.warns(ev.RecallDatasetDriftWarning, match="expected file missing"):
+        ev.check_live_dataset(dataset, harness.vault)
+
+
+def test_check_live_dataset_returns_every_problem_in_order(harness):
+    """Scenario: check_live_dataset returns every problem in order, one warning each."""
+    write_vault(harness.vault, {"Witt/Learnings/coffee.md": "# Coffee\n\nespresso notes\n"})
+    (harness.vault / HUB).unlink()
+    dataset = _dataset(harness.dataset, harness.vault.parent)
+
+    with pytest.warns(ev.RecallDatasetDriftWarning) as record:
+        problems = ev.check_live_dataset(dataset, harness.vault)
+
+    assert problems == ["null contamination", f"expected file missing: {HUB}"]
+    drift = [w for w in record if issubclass(w.category, ev.RecallDatasetDriftWarning)]
+    assert len(drift) == 2
+    first, second = (str(w.message) for w in drift)
+    assert first.startswith("null contamination") and "'espresso'" in first
+    assert "Witt/Learnings/coffee.md" in first
+    assert second == f"expected file missing: {HUB}"
+
+
+def test_an_excluded_expected_path_is_reported_the_same_way_by_both_checks(harness, capsys):
+    """Scenario: an excluded expected path is reported the same way by both checks."""
+    excluded = "Witt/Logs/2026-11-21.md"
+    assert (harness.vault / excluded).is_file()
+    harness.dataset["queries"][5]["expected"] = excluded
+    dataset = _dataset(harness.dataset, harness.vault.parent)
+
+    with pytest.warns(ev.RecallDatasetDriftWarning):
+        problems = ev.check_live_dataset(dataset, harness.vault)
+    assert problems == [f"expected file missing: {excluded}"]
+
+    code, report, _err = harness.run(capsys=capsys)
+    assert code == ev.EXIT_GATE
+    assert "stale_labels" in report["failed_gates"]
+
+
+@pytest.mark.parametrize("vault", ["missing", "no_witt"])
+def test_check_live_dataset_never_raises_on_a_broken_vault(tmp_path, vault):
+    """Scenario Outline: check_live_dataset never raises on a broken vault."""
+    raw = base_dataset()
+    dataset = _dataset(raw, tmp_path)
+    root = tmp_path / "vault"
+    if vault == "no_witt":
+        write_vault(root, {"10_Notes/a.md": "# A\n\nhello\n"})
+
+    with pytest.warns(ev.RecallDatasetDriftWarning):
+        problems = ev.check_live_dataset(dataset, root)
+
+    assert problems == [f"expected file missing: {p}" for p in _labelled_paths(raw)]
+
+
+def test_a_clean_vault_gives_no_drift_warning(harness):
+    """Scenario: a clean vault gives no drift warning."""
+    import warnings
+
+    dataset = _dataset(harness.dataset, harness.vault.parent)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", ev.RecallDatasetDriftWarning)
+        assert ev.check_live_dataset(dataset, harness.vault) == []
+
+
+def test_live_corpus_contamination_still_fails_the_eval(harness, capsys):
+    """Scenario: live-corpus contamination still fails the eval."""
+    write_vault(harness.vault, {"Witt/Learnings/coffee.md": "# Coffee\n\nespresso notes\n"})
+
+    code, report, err = harness.run(capsys=capsys)
+
+    assert code == ev.EXIT_DATASET and report is None
+    assert "invalid dataset" in err and "null contamination" in err
+
+
+# --- spec 004 Goals 9 and 10: invalid bodies, report labels ------------------------------
+
+
+@pytest.mark.parametrize(
+    ("body", "which"),
+    [
+        ("oops, not json", "warmup"),
+        ("[]", "warmup"),
+        ("[{}]", "warmup"),
+        ('"str"', "warmup"),
+        ("oops, not json", "first"),
+    ],
+)
+def test_an_invalid_200_body_gives_exit_3_and_no_report(harness, capsys, body, which):
+    """Scenario Outline: an invalid 200 body gives exit 3 and no report."""
+    target = "warmup" if which == "warmup" else harness.dataset["queries"][0]["query"]
+
+    def responder(req: dict) -> dict | str:
+        return body if req["query"] == target else perfect(req, harness.dataset)
+
+    code, report, err = harness.run(responder, capsys)
+
+    assert code == ev.EXIT_UNREACHABLE
+    assert "recall api returned an invalid body" in err
+    assert "Traceback" not in err
+    assert report is None
+
+
+def test_the_report_labels_where_model_fields_come_from(harness, capsys):
+    """Scenario: the report labels where model fields come from."""
+    code, report, _err = harness.run(capsys=capsys)
+
+    assert code == 0
+    assert report["model_fields_source"] == "eval process settings and local HF cache"
+    assert report["embedding_model"] == harness.settings.embedding_model
+    assert report["hf_revision"] == ev._hf_revision(harness.settings.embedding_model)
+
+
+# --- spec 004 Goal 11: MRR recommendation ------------------------------------------------
+
+
+def _sixteen_notes(h: Harness) -> None:
+    write_vault(
+        h.vault, {f"Witt/Learnings/extra{i}.md": f"# E{i}\n\nextra {i}\n" for i in range(11)}
+    )
+
+
+@pytest.mark.parametrize(("gate_mrr", "expected"), [(True, []), (False, [ev.RECOMMEND_MRR_LINE])])
+def test_mrr_recommendation_only_when_the_gate_is_off(harness, capsys, gate_mrr, expected):
+    """Scenarios: no MRR recommendation when the gate is on; it still prints when off."""
+    _sixteen_notes(harness)
+    harness.dataset["gate_mrr"] = gate_mrr
+
+    code, report, err = harness.run(capsys=capsys)
+
+    assert code == 0 and report["witt_note_count"] == 16
+    assert report["recommendations"] == expected
+    assert ("recommend gate_mrr: true" in err) is (not gate_mrr)

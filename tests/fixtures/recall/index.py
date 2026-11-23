@@ -20,6 +20,21 @@ FIXTURE_VAULT = Path(__file__).parent / "vault"
 GOLDENS_PATH = Path(__file__).parent / "goldens.json"
 TEST_QUERY = "override review process"
 
+# Spec 004: a separate vault where some Witt notes match only lexically (sim < 0.40 floor).
+LEXONLY_QUERY = "quokka"
+LEXONLY_VECTOR_NOTES = {
+    "Witt/Projects/witt/decisions/ADR-010-lex.md": 0.70,  # also matches LEXONLY_QUERY
+    "Witt/Projects/witt/specs/010-lex.md": 0.60,
+    "Witt/Projects/second-brain/specs/020-lex.md": 0.50,
+    "Witt/Learnings/lex-learning.md": 0.40,
+}
+LEXONLY_KEYWORD_NOTES = {
+    "Witt/Projects/witt/decisions/ADR-011-kw.md": 0.10,
+    "Witt/Projects/second-brain/specs/021-kw.md": 0.20,
+    "Witt/Learnings/kw-learning.md": 0.30,
+}
+_LEXONLY_MATCHES = {"Witt/Projects/witt/decisions/ADR-010-lex.md", *LEXONLY_KEYWORD_NOTES}
+
 
 @dataclass
 class RecallIndex:
@@ -69,6 +84,21 @@ def write_vault(root: Path, notes: dict[str, str]) -> Path:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
     return root
+
+
+def build_lexonly_index(root: Path) -> RecallIndex:
+    """Write the LEXONLY vault under root/vault and index it into root/data.
+
+    7 Witt chunks: 4 at sim >= 0.40 (one also matching LEXONLY_QUERY lexically) and
+    3 at sim < 0.40 that match LEXONLY_QUERY lexically. FIXTURE_VAULT is not involved.
+    """
+    notes = {}
+    for i, (rel, sim) in enumerate((LEXONLY_VECTOR_NOTES | LEXONLY_KEYWORD_NOTES).items()):
+        body = f"lexonly note {i} plain words"
+        if rel in _LEXONLY_MATCHES:
+            body = f"{LEXONLY_QUERY} {body}"
+        notes[rel] = note(f"Lexonly {i}", sim, body)
+    return build_index(write_vault(root / "vault", notes), root / "data")
 
 
 def copy_index(src: RecallIndex, dest: Path) -> RecallIndex:

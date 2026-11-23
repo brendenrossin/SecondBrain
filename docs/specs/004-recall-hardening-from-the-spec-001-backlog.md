@@ -4,7 +4,7 @@ title: Recall hardening from the spec 001 backlog
 project: second-brain
 tier: standard
 status: Approved
-version: 0.3.0
+version: 0.3.1
 created: '2026-11-22'
 updated: '2026-11-22'
 tags: []
@@ -129,7 +129,7 @@ flowchart TD
 **Decision 3: input and file hardening (Goals 5 and 6).**
 - **Entry length cap.** `RecallFilters._witt_paths_only` checks the `Witt/` prefix first, then rejects any entry over `EXCLUDE_PATH_MAX = 512` characters (characters, not bytes). The message is `exclude_paths entries must be at most 512 characters`.
   - An entry that is both too long and lacks the prefix gets the prefix message.
-  - The MCP tool shares `RecallFilters`, so it returns the same text inside `invalid arguments: …`.
+  - The MCP tool takes `filters: RecallFilters`, so the MCP SDK validates it before the handler runs. An over-long entry is an SDK tool error (`is_error: true`) whose text contains the same message, and no HTTP request is sent. That's how the `Witt/` prefix rule and the 10-entry limit already behave. (v0.3.1: corrected at build time; v0.3.0 said `ok: false` with `invalid arguments: …`, which only covers `query` and `limit`.)
   - This supersedes the `RecallFilters` contract in spec 001.
 - **Log file mode.** `_append_log` opens the file with `os.open(path, O_WRONLY | O_APPEND | O_CREAT, 0o600)` and wraps the fd with `os.fdopen`. If `fdopen` raises, the fd is closed first.
   - A newly created file is 0600 whatever the process umask.
@@ -331,7 +331,7 @@ Feature: Recall hardening
   Scenario: The MCP tool reports the cap
     Given the MCP recall tool
     When it is called with an exclude_paths entry of "Witt/" followed by 508 "a" characters
-    Then it returns ok false with error containing "invalid arguments" and "at most 512 characters"
+    Then it returns an SDK tool error (is_error true) whose text contains "at most 512 characters"
     And no HTTP request is sent
 
   # --- Goal 6: recall log permissions ------------------------------------------
@@ -570,6 +570,17 @@ Feature: Recall hardening
 - **Cancelling warmup during a model load.** `to_thread` can't be interrupted, so shutdown may still wait for the load. That's the same as today, just quieter.
 - **The concurrent-reconnect test is probabilistic.** It can pass on broken code if the race window is never hit. The deterministic lock-held scenarios carry the guarantee; the stress test is a smoke check.
 
+### Deferred from code review
+- ~~(Medium) `tests/test_launchd_plists.py` compared the plist paths against the checkout root, so it failed outside the canonical checkout.~~ Fixed after CI failed on PR #21: the root now comes from the API plist WorkingDirectory.
+- (Low) `make install-ui-service` and `make ui` don't build `frontend/.next` first, so on a fresh clone launchd keeps restarting a process that fails.
+- (Low) The lifespan `yield` isn't wrapped in try/finally, so `_stop_warmup` is skipped if shutdown happens through an exception. `suppress(CancelledError)` can also swallow a cancellation of the shutdown itself.
+- (Low) `check_live_dataset` relies on `assert q.expected is not None`, which `python -O` strips. Use an explicit `continue`.
+- (Low) Each `_corpus_findings` detail names only the first offender, so several bad queries come to light one run at a time.
+- (Low) `_VectorLedReader` depends on `HybridRetriever` calling `get_chunk` only for ids that come back lexical-only. Add a test that fails if hybrid.py starts calling it for ids that are in the vector results.
+- (Nit) The `similarity_score == 0.0` keyword-only guard in `_rank` is now just a safety net. It would miscount a true 0.0 vector hit, which the 0.40 floor makes impossible.
+- (Low) The 7.2 tick confirmed the log path from `RECALL_LOG_NAME` and the plist `WorkingDirectory`. No `lsof` check ran, because the API had no recall_log open at the time.
+- (Low) Nothing tracks these deferred items yet, such as a backlog or roadmap entry. Decide at close.
+
 ## Rollout
 1. Merge. The API restarts via the usual `launchctl unload/load` (see PROJECT.md).
 2. Confirm which file the running API writes. The installed API plist's `WorkingDirectory` is `/Users/brentrossin/code/second-brain` (checked 2026-11-22), so it writes `data/recall_log.jsonl` there, the path in the newsyslog conf. After a recall, `lsof -p $(lsof -ti:8000) | grep recall_log` shows the open file, if one is open. If it shows a different path, stop: fix the newsyslog conf path before step 4.
@@ -593,7 +604,7 @@ Feature: Recall hardening
 | `tests/fixtures/recall/index.py` | Update | `LEXONLY_QUERY` and `build_lexonly_index()`: a separate vault and index. `FIXTURE_VAULT` is unchanged. |
 | `tests/test_recall_api.py` | Update | Goals 1–6 and 13 scenarios. Extend `test_retrieval_failures_return_503_without_leaking_internals` (count == 7), `test_recall_log_write_failure_does_not_fail_the_request` (`os.open` path), `test_snippets_truncated_on_a_word_boundary` (two rows), `test_witt_only_recall_returns_best_decision_first` (precondition), the 422/boundary tables (512 cap). Existing `spies` / `HybridRetriever` patches stay valid because `_retrieve` is unchanged and `build_retriever` looks up `HybridRetriever` at call time. Rename `_ReadOnlyLexicalStore` → `_VectorLedReader` with no alias at the import (line 13), `test_vector_window_covers_every_witt_chunk_up_to_500`, `_inject` (`fts`/`count`), and `test_recall_reads_lexical_db_through_its_own_read_only_connection`, which keeps its `OperationalError, match="readonly"` assert. |
 | `tests/test_recall_eval.py` | Update | Goals 9–12. `test_validation_exemptions_and_scoping` moves to `corpus_problems`. The live test calls `check_live_dataset` and only warns. New structural test. `Harness` gets a raw-content responder for the invalid-body rows. |
-| `tests/test_mcp_server.py` | Update | MCP row for the 512 cap. |
+| `tests/test_mcp_server.py` | Update | MCP row for the 512 cap, in `test_schema_violations_are_sdk_tool_errors_not_exceptions` (an SDK tool error, like the prefix rule). |
 | `tests/test_embedder_warmup.py` | Update | Goal 7 scenarios. `test_warmup_failure_is_logged_not_raised` captures the task inside the lifespan and keeps its assertion. The `not hasattr` assertions are unchanged. |
 | `tests/test_stores.py` | Update | Goal 8 scenarios, including read-once for both properties and `clear()` under the lock. |
 | `docs/specs/001-secondbrain-recall-mcp-server-for-witt.md` | Update | One-line "superseded in part by 004" note under the title; status and history untouched. |
@@ -612,44 +623,44 @@ Feature: Recall hardening
 > - If the spec and the code disagree, stop and propose a spec edit. Don't improvise.
 
 ### Phase 1 — Branch, fixtures and goldens on unchanged code
-- [ ] 1.1 Branch `feat/004-recall-hardening` off `main` and record the suite baseline — files: none — done when: `uv run python -m pytest -q` passes, and the count is written into this step (expected about 1097).
-- [ ] 1.2 Add `LEXONLY_QUERY` and `build_lexonly_index()` as a separate vault and index (4 Witt notes at sim >= 0.40, one also matching lexically; 3 at sim < 0.40 matching lexically). `FIXTURE_VAULT` is untouched. Add `test_lexonly_fixture_shape`, which asserts 7 Witt chunks, 4 vector hits at the 0.40 floor and 4 lexical matches — files: `tests/fixtures/recall/index.py`, `tests/test_recall_prefilter.py` — done when: that test passes and the existing goldens test still passes.
-- [ ] 1.3 Extend `capture_goldens.py` to write `recall_goldens.json`: endpoint hits for TEST_QUERY on the session index, and for LEXONLY_QUERY on the LEXONLY index, unfiltered plus each of project, kinds and exclude_paths, with ties sorted. Add `test_recall_endpoint_hits_match_goldens`. **Commit alone** — files: `tests/fixtures/recall/capture_goldens.py`, `tests/fixtures/recall/recall_goldens.json`, `tests/test_recall_api.py` — done when: the test passes on unchanged code and `git show --stat HEAD` lists no `src/` file.
+- [x] 1.1 Branch `feat/004-recall-hardening` off `main` and record the suite baseline — files: none — done when: `uv run python -m pytest -q` passes, and the count is written into this step (expected about 1097). **Baseline: 1097 passed (2026-11-22).**
+- [x] 1.2 Add `LEXONLY_QUERY` and `build_lexonly_index()` as a separate vault and index (4 Witt notes at sim >= 0.40, one also matching lexically; 3 at sim < 0.40 matching lexically). `FIXTURE_VAULT` is untouched. Add `test_lexonly_fixture_shape`, which asserts 7 Witt chunks, 4 vector hits at the 0.40 floor and 4 lexical matches — files: `tests/fixtures/recall/index.py`, `tests/test_recall_prefilter.py` — done when: that test passes and the existing goldens test still passes.
+- [x] 1.3 Extend `capture_goldens.py` to write `recall_goldens.json`: endpoint hits for TEST_QUERY on the session index, and for LEXONLY_QUERY on the LEXONLY index, unfiltered plus each of project, kinds and exclude_paths, with ties sorted. Add `test_recall_endpoint_hits_match_goldens`. **Commit alone** — files: `tests/fixtures/recall/capture_goldens.py`, `tests/fixtures/recall/recall_goldens.json`, `tests/test_recall_api.py` — done when: the test passes on unchanged code and `git show --stat HEAD` lists no `src/` file.
 
 ### Phase 2 — Eval and dataset validation (Goals 9–12)
-- [ ] 2.1 Tests first: the Goal 12 scenarios (structural valid with no vault, structurally broken, exact `corpus_problems` reasons, exemptions and scoping moved to `corpus_problems`, every reason in order, live drift warns, missing expected file warns, excluded path reported by both, never-raises outline, clean vault, exact return plus 2 ordered warnings, contamination still exits 2). Then `structural_problems`, `corpus_problems`, `_is_indexed_label` (also used by `stale_labels`), `check_live_dataset` and `RecallDatasetDriftWarning`. Rewrite the live test to call `check_live_dataset` and warn only — files: `src/secondbrain/eval/recall_eval.py`, `tests/test_recall_eval.py` — done when: all Goal 12 scenarios pass and the existing eval tests pass unchanged.
-- [ ] 2.2 Tests first: the Goal 9 outline (5 rows, using a new raw-content responder on `Harness`) and the Goal 10 report field. Then the `_post` body guard and `model_fields_source` — files: `recall_eval.py`, `tests/test_recall_eval.py` — done when: those scenarios pass.
-- [ ] 2.3 Tests first: both Goal 11 scenarios through `Harness.run` with a 16-note vault. Then `recommend = not dataset.gate_mrr and (...)` — files: `recall_eval.py`, `tests/test_recall_eval.py` — done when: both pass.
-- [ ] 2.4 Add the `pyproject.toml` comment that `filterwarnings = error` would break Decision 4 — files: `pyproject.toml` — done when: `uv run python -m pytest tests/test_recall_eval.py -q` passes and shows the drift warning only when the live vault drifts.
+- [x] 2.1 Tests first: the Goal 12 scenarios (structural valid with no vault, structurally broken, exact `corpus_problems` reasons, exemptions and scoping moved to `corpus_problems`, every reason in order, live drift warns, missing expected file warns, excluded path reported by both, never-raises outline, clean vault, exact return plus 2 ordered warnings, contamination still exits 2). Then `structural_problems`, `corpus_problems`, `_is_indexed_label` (also used by `stale_labels`), `check_live_dataset` and `RecallDatasetDriftWarning`. Rewrite the live test to call `check_live_dataset` and warn only — files: `src/secondbrain/eval/recall_eval.py`, `tests/test_recall_eval.py` — done when: all Goal 12 scenarios pass and the existing eval tests pass unchanged.
+- [x] 2.2 Tests first: the Goal 9 outline (5 rows, using a new raw-content responder on `Harness`) and the Goal 10 report field. Then the `_post` body guard and `model_fields_source` — files: `recall_eval.py`, `tests/test_recall_eval.py` — done when: those scenarios pass.
+- [x] 2.3 Tests first: both Goal 11 scenarios through `Harness.run` with a 16-note vault. Then `recommend = not dataset.gate_mrr and (...)` — files: `recall_eval.py`, `tests/test_recall_eval.py` — done when: both pass.
+- [x] 2.4 Add the `pyproject.toml` comment that `filterwarnings = error` would break Decision 4 — files: `pyproject.toml` — done when: `uv run python -m pytest tests/test_recall_eval.py -q` passes and shows the drift warning only when the live vault drifts.
 
 ### Phase 3 — Recall reader, worker call and project check (Goals 1–4)
-- [ ] 3.1 Rename `_ReadOnlyLexicalStore` → `_VectorLedReader` with no alias. Override `get_chunk` to count and return `None`, with the docstring warnings from Decision 1. Update the four test references. Add the scenarios: lexical-only counted with no chunk query (trace), skip count with top_k=2, the reader still serves count and search, and never the shared store — files: `src/secondbrain/api/recall.py`, `tests/test_recall_api.py` — done when: those 4 scenarios, the read-only test and `test_recall_endpoint_hits_match_goldens` pass.
-- [ ] 3.2 Tests first: the to_thread spy scenario, the close-once outline (4 rows), the zero-construction outline (2 rows), the cancelled-request scenario, the 503-after-counting outline (3 rows) plus count=120 and count-fails rows, and a PermissionError in the project check gives a logged 503. Then `_RecallState`, `_recall_work`, the `build_retriever` closure, step 3 inside the `try` via `to_thread`, and the `dropped_keyword_only` sum. Remove the handler's `reader.close()` — files: `api/recall.py`, `tests/test_recall_api.py` — done when: those scenarios, the full `tests/test_recall_api.py` (including the zero-spans and Langfuse tests) and the goldens all pass.
+- [x] 3.1 Rename `_ReadOnlyLexicalStore` → `_VectorLedReader` with no alias. Override `get_chunk` to count and return `None`, with the docstring warnings from Decision 1. Update the four test references. Add the scenarios: lexical-only counted with no chunk query (trace), skip count with top_k=2, the reader still serves count and search, and never the shared store — files: `src/secondbrain/api/recall.py`, `tests/test_recall_api.py` — done when: those 4 scenarios, the read-only test and `test_recall_endpoint_hits_match_goldens` pass.
+- [x] 3.2 Tests first: the to_thread spy scenario, the close-once outline (4 rows), the zero-construction outline (2 rows), the cancelled-request scenario, the 503-after-counting outline (3 rows) plus count=120 and count-fails rows, and a PermissionError in the project check gives a logged 503. Then `_RecallState`, `_recall_work`, the `build_retriever` closure, step 3 inside the `try` via `to_thread`, and the `dropped_keyword_only` sum. Remove the handler's `reader.close()` — files: `api/recall.py`, `tests/test_recall_api.py` — done when: those scenarios, the full `tests/test_recall_api.py` (including the zero-spans and Langfuse tests) and the goldens all pass.
 
 ### Phase 4 — Input and log hardening (Goals 5, 6, 13)
-- [ ] 4.1 Tests first: the 512-cap outline (4 rows), the specific message, the prefix-wins rule, and the MCP row. Then `EXCLUDE_PATH_MAX` in `RecallFilters` — files: `src/secondbrain/models.py`, `tests/test_recall_api.py`, `tests/test_mcp_server.py` — done when: those scenarios and the existing 422/boundary tables pass.
-- [ ] 4.2 Tests first: new log created 0600 (umask restored, not parallel-safe), existing log keeps its mode, failing fdopen closes the fd, and a directory at the path still gives a 200. Then `os.open` / `os.fdopen` in `_append_log` — files: `api/recall.py`, `tests/test_recall_api.py` — done when: those 4 scenarios pass.
-- [ ] 4.3 Change the newsyslog mode to 600, plus its parse test — files: `etc/newsyslog.d/secondbrain.conf`, `tests/test_recall_api.py` — done when: "newsyslog rotates the recall log at mode 600" passes.
-- [ ] 4.4 Goal 13 rows: snippet whitespace at 300 and 600, the 590–594 run, and the precondition assert against `goldens.json["retrieve"]` — files: `tests/test_recall_api.py` — done when: those rows pass. No `src/` change is expected; if one is needed, `make_snippet` has a bug, so stop and report.
+- [x] 4.1 Tests first: the 512-cap outline (4 rows), the specific message, the prefix-wins rule, and the MCP row. Then `EXCLUDE_PATH_MAX` in `RecallFilters` — files: `src/secondbrain/models.py`, `tests/test_recall_api.py`, `tests/test_mcp_server.py` — done when: those scenarios and the existing 422/boundary tables pass.
+- [x] 4.2 Tests first: new log created 0600 (umask restored, not parallel-safe), existing log keeps its mode, failing fdopen closes the fd, and a directory at the path still gives a 200. Then `os.open` / `os.fdopen` in `_append_log` — files: `api/recall.py`, `tests/test_recall_api.py` — done when: those 4 scenarios pass.
+- [x] 4.3 Change the newsyslog mode to 600, plus its parse test — files: `etc/newsyslog.d/secondbrain.conf`, `tests/test_recall_api.py` — done when: "newsyslog rotates the recall log at mode 600" passes.
+- [x] 4.4 Goal 13 rows: snippet whitespace at 300 and 600, the 590–594 run, and the precondition assert against `goldens.json["retrieve"]` — files: `tests/test_recall_api.py` — done when: those rows pass. No `src/` change is expected; if one is needed, `make_snippet` has a bug, so stop and report.
 
 ### Phase 5 — Warmup cancellation and the Chroma race (Goals 7, 8)
-- [ ] 5.1 Tests first: still-running warmup cancelled, finished warmup not cancelled (cancel spied), disabled warmup leaves no attribute, failed warmup still observable. Update `test_warmup_failure_is_logged_not_raised` so it captures the task inside the lifespan. Then the lifespan change — files: `src/secondbrain/main.py`, `tests/test_embedder_warmup.py` — done when: all warmup tests pass with no hang (each test under 10 s).
-- [ ] 5.2 Tests first: `_reconnect` waits for the lock, re-entrancy, the read-once outline (2 rows), `clear()` under the lock, and the concurrent smoke test. Then the locals, the `is None` double-check, and the locked `_reconnect` and `clear` — files: `src/secondbrain/stores/vector.py`, `tests/test_stores.py` — done when: those scenarios pass and `tests/test_stores.py` passes in full.
+- [x] 5.1 Tests first: still-running warmup cancelled, finished warmup not cancelled (cancel spied), disabled warmup leaves no attribute, failed warmup still observable. Update `test_warmup_failure_is_logged_not_raised` so it captures the task inside the lifespan. Then the lifespan change — files: `src/secondbrain/main.py`, `tests/test_embedder_warmup.py` — done when: all warmup tests pass with no hang (each test under 10 s).
+- [x] 5.2 Tests first: `_reconnect` waits for the lock, re-entrancy, the read-once outline (2 rows), `clear()` under the lock, and the concurrent smoke test. Then the locals, the `is None` double-check, and the locked `_reconnect` and `clear` — files: `src/secondbrain/stores/vector.py`, `tests/test_stores.py` — done when: those scenarios pass and `tests/test_stores.py` passes in full.
 
 ### Phase 6 — Docs
-- [ ] 6.1 Update the backlog: tick the closed items, mark the MCP cache as cut at 004 triage, and add the "expose serving embedding model" line. Confirm 001's superseded note is present — files: `docs/optimizations/001-recall-backlog.md`, `docs/specs/001-secondbrain-recall-mcp-server-for-witt.md` — done when: `grep -c '\- \[x\]' docs/optimizations/001-recall-backlog.md` has gone up by the number of items closed, and 001's status/history are unchanged per `spec_index`.
+- [x] 6.1 Update the backlog: tick the closed items, mark the MCP cache as cut at 004 triage, and add the "expose serving embedding model" line. Confirm 001's superseded note is present — files: `docs/optimizations/001-recall-backlog.md`, `docs/specs/001-secondbrain-recall-mcp-server-for-witt.md` — done when: `grep -c '\- \[x\]' docs/optimizations/001-recall-backlog.md` has gone up by the number of items closed, and 001's status/history are unchanged per `spec_index`.
 
 ### Verification
-- [ ] V.1 `uv run ruff check src tests` and `uv run ruff format --check src tests` are clean.
-- [ ] V.2 `uv run mypy src` is clean.
-- [ ] V.3 `uv run python -m pytest -q` is green; paste the summary line. The count should be the Phase 1.1 baseline plus the new tests.
-- [ ] V.4 Import smoke test: `uv run python -c "import secondbrain.api.recall, secondbrain.eval.recall_eval, secondbrain.stores.vector, secondbrain.main"` exits 0.
-- [ ] V.5 `git diff main --stat -- src/secondbrain/retrieval/hybrid.py` is empty.
+- [x] V.1 `uv run ruff check src tests` and `uv run ruff format --check src tests` are clean.
+- [x] V.2 `uv run mypy src` is clean.
+- [x] V.3 `uv run python -m pytest -q` is green; paste the summary line. The count should be the Phase 1.1 baseline plus the new tests. **2026-11-22: `1162 passed, 8 warnings in 53.75s` (baseline 1097 + 65 new).**
+- [x] V.4 Import smoke test: `uv run python -c "import secondbrain.api.recall, secondbrain.eval.recall_eval, secondbrain.stores.vector, secondbrain.main"` exits 0.
+- [x] V.5 `git diff main --stat -- src/secondbrain/retrieval/hybrid.py` is empty.
 
 ### Phase 7 — Rollout (after merge)
 - [ ] 7.1 PR merged. API restarted via `launchctl unload/load`. `curl -s http://127.0.0.1:8000/health` returns ok.
-- [ ] 7.2 Rollout steps 2–3: confirm the log path, chmod via `find`, and `stat -f %Lp data/recall_log.jsonl` prints `600`.
-- [ ] 7.3 **Brent, in a real terminal:** `sudo cp etc/newsyslog.d/secondbrain.conf /etc/newsyslog.d/`, then `diff` prints nothing.
+- [x] 7.2 Rollout steps 2–3: confirm the log path, chmod via `find`, and `stat -f %Lp data/recall_log.jsonl` prints `600`.
+- [x] 7.3 **Brent, in a real terminal:** `sudo cp etc/newsyslog.d/secondbrain.conf /etc/newsyslog.d/`, then `diff` prints nothing.
 - [ ] 7.4 Live eval: `uv run python -m secondbrain.eval.recall_eval` gives PASS with the same recall@1 and MRR as 2026-11-21 and no `recommend gate_mrr` line.
 - [ ] 7.5 One live MCP `recall` call returns `ok: true`, and its `recall_log.jsonl` line shows a `dropped_keyword_only` count.
 
