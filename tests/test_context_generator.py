@@ -3,6 +3,10 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import anthropic
+import httpx
+import pytest
+
 from secondbrain.config import Settings
 from secondbrain.indexing.context import ContextGenerator
 from secondbrain.indexing.embedder import build_embedding_text
@@ -206,3 +210,119 @@ def test_indexing_pipeline_calls_context_generator():
     assert "ContextGenerator" in source, "index.py must use ContextGenerator"
     assert "generate_blurbs" in source, "index.py must call generate_blurbs"
     assert "context_blurb" in source, "index.py must set context_blurb on chunks"
+
+
+# --- Spec 007: prompt-cached document prefix -------------------------------------------
+
+
+def _response(text="blurb", input_tokens=100, output_tokens=20, write=0, read=0):
+    resp = MagicMock()
+    resp.content = [MagicMock(text=text)]
+    resp.usage.input_tokens = input_tokens
+    resp.usage.output_tokens = output_tokens
+    resp.usage.cache_creation_input_tokens = write
+    resp.usage.cache_read_input_tokens = read
+    return resp
+
+
+def _generator(mock_client, usage_store=None):
+    with patch("secondbrain.indexing.context.Anthropic", return_value=mock_client):
+        return ContextGenerator(api_key="test-key", usage_store=usage_store)
+
+
+def test_document_is_a_cached_block_before_the_chunk():
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = _response()
+    gen = _generator(mock_client)
+
+    gen.generate_blurbs("Spec", "DOC BODY", [_make_chunk("CHUNK BODY")])
+
+    kwargs = mock_client.messages.create.call_args.kwargs
+    assert kwargs["model"] == "claude-haiku-4-5"
+    assert kwargs["system"].startswith("You are a context annotation assistant")
+    (message,) = kwargs["messages"]
+    assert message["role"] == "user"
+    doc_block, chunk_block = message["content"]
+    assert doc_block == {
+        "type": "text",
+        "text": '<document title="Spec">\nDOC BODY\n</document>',
+        "cache_control": {"type": "ephemeral"},
+    }
+    assert chunk_block == {
+        "type": "text",
+        "text": "<chunk>\nCHUNK BODY\n</chunk>\n\n"
+        "Write a 1-2 sentence context blurb for this chunk.",
+    }
+
+
+def test_every_chunk_sends_an_identical_prefix():
+    mock_client = MagicMock()
+    mock_client.messages.create.side_effect = [_response(f"b{i}") for i in range(3)]
+    gen = _generator(mock_client)
+
+    gen.generate_blurbs("Note", "full doc", [_make_chunk(f"chunk {i}") for i in range(3)])
+
+    calls = [c.kwargs for c in mock_client.messages.create.call_args_list]
+    assert len(calls) == 3
+    assert len({c["system"] for c in calls}) == 1
+    prefixes = [c["messages"][0]["content"][0] for c in calls]
+    assert all(p == prefixes[0] for p in prefixes)
+    tails = [c["messages"][0]["content"][1]["text"] for c in calls]
+    assert len(set(tails)) == 3
+
+
+def test_cache_tokens_are_priced_and_logged():
+    mock_client = MagicMock()
+    mock_client.messages.create.side_effect = [
+        _response(write=10_000),
+        _response(read=10_000),
+    ]
+    usage_store = MagicMock()
+    gen = _generator(mock_client, usage_store=usage_store)
+
+    gen.generate_blurbs("Note", "doc", [_make_chunk("a"), _make_chunk("b")])
+
+    first, second = (c.kwargs for c in usage_store.log_usage.call_args_list)
+    assert first["cost_usd"] == pytest.approx(0.012700)
+    assert second["cost_usd"] == pytest.approx(0.001200)
+    assert first["input_tokens"] == 100 + 10_000
+    assert second["input_tokens"] == 100 + 10_000
+    assert first["metadata"] == {"cache_write_tokens": 10_000, "cache_read_tokens": 0}
+    assert second["metadata"] == {"cache_write_tokens": 0, "cache_read_tokens": 10_000}
+
+
+def test_missing_or_non_integer_cache_fields_count_as_zero():
+    resp = MagicMock()
+    resp.content = [MagicMock(text="blurb")]
+    resp.usage.input_tokens = 1000
+    resp.usage.output_tokens = 100
+    # MagicMock auto-attributes: cache fields exist but are not ints
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = resp
+    usage_store = MagicMock()
+    gen = _generator(mock_client, usage_store=usage_store)
+
+    gen.generate_blurbs("Note", "doc", [_make_chunk("a")])
+
+    logged = usage_store.log_usage.call_args.kwargs
+    assert logged["input_tokens"] == 1000
+    assert logged["cost_usd"] == pytest.approx((1000 * 1.00 + 100 * 5.00) / 1e6)
+    assert logged["metadata"] == {"cache_write_tokens": 0, "cache_read_tokens": 0}
+
+
+def test_api_error_still_returns_empty_blurb():
+    request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+    error = anthropic.BadRequestError(
+        "usage limit", response=httpx.Response(400, request=request), body=None
+    )
+    mock_client = MagicMock()
+    mock_client.messages.create.side_effect = error
+    usage_store = MagicMock()
+    gen = _generator(mock_client, usage_store=usage_store)
+
+    blurbs = gen.generate_blurbs("Note", "doc", [_make_chunk("a")])
+
+    assert blurbs == [""]
+    logged = usage_store.log_usage.call_args.kwargs
+    assert logged["status"] == "error"
+    assert logged["input_tokens"] == 0 and logged["cost_usd"] == 0.0

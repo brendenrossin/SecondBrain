@@ -9,6 +9,7 @@ import uuid
 from typing import TYPE_CHECKING
 
 from anthropic import Anthropic
+from anthropic.types import TextBlockParam
 
 if TYPE_CHECKING:
     from secondbrain.models import Chunk
@@ -25,22 +26,36 @@ _SYSTEM_PROMPT = (
 )
 
 
-def _build_user_message(title: str, document: str, chunk: str) -> str:
-    """Build user message for context generation.
+def _build_user_content(title: str, document: str, chunk: str) -> list[TextBlockParam]:
+    """Build the user content blocks for context generation.
+
+    The document is its own block marked for prompt caching, so every chunk of a
+    note re-reads it from cache (0.1x) instead of paying full price per chunk;
+    without this, cost grows with chunks x note length (spec 007). The block must
+    stay byte-identical across a note's chunks, so nothing chunk-specific goes in it.
 
     Uses string concatenation instead of str.format() to avoid KeyError
     when vault content contains {curly braces} (e.g. code blocks).
     """
-    return (
-        '<document title="'
-        + title
-        + '">\n'
-        + document
-        + "\n</document>\n\n<chunk>\n"
-        + chunk
-        + "\n</chunk>\n\n"
-        + "Write a 1-2 sentence context blurb for this chunk."
-    )
+    return [
+        {
+            "type": "text",
+            "text": '<document title="' + title + '">\n' + document + "\n</document>",
+            "cache_control": {"type": "ephemeral"},
+        },
+        {
+            "type": "text",
+            "text": "<chunk>\n"
+            + chunk
+            + "\n</chunk>\n\n"
+            + "Write a 1-2 sentence context blurb for this chunk.",
+        },
+    ]
+
+
+def _token_count(value: object) -> int:
+    """A usage field as an int; absent or non-integer (older SDK, mocks) counts as 0."""
+    return value if isinstance(value, int) else 0
 
 
 class ContextGenerator:
@@ -103,15 +118,18 @@ class ContextGenerator:
                 messages=[
                     {
                         "role": "user",
-                        "content": _build_user_message(note_title, note_content, chunk.chunk_text),
+                        "content": _build_user_content(note_title, note_content, chunk.chunk_text),
                     }
                 ],
             )
             content_block = response.content[0]
             blurb = content_block.text.strip() if hasattr(content_block, "text") else ""
             latency_ms = (time.time() - start) * 1000
-            input_tokens = response.usage.input_tokens
-            output_tokens = response.usage.output_tokens
+            usage = response.usage
+            input_tokens = _token_count(usage.input_tokens)
+            output_tokens = _token_count(usage.output_tokens)
+            cache_write = _token_count(getattr(usage, "cache_creation_input_tokens", 0))
+            cache_read = _token_count(getattr(usage, "cache_read_input_tokens", 0))
 
             if self._usage_store:
                 from secondbrain.stores.usage import calculate_cost
@@ -120,9 +138,17 @@ class ContextGenerator:
                     provider="anthropic",
                     model=self._model,
                     usage_type="context_generation",
-                    input_tokens=input_tokens,
+                    input_tokens=input_tokens + cache_write + cache_read,
                     output_tokens=output_tokens,
-                    cost_usd=calculate_cost("anthropic", self._model, input_tokens, output_tokens),
+                    cost_usd=calculate_cost(
+                        "anthropic",
+                        self._model,
+                        input_tokens,
+                        output_tokens,
+                        cache_write_tokens=cache_write,
+                        cache_read_tokens=cache_read,
+                    ),
+                    metadata={"cache_write_tokens": cache_write, "cache_read_tokens": cache_read},
                     trace_id=trace_id,
                     latency_ms=latency_ms,
                     status="ok",

@@ -501,3 +501,26 @@ class TestGetAnomalies:
         anomalies = store.get_anomalies()
         error_anomalies = [a for a in anomalies if a["type"] == "high_error_rate"]
         assert len(error_anomalies) == 0
+
+
+class TestCalculateCostWithCache:
+    """Spec 007: cache writes bill at 1.25x and reads at 0.1x of the input rate."""
+
+    def test_cache_write_priced_at_1_25x(self):
+        cost = calculate_cost("anthropic", "claude-haiku-4-5", 100, 20, cache_write_tokens=10_000)
+        assert cost == pytest.approx((100 + 10_000 * 1.25) * 1.00 / 1e6 + 20 * 5.00 / 1e6)
+        assert cost == pytest.approx(0.012700)
+
+    def test_cache_read_priced_at_0_1x(self):
+        cost = calculate_cost("anthropic", "claude-haiku-4-5", 100, 20, cache_read_tokens=10_000)
+        assert cost == pytest.approx((100 + 10_000 * 0.1) * 1.00 / 1e6 + 20 * 5.00 / 1e6)
+        assert cost == pytest.approx(0.001200)
+
+    def test_no_cache_arguments_is_backward_compatible(self):
+        assert calculate_cost("anthropic", "claude-haiku-4-5", 1000, 100) == pytest.approx(
+            (1000 * 1.00 + 100 * 5.00) / 1e6
+        )
+
+    def test_cache_on_free_or_unknown_model_is_zero(self):
+        assert calculate_cost("ollama", "gemma4", 10, 10, cache_read_tokens=1000) == 0.0
+        assert calculate_cost("anthropic", "nope", 10, 10, cache_write_tokens=1000) == 0.0
