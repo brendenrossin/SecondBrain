@@ -578,6 +578,8 @@ Feature: Recall hardening
 - (Low) Each `_corpus_findings` detail names only the first offender, so several bad queries come to light one run at a time.
 - (Low) `_VectorLedReader` depends on `HybridRetriever` calling `get_chunk` only for ids that come back lexical-only. Add a test that fails if hybrid.py starts calling it for ids that are in the vector results.
 - (Nit) The `similarity_score == 0.0` keyword-only guard in `_rank` is now just a safety net. It would miscount a true 0.0 vector hit, which the 0.40 floor makes impossible.
+- (Low) The 7.2 tick confirmed the log path from `RECALL_LOG_NAME` and the plist `WorkingDirectory`. No `lsof` check ran, because the API had no recall_log open at the time.
+- (Low) Nothing tracks these deferred items yet, such as a backlog or roadmap entry. Decide at close.
 
 ## Rollout
 1. Merge. The API restarts via the usual `launchctl unload/load` (see PROJECT.md).
