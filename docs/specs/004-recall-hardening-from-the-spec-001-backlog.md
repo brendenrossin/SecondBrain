@@ -649,7 +649,7 @@ Feature: Recall hardening
 ### Phase 7 — Rollout (after merge)
 - [ ] 7.1 PR merged. API restarted via `launchctl unload/load`. `curl -s http://127.0.0.1:8000/health` returns ok.
 - [ ] 7.2 Rollout steps 2–3: confirm the log path, chmod via `find`, and `stat -f %Lp data/recall_log.jsonl` prints `600`.
-- [ ] 7.3 **Brent, in a real terminal:** `sudo cp etc/newsyslog.d/secondbrain.conf /etc/newsyslog.d/`, then `diff` prints nothing.
+- [x] 7.3 **Brent, in a real terminal:** `sudo cp etc/newsyslog.d/secondbrain.conf /etc/newsyslog.d/`, then `diff` prints nothing.
 - [ ] 7.4 Live eval: `uv run python -m secondbrain.eval.recall_eval` gives PASS with the same recall@1 and MRR as 2026-11-21 and no `recommend gate_mrr` line.
 - [ ] 7.5 One live MCP `recall` call returns `ok: true`, and its `recall_log.jsonl` line shows a `dropped_keyword_only` count.
 
