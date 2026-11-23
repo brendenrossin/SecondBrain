@@ -11,6 +11,8 @@ from typing import TYPE_CHECKING
 from anthropic import Anthropic
 from anthropic.types import TextBlockParam
 
+from secondbrain.vault.witt import is_witt_path
+
 if TYPE_CHECKING:
     from secondbrain.models import Chunk
     from secondbrain.stores.index_cache import IndexCache
@@ -84,12 +86,20 @@ class ContextGenerator:
 
         Returns a list of blurb strings aligned 1:1 with input chunks.
         On error for any chunk, returns empty string for that chunk.
+
+        Witt notes get no blurbs and no API call (spec 008). Specs are long and are
+        rewritten often, so they were most of the cost, and their chunks already
+        carry title, heading path, project and kind. Checking here covers every
+        indexing call site.
         """
         if trace_id is None:
             trace_id = uuid.uuid4().hex
 
         blurbs: list[str] = []
         for chunk in chunks:
+            if is_witt_path(chunk.note_path):
+                blurbs.append("")
+                continue
             blurb = self._generate_one(note_title, note_content, chunk, trace_id)
             blurbs.append(blurb)
         return blurbs
