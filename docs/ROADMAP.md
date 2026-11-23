@@ -44,6 +44,7 @@ ENGAGE-1 (Today surface + daily push plumbing) ◄── done
         ├─► FEED-3 (Google Calendar read-only)
         └─► FEED-4 (Gmail — absorbs EMAIL-1)
               └─► FEED-5 (Podcasts / X — deferred, expensive)
+        └─► FEED-6 (Radar page + brief line — depends on Radar's read API, ~/code/radar)
 
 RETRIEVAL-1 (Wiki links) ◄── done
   └─► RETRIEVAL-2 (Capture connections) ── folded into ENGAGE-3
@@ -88,6 +89,7 @@ _ENGAGE-1 delivered — see [DELIVERED.md](DELIVERED.md)._
 | FEED-3 | Google Calendar read-only → real events in the daily brief | 1-2d | Backlog | [exploration](features/EXPLORATION-calendar-integration.md) |
 | FEED-4 | Gmail read-only (absorbs EMAIL-1): trusted-sender summaries, recruiter/family detection, newsletter ingestion | 5-7d | Backlog | [spec](features/email-ingestion.md) |
 | FEED-5 | Podcasts (captions) / X — deferred until the cheaper feed proves the habit; expensive sources | TBD | Backlog | — |
+| FEED-6 | **Radar in SecondBrain:** a Radar page (the standing list of dev tools/harnesses others use — maturity hot/rising/established/faded, my call assess/trial/adopt/pass, solo vs work tags, what changed this week) plus a one-line "new on the radar" entry in the daily brief. Radar is a separate service (`~/code/radar`, own repo + MCP); SecondBrain is just the UI and reads Radar's local read API. Blocked until Radar's first spec defines that API. Replaces SecondBrain spec 005 (Abandoned, ADR-011). Needs a Witt spec here; update both `Sidebar.tsx` and `MobileNav.tsx`. | 1-2d | Backlog (blocked on Radar) | ADR-011 |
 
 ---
 
