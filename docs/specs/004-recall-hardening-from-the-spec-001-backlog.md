@@ -570,6 +570,15 @@ Feature: Recall hardening
 - **Cancelling warmup during a model load.** `to_thread` can't be interrupted, so shutdown may still wait for the load. That's the same as today, just quieter.
 - **The concurrent-reconnect test is probabilistic.** It can pass on broken code if the race window is never hit. The deterministic lock-held scenarios carry the guarantee; the stress test is a smoke check.
 
+### Deferred from code review
+- (Medium) `tests/test_launchd_plists.py` compares the plist's absolute paths with the checkout's own root, so the test fails when run from a worktree or another checkout.
+- (Low) `make install-ui-service` and `make ui` don't build `frontend/.next` first, so on a fresh clone launchd keeps restarting a process that fails.
+- (Low) The lifespan `yield` isn't wrapped in try/finally, so `_stop_warmup` is skipped if shutdown happens through an exception. `suppress(CancelledError)` can also swallow a cancellation of the shutdown itself.
+- (Low) `check_live_dataset` relies on `assert q.expected is not None`, which `python -O` strips. Use an explicit `continue`.
+- (Low) Each `_corpus_findings` detail names only the first offender, so several bad queries come to light one run at a time.
+- (Low) `_VectorLedReader` depends on `HybridRetriever` calling `get_chunk` only for ids that come back lexical-only. Add a test that fails if hybrid.py starts calling it for ids that are in the vector results.
+- (Nit) The `similarity_score == 0.0` keyword-only guard in `_rank` is now just a safety net. It would miscount a true 0.0 vector hit, which the 0.40 floor makes impossible.
+
 ## Rollout
 1. Merge. The API restarts via the usual `launchctl unload/load` (see PROJECT.md).
 2. Confirm which file the running API writes. The installed API plist's `WorkingDirectory` is `/Users/brentrossin/code/second-brain` (checked 2026-11-22), so it writes `data/recall_log.jsonl` there, the path in the newsyslog conf. After a recall, `lsof -p $(lsof -ti:8000) | grep recall_log` shows the open file, if one is open. If it shows a different path, stop: fix the newsyslog conf path before step 4.
@@ -648,7 +657,7 @@ Feature: Recall hardening
 
 ### Phase 7 — Rollout (after merge)
 - [ ] 7.1 PR merged. API restarted via `launchctl unload/load`. `curl -s http://127.0.0.1:8000/health` returns ok.
-- [ ] 7.2 Rollout steps 2–3: confirm the log path, chmod via `find`, and `stat -f %Lp data/recall_log.jsonl` prints `600`.
+- [x] 7.2 Rollout steps 2–3: confirm the log path, chmod via `find`, and `stat -f %Lp data/recall_log.jsonl` prints `600`.
 - [x] 7.3 **Brent, in a real terminal:** `sudo cp etc/newsyslog.d/secondbrain.conf /etc/newsyslog.d/`, then `diff` prints nothing.
 - [ ] 7.4 Live eval: `uv run python -m secondbrain.eval.recall_eval` gives PASS with the same recall@1 and MRR as 2026-11-21 and no `recommend gate_mrr` line.
 - [ ] 7.5 One live MCP `recall` call returns `ok: true`, and its `recall_log.jsonl` line shows a `dropped_keyword_only` count.
