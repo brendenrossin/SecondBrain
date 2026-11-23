@@ -3,7 +3,7 @@ id: '003'
 title: Repo UI plist matches the installed Next.js service
 project: second-brain
 tier: quick
-status: Approved
+status: Implemented
 version: 0.1.0
 created: '2026-11-22'
 updated: '2026-11-22'
@@ -13,6 +13,9 @@ history:
   date: '2026-11-22'
   note: created
 - status: Approved
+  date: '2026-11-22'
+  note: gate passed
+- status: Implemented
   date: '2026-11-22'
   note: gate passed
 ---
