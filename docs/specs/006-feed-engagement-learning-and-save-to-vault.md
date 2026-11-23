@@ -4,7 +4,7 @@ title: Feed engagement learning and save to vault
 project: second-brain
 tier: standard
 status: Approved
-version: 0.3.0
+version: 0.3.1
 created: '2026-11-22'
 updated: '2026-11-22'
 tags: []
@@ -33,7 +33,7 @@ ROADMAP ticket **FEED-2, slice 1 of 2**. Follow-on to FEED-1 (`docs/features/fee
 
 - **Slice 1 (this spec).** Captures explicit feedback, saves to the vault, hardens click capture,
   and shows why an item ranked where it did. It does not change ranking.
-- **Slice 2 (future spec 007).** Adds the learning rule, the learned-weights panel and reset. It is
+- **Slice 2 (a future spec, "FEED-2 slice 2").** Adds the learning rule, the learned-weights panel and reset. It is
   drafted only if the day-28 check below shows that I actually vote. ADR-012 records where slice
   2's learned weights will live (`feed.db` deltas over the vault config, never written back to the
   note).
@@ -73,7 +73,7 @@ all, before any learning gets built on top of it.
 
 ## Non-Goals
 - **Changing ranking based on feedback.** The learning rule, the learned-weights panel and reset
-  belong to slice 2 (spec 007, drafted only if the day-28 check passes). FEED-2's ROADMAP row notes
+  belong to slice 2 (a future spec, drafted only if the day-28 check passes). FEED-2's ROADMAP row notes
   this. With this spec shipped, every score is identical to FEED-1.
 - **Pruning signals.** Slice 2 decides retention once it knows what the rule needs. Rows are tiny.
 - **Controls on the "More from your sources" rows** of `/feed`. They stay a minimal scanning list,
@@ -700,7 +700,7 @@ Feature: Feed row controls (vitest)
   measure.
   - **Day-28 check, 28 days after rollout:**
     `sqlite3 data/feed.db "SELECT value, COUNT(*) FROM feed_signals GROUP BY value"`.
-  - **≥ 15 `up` + `down` rows:** draft spec 007, the learning rule. ADR-012 covers its storage,
+  - **≥ 15 `up` + `down` rows:** draft the slice-2 spec (the learning rule). ADR-012 covers its storage,
     and `docs/specs/reviews/006-*.r1.md` holds its design feedback.
   - **Fewer:** close FEED-2 at slice 1 and look at relevance or surfacing instead: source mix,
     top-N size, whether the brief shows enough. Record either outcome as an ADR.
@@ -739,7 +739,7 @@ Feature: Feed row controls (vitest)
 | `frontend/src/lib/types.ts` | Update | `FeedItem.vote/save_state/wiki_path/save_error/why` |
 | `frontend/src/lib/api.test.ts` | New | recordFeedClick branches incl. `this` binding and throw |
 | `frontend/src/components/feed/FeedBlock.test.tsx` | New | the "Feed row controls" scenarios |
-| `docs/ROADMAP.md` | Update | FEED-2 row: slice 1 = spec 006; slice 2 (learning) = spec 007 after the day-28 check |
+| `docs/ROADMAP.md` | Update | FEED-2 row: slice 1 = spec 006; slice 2 (learning) = a future spec after the day-28 check |
 | `tests/unit/feed/test_rank.py` | Update | FEED-1 golden score, rank_why shape + case, both rank Properties |
 | `tests/unit/feed/test_store_feed.py` | Update | signal semantics + atomicity, `SignalMachine`, claim concurrency/retry/stale/late-callback, migration (v0, v1, fresh, existing column, race, failure from v0/v1 + retry), upsert refreshes rank_why; `test_marks_the_database_migrated` and `test_fresh_database_is_marked_current` assert `== 2` |
 | `tests/test_feed_api.py` | Update | vote/click/save/GET scenarios; patch `secondbrain.api.wiki.start_ingestion_job`; settings cases set the cached settings |
@@ -790,7 +790,7 @@ Feature: Feed row controls (vitest)
 - [ ] 6.2 `FeedLink` gets the optional `item` prop. The row becomes a container: anchor plus sibling 👍/👎/💾/why, optimistic toggle with revert, re-tap → `none`, save states including handling the 409, and the why disclosure. Only `FeedBlock`'s summarized sections pass `item`; `feed/page.tsx` stays unchanged. Write `FeedBlock.test.tsx` covering every "Feed row controls" scenario — files: `frontend/src/components/feed/FeedBlock.tsx`, `frontend/src/components/feed/FeedBlock.test.tsx` — done when: `npm test` is green, and `npm run build` and `npm run lint` succeed.
 
 ### Phase 7 — Docs
-- [ ] 7.1 FEED-2 ROADMAP row: slice 1 = spec 006, slice 2 = spec 007 after the day-28 check (ADR-013) — files: `docs/ROADMAP.md` — done when: the row is updated and `git diff --stat` shows only that file for this step.
+- [ ] 7.1 FEED-2 ROADMAP row: slice 1 = spec 006, slice 2 = a future spec after the day-28 check (ADR-013) — files: `docs/ROADMAP.md` — done when: the row is updated and `git diff --stat` shows only that file for this step.
 
 ### Verification
 - [ ] ruff clean: `uv run ruff check src tests` and `uv run ruff format --check src tests`.
