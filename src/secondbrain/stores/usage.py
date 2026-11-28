@@ -23,8 +23,23 @@ PRICING: dict[str, dict[str, tuple[float, float]]] = {
 }
 
 
-def calculate_cost(provider: str, model: str, input_tokens: int, output_tokens: int) -> float:
+_CACHE_WRITE_MULTIPLIER = 1.25  # 5-minute-TTL cache write, relative to the input rate
+_CACHE_READ_MULTIPLIER = 0.1
+
+
+def calculate_cost(
+    provider: str,
+    model: str,
+    input_tokens: int,
+    output_tokens: int,
+    *,
+    cache_write_tokens: int = 0,
+    cache_read_tokens: int = 0,
+) -> float:
     """Calculate USD cost for a given LLM call.
+
+    ``input_tokens`` is the uncached input only. Prompt-cache writes and reads are
+    billed at 1.25x and 0.1x of the input rate (5-minute TTL).
 
     Returns 0.0 for Ollama. Logs a warning for unknown paid models.
     """
@@ -41,7 +56,12 @@ def calculate_cost(provider: str, model: str, input_tokens: int, output_tokens: 
         )
         return 0.0
     input_rate, output_rate = rates
-    return (input_tokens * input_rate + output_tokens * output_rate) / 1_000_000
+    billed_input = (
+        input_tokens
+        + cache_write_tokens * _CACHE_WRITE_MULTIPLIER
+        + cache_read_tokens * _CACHE_READ_MULTIPLIER
+    )
+    return (billed_input * input_rate + output_tokens * output_rate) / 1_000_000
 
 
 class UsageStore:
