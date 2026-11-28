@@ -2,7 +2,7 @@
 
 import pytest
 
-from secondbrain.vault.witt import WITT_FOLDER, WITT_LOG_EXCLUDE, classify_witt_path
+from secondbrain.vault.witt import WITT_FOLDER, WITT_LOG_EXCLUDE, classify_witt_path, is_witt_path
 
 
 @pytest.mark.parametrize(
@@ -34,3 +34,19 @@ def test_degenerate_paths_never_raise(path):
 def test_layout_constants():
     assert WITT_FOLDER == "Witt"
     assert WITT_LOG_EXCLUDE == "Witt/Logs/*"
+
+
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("Witt/Learnings/n.md", True),
+        ("Witt/Projects/witt/decisions/ADR-1.md", True),
+        ("10_Notes/Witt/notes.md", False),
+        ("Wittgenstein/Tractatus.md", False),
+        ("10_Notes/Test.md", False),
+        ("", False),
+    ],
+)
+def test_is_witt_path(path, expected):
+    """Spec 008: only paths whose first segment is the Witt folder are Witt notes."""
+    assert is_witt_path(path) is expected

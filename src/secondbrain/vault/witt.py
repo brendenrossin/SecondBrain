@@ -14,6 +14,14 @@ WITT_LOG_EXCLUDE = "Witt/Logs/*"
 _PROJECT_SUBDIR_KINDS: dict[str, RecallKind] = {"specs": "spec", "decisions": "decision"}
 
 
+def is_witt_path(note_path: str) -> bool:
+    """True when a vault-relative path lives under the Witt folder (first segment only).
+
+    ``10_Notes/Witt/x.md`` and ``Wittgenstein/x.md`` are ordinary notes.
+    """
+    return note_path.split("/", 1)[0] == WITT_FOLDER
+
+
 def classify_witt_path(note_path: str) -> tuple[RecallKind, str | None]:
     """Map a vault-relative path to (kind, project slug). Pure; never raises.
 

@@ -326,3 +326,38 @@ def test_api_error_still_returns_empty_blurb():
     logged = usage_store.log_usage.call_args.kwargs
     assert logged["status"] == "error"
     assert logged["input_tokens"] == 0 and logged["cost_usd"] == 0.0
+
+
+# --- Spec 008: no context blurbs for Witt notes ------------------------------------------
+
+
+def _chunk_at(note_path: str, text: str) -> Chunk:
+    chunk = _make_chunk(text)
+    chunk.note_path = note_path
+    return chunk
+
+
+def test_witt_note_makes_no_api_call_and_gets_empty_blurbs():
+    mock_client = MagicMock()
+    usage_store = MagicMock()
+    gen = _generator(mock_client, usage_store=usage_store)
+    path = "Witt/Projects/second-brain/specs/006-x.md"
+
+    blurbs = gen.generate_blurbs("Spec", "doc", [_chunk_at(path, f"c{i}") for i in range(3)])
+
+    assert blurbs == ["", "", ""]
+    mock_client.messages.create.assert_not_called()
+    usage_store.log_usage.assert_not_called()
+
+
+def test_non_witt_note_still_gets_blurbs():
+    mock_client = MagicMock()
+    mock_client.messages.create.side_effect = [_response("b0"), _response("b1")]
+    gen = _generator(mock_client)
+
+    blurbs = gen.generate_blurbs(
+        "Test", "doc", [_chunk_at("10_Notes/Test.md", f"c{i}") for i in range(2)]
+    )
+
+    assert blurbs == ["b0", "b1"]
+    assert mock_client.messages.create.call_count == 2
